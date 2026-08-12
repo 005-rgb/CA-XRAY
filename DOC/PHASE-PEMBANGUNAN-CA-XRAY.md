@@ -87,6 +87,10 @@ terhadap perubahan API eksternal.
 
 **Tujuan:** memindahkan state penting dari proses aplikasi ke storage durable.
 
+**Status keputusan:** disetujui untuk implementation planning. Detail keputusan,
+scope, target recovery, data model, dan acceptance gate disimpan di
+`DOC/PHASE-3-PERSISTENCE-DECISIONS.md`.
+
 **Output:**
 
 - Migration schema untuk users, workspaces, memberships, scan jobs, scans,
@@ -95,6 +99,19 @@ terhadap perubahan API eksternal.
 - Idempotency untuk scan creation dan webhook event.
 - Retention, archival, encrypted backup, restore procedure, dan rollback migration.
 - Object storage untuk payload/evidence besar; cache hanya sebagai acceleration layer.
+
+Keputusan Phase 3 yang telah dikunci:
+
+- PostgreSQL wajib untuk production melalui adapter-first; development tetap dapat
+  menggunakan adapter lokal.
+- Server authorization, ownership, foreign key, constraint, dan index digunakan
+  sekarang; RLS ditunda ke fase authentication/tenant isolation.
+- Evidence awal disimpan di PostgreSQL JSONB; object storage belum dikonfigurasi.
+- Retention policy dan lifecycle metadata ditetapkan sekarang, tetapi archival dan
+  deletion worker penuh ditunda serta tidak ada automatic destructive deletion.
+- Target awal recovery adalah RPO 1 jam, RTO 4 jam, dan availability SLO 99,5%.
+- Scope tetap persistence-only: schema, adapter, transaction, idempotency, outbox,
+  retention contract, serta recovery tests.
 
 **Gate:** data tetap konsisten setelah restart, duplicate request, partial failure,
 migration rollback, dan restore drill.
