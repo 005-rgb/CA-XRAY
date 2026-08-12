@@ -867,6 +867,8 @@ function mergeNormalizedEvidence(scan, result) {
           target[key] = value;
           continue;
         }
+        const conflictPath = [...path, key].join(".");
+        if (current.provenance?.conflictPath === conflictPath) continue;
         const currentValid = current.evidenceStatus === PROVIDER_RESULT_STATUS.VALID && current.status !== STATUS.UNKNOWN;
         const incomingValid = value.evidenceStatus === PROVIDER_RESULT_STATUS.VALID && value.status !== STATUS.UNKNOWN;
         if (!currentValid && incomingValid) {
@@ -874,7 +876,6 @@ function mergeNormalizedEvidence(scan, result) {
           continue;
         }
         if (currentValid && incomingValid && !equivalentValues(current.value, value.value)) {
-          const conflictPath = [...path, key].join(".");
           scan.conflicts.push({
             path: conflictPath,
             status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR,

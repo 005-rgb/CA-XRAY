@@ -20,9 +20,16 @@ function providerValue(data, key) {
   if (!Object.prototype.hasOwnProperty.call(data || {}, key)) return null;
   const raw = data[key];
   if (raw === "" || raw === null || raw === undefined) return null;
-  if (raw === "0") return false;
-  if (raw === "1") return true;
   return raw;
+}
+
+function providerBoolean(data, key) {
+  const raw = providerValue(data, key);
+  if (raw === null) return null;
+  const normalized = String(raw).toLowerCase();
+  if (raw === true || raw === 1 || normalized === "1" || normalized === "true" || normalized === "yes") return true;
+  if (raw === false || raw === 0 || normalized === "0" || normalized === "false" || normalized === "no") return false;
+  return null;
 }
 
 function parseTax(value) {
@@ -115,11 +122,12 @@ function normalizeGoPlus({ response, retrievedAt, network, providerId }) {
   };
   const security = Object.fromEntries(Object.entries(boolMap).map(([name, keyName], index) => [
     name,
-    makePoint(providerValue(data, keyName), sourceContext, `GP-${String(index + 1).padStart(3, "0")}`),
+    makePoint(providerBoolean(data, keyName), sourceContext, `GP-${String(index + 1).padStart(3, "0")}`),
   ]));
-  security.canChangeTax = providerValue(data, "can_set_tax") === null
+  const explicitTaxChange = providerBoolean(data, "can_set_tax");
+  security.canChangeTax = explicitTaxChange === null
     ? security.canChangeTax
-    : makePoint(providerValue(data, "can_set_tax"), sourceContext, "GP-008");
+    : makePoint(explicitTaxChange, sourceContext, "GP-008");
   const ownerAddress = providerValue(data, "owner_address");
   security.ownerAddress = makePoint(ownerAddress, sourceContext, "GP-009");
   security.ownerControl = makePoint(
@@ -127,18 +135,18 @@ function normalizeGoPlus({ response, retrievedAt, network, providerId }) {
     sourceContext,
     "GP-010",
   );
-  security.sourceVerified = makePoint(providerValue(data, "is_open_source"), sourceContext, "GP-011");
+  security.sourceVerified = makePoint(providerBoolean(data, "is_open_source"), sourceContext, "GP-011");
 
   const trading = {
     buyTax: makePoint(providerValue(data, "buy_tax"), sourceContext, "GP-012", parseTax),
     sellTax: makePoint(providerValue(data, "sell_tax"), sourceContext, "GP-013", parseTax),
     transferTax: makePoint(providerValue(data, "transfer_tax"), sourceContext, "GP-014", parseTax),
-    sellRestriction: makePoint(providerValue(data, "cannot_sell_all"), sourceContext, "GP-015"),
-    buyRestriction: makePoint(providerValue(data, "cannot_buy"), sourceContext, "GP-016"),
-    maliciousTradingSignal: makePoint(providerValue(data, "is_honeypot"), sourceContext, "GP-017"),
+    sellRestriction: makePoint(providerBoolean(data, "cannot_sell_all"), sourceContext, "GP-015"),
+    buyRestriction: makePoint(providerBoolean(data, "cannot_buy"), sourceContext, "GP-016"),
+    maliciousTradingSignal: makePoint(providerBoolean(data, "is_honeypot"), sourceContext, "GP-017"),
     taxChangeable: security.canChangeTax,
-    maxTransactionRestriction: makePoint(providerValue(data, "anti_whale_modifiable"), sourceContext, "GP-018"),
-    maxWalletRestriction: makePoint(providerValue(data, "anti_whale_modifiable"), sourceContext, "GP-019"),
+    maxTransactionRestriction: makePoint(providerBoolean(data, "anti_whale_modifiable"), sourceContext, "GP-018"),
+    maxWalletRestriction: makePoint(providerBoolean(data, "anti_whale_modifiable"), sourceContext, "GP-019"),
     tradingPause: security.canPause,
     hasPair: makePoint(null, sourceContext, "GP-020"),
   };

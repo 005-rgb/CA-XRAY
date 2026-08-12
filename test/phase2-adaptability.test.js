@@ -11,6 +11,7 @@ const {
 } = require("../src/providers/contracts");
 const {
   createDefaultProviderRegistry,
+  normalizeGoPlus,
   normalizeDexScreener,
 } = require("../src/providers/default-adapters");
 const { createProviderRegistry } = require("../src/providers/registry");
@@ -111,6 +112,32 @@ test("missing market numerics stay unknown and never become NaN", () => {
   assert.equal(JSON.stringify(result).includes("NaN"), false);
 });
 
+test("GoPlus preserves numeric zero while normalizing boolean flags", () => {
+  const result = normalizeGoPlus({
+    response: {
+      code: 1,
+      result: {
+        [address]: {
+          decimals: "0",
+          total_supply: "0",
+          is_mintable: "0",
+          buy_tax: "0",
+        },
+      },
+    },
+    retrievedAt,
+    network: { goplusChainId: "1" },
+    providerId: "goplus-security",
+  });
+  assert.equal(result.status, PROVIDER_RESULT_STATUS.VALID);
+  assert.equal(result.evidence.token.decimals.value, "0");
+  assert.equal(result.evidence.token.decimals.status, "VERIFIED");
+  assert.equal(result.evidence.security.canMint.value, false);
+  assert.equal(result.evidence.security.canMint.status, "NOT_DETECTED");
+  assert.equal(result.evidence.trading.buyTax.value, 0);
+  assert.equal(result.evidence.trading.buyTax.status, "VERIFIED");
+});
+
 test("conflicting normalized values are explicit and do not win by provider order", async () => {
   const first = createProviderRegistry([
     adapter("alpha", "Alpha"),
@@ -128,6 +155,19 @@ test("conflicting normalized values are explicit and do not win by provider orde
   assert.equal(left.conflicts.length, 1);
   assert.equal(left.token.name.status, "UNKNOWN");
   assert.deepEqual(toPublicScan(left).conflicts, toPublicScan(right).conflicts);
+});
+
+test("a later provider cannot overwrite an existing normalized conflict", async () => {
+  const registry = createProviderRegistry([
+    adapter("alpha", "Alpha"),
+    adapter("bravo", "Bravo"),
+    adapter("charlie", "Charlie"),
+  ]);
+  const scan = await scanLive({ address, networkId, providerRegistry: registry });
+  assert.equal(scan.conflicts.length, 1);
+  assert.equal(scan.token.name.value, null);
+  assert.equal(scan.token.name.status, "UNKNOWN");
+  assert.equal(scan.dataStatus, "provider_error");
 });
 
 test("provider order and live errors never trigger demo fallback", async () => {
