@@ -32,6 +32,7 @@ test("provider registry enforces an adapter contract", () => {
   const registry = createProviderRegistry([{
     id: "test-provider",
     source: "Test provider",
+    validate: () => true,
     fetch: async () => ({ json: {}, retrievedAt: "2026-01-01T00:00:00.000Z" }),
     apply: () => true,
   }]);

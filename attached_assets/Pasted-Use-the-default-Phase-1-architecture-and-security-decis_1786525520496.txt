@@ -1,0 +1,49 @@
+Use the default Phase 1 architecture and security decisions. APPROVED.
+
+Lock the following decisions:
+
+Modular monolith first; do not introduce microservices unless a later phase explicitly requires it.
+Node.js 24 LTS backend.
+PostgreSQL is the primary source of truth.
+Redis/cache and object storage are supporting infrastructure only.
+Every user gets a personal workspace automatically.
+Team workspace uses membership-based access.
+Every private/domain record must be scoped by workspace_id.
+Enforce tenant isolation server-side on every read, write, update, delete, export, and scan-history operation. Never trust workspace_id supplied by the client.
+Superadmin is a platform-level role and is outside normal workspace authorization.
+Roles: Visitor, User, Workspace Member, Workspace Owner, Superadmin, Support Admin, Read-only Auditor.
+Clerk handles authentication, including email + Google login, session management, recovery, and MFA for Superadmin.
+Never store authentication secrets or provider API secrets in the database or browser.
+Classify data as Public, Private, Restricted, and Secret exactly as specified.
+GoPlus/DexScreener and all future providers are external untrusted inputs.
+All provider responses must pass through provider adapters + strict schema validation before reaching the core analyzer.
+Implement timeout, bounded retry, circuit breaker, quota/rate protection, and provider health states.
+Never silently replace LIVE provider data with DEMO data. If live data is unavailable, explicitly show UNAVAILABLE, PARTIAL, or INSUFFICIENT DATA.
+Provider URLs must be server-controlled configuration only; never accept arbitrary provider URLs from users/admins, preventing SSRF.
+Rate-limit by IP, user, workspace, API client, and subscription plan.
+Enforce request-size, concurrent-scan, queue, and provider-quota limits.
+Scan requests and payment webhooks must be idempotent.
+Prevent duplicate scans and request flooding.
+Audit authentication, membership/role changes, scans, exports, provider configuration, billing/subscription/entitlement changes, and superadmin actions.
+Audit records should be append-only/immutable from normal application users.
+Define account deletion, workspace deletion, data export, retention, encrypted backups, and restore procedures.
+Preserve the previously approved targets: RPO 15 minutes, RTO 1 hour, SLO 99.9%.
+Important CA X-RAY security rule
+
+The contract address entered by a user is data, not executable input. Validate network + address format using chain-specific validation, normalize safely, and never construct arbitrary RPC/provider URLs from raw user input.
+
+The analyzer must remain deterministic: provider data → normalized evidence → risk rules → score → report. Authentication, billing, UI, and provider-specific logic must not be embedded inside the risk engine.
+
+Phase 1 Gate
+
+Do not proceed to implementation until the following are explicitly locked:
+
+Trust boundaries
+Threat model and P0 mitigations
+Tenant isolation rules
+Permission matrix
+Provider failure policy
+Secret/data classification
+Security acceptance criteria
+
+Do not add unrelated features, AI, chatbot, WhatsApp, CRM, realtime, mobile app, or other scope creep. Keep the architecture production-ready but implementation-efficient.

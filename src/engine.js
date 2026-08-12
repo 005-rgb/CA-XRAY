@@ -1,4 +1,9 @@
 const { createProviderRegistry } = require("./providers/registry");
+const {
+  assertControlledProviderUrl,
+  CONTROLLED_PROVIDER_ORIGINS,
+} = require("./providers/registry");
+const { CircuitBreaker, withProviderPolicy } = require("./security/controls");
 
 const STATUS = Object.freeze({
   VERIFIED: "VERIFIED",
@@ -805,12 +810,13 @@ function isProviderObject(value) {
 }
 
 async function fetchJson(url, provider, timeout = 12000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  const retrievedAt = new Date().toISOString();
-  try {
+  assertControlledProviderUrl(url, CONTROLLED_PROVIDER_ORIGINS);
+  if (!fetchJson.breakers) fetchJson.breakers = new Map();
+  if (!fetchJson.breakers.has(provider)) fetchJson.breakers.set(provider, new CircuitBreaker());
+  return withProviderPolicy(async ({ signal }) => {
+    const retrievedAt = new Date().toISOString();
     const response = await fetch(url, {
-      signal: controller.signal,
+      signal,
       headers: { Accept: "application/json", "User-Agent": "CA-XRAY/1.0" },
     });
     const text = await response.text();
@@ -818,16 +824,26 @@ async function fetchJson(url, provider, timeout = 12000) {
     try {
       json = JSON.parse(text);
     } catch {
-      throw Object.assign(new Error("MALFORMED_RESPONSE"), { code: "MALFORMED_RESPONSE", provider, status: response.status });
+      throw Object.assign(new Error("MALFORMED_RESPONSE"), {
+        code: "MALFORMED_RESPONSE",
+        provider,
+        status: response.status,
+      });
     }
-    if (!response.ok) throw Object.assign(new Error(`HTTP_${response.status}`), { code: response.status === 429 ? "RATE_LIMIT" : "PROVIDER_ERROR", provider, status: response.status });
+    if (!response.ok) {
+      throw Object.assign(new Error(`HTTP_${response.status}`), {
+        code: response.status === 429 ? "RATE_LIMIT" : "PROVIDER_ERROR",
+        provider,
+        status: response.status,
+      });
+    }
     return { json, retrievedAt };
-  } catch (error) {
-    if (error.name === "AbortError") throw Object.assign(new Error("PROVIDER_TIMEOUT"), { code: "PROVIDER_TIMEOUT", provider });
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  }, {
+    provider,
+    breaker: fetchJson.breakers.get(provider),
+    timeoutMs: timeout,
+    retries: 1,
+  });
 }
 
 function applyGoPlus(scan, response, retrievedAt, network) {
@@ -937,6 +953,10 @@ function createDefaultProviderRegistry() {
     {
       id: "goplus-security",
       source: "GoPlus Security API",
+      validate: (response) =>
+        isProviderObject(response) && [1, "1"].includes(response.code) && isProviderObject(response.result)
+          ? true
+          : { code: "MALFORMED_RESPONSE", message: "GoPlus returned an invalid response shape." },
       fetch: ({ address, network }) => {
         const url = `https://api.gopluslabs.io/api/v1/token_security/${network.goplusChainId}?contract_addresses=${encodeURIComponent(address)}`;
         return fetchJson(url, "GoPlus Security API");
@@ -946,6 +966,10 @@ function createDefaultProviderRegistry() {
     {
       id: "dexscreener",
       source: "DexScreener API",
+      validate: (response) =>
+        isProviderObject(response) && (response.pairs === null || Array.isArray(response.pairs))
+          ? true
+          : { code: "MALFORMED_RESPONSE", message: "DexScreener returned an invalid response shape." },
       fetch: ({ address }) => {
         const url = `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(address)}`;
         return fetchJson(url, "DexScreener API");
@@ -970,13 +994,22 @@ async function scanLive({ address, networkId, providerRegistry = createDefaultPr
   for (const [index, result] of results.entries()) {
     const provider = providers[index];
     if (result.status === "fulfilled") {
-      const applied = provider.apply({
-        scan,
-        response: result.value.json,
-        retrievedAt: result.value.retrievedAt,
-        ...context,
-      });
-      if (applied) successes += 1;
+      try {
+        providerRegistry.validateResponse(provider.id, result.value.json);
+        const applied = provider.apply({
+          scan,
+          response: result.value.json,
+          retrievedAt: result.value.retrievedAt,
+          ...context,
+        });
+        if (applied) successes += 1;
+      } catch (error) {
+        scan.errors.push({
+          provider: provider.source,
+          code: error.code || "PROVIDER_RESPONSE_INVALID",
+          message: error.message || "Provider response failed validation.",
+        });
+      }
     } else {
       const error = result.reason;
       scan.errors.push({

@@ -43,6 +43,7 @@ class InMemoryScanJobQueue {
       id: `scan_${randomUUID()}`,
       type: "contract-scan",
       payload,
+      workspaceId: payload && payload.workspaceId ? payload.workspaceId : null,
       status: JOB_STATUS.QUEUED,
       createdAt: now,
       startedAt: null,
@@ -59,6 +60,18 @@ class InMemoryScanJobQueue {
   get(jobId) {
     const job = this.jobs.get(jobId);
     return job ? snapshot(job) : null;
+  }
+
+  getForWorkspace(jobId, workspaceId) {
+    const job = this.jobs.get(jobId);
+    if (!job || job.workspaceId !== workspaceId) return null;
+    return snapshot(job);
+  }
+
+  activeForWorkspace(workspaceId) {
+    return [...this.jobs.values()].filter(
+      (job) => job.workspaceId === workspaceId && ["QUEUED", "RUNNING"].includes(job.status),
+    ).length;
   }
 
   #drain() {

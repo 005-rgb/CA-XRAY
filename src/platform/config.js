@@ -7,6 +7,17 @@ const ARCHITECTURE_TARGETS = Object.freeze({
   availabilitySlo: 0.999,
 });
 
+const SECURITY_LIMITS = Object.freeze({
+  requestBodyBytes: 12_000,
+  ipRequestsPerMinute: 60,
+  userRequestsPerMinute: 60,
+  workspaceRequestsPerMinute: 30,
+  apiClientRequestsPerMinute: 120,
+  maxConcurrentScansPerWorkspace: 2,
+  providerTimeoutMs: 12_000,
+  providerRetries: 1,
+});
+
 const PLAN_CATALOG = Object.freeze({
   free: {
     id: "free",
@@ -14,6 +25,7 @@ const PLAN_CATALOG = Object.freeze({
     workspace: "personal",
     billing: "free",
     scanLimitPerMonth: 25,
+    maxConcurrentScans: 2,
     features: ["Personal workspace", "Evidence-backed scan reports"],
     stripePriceEnv: null,
   },
@@ -23,6 +35,7 @@ const PLAN_CATALOG = Object.freeze({
     workspace: "personal",
     billing: "paid",
     scanLimitPerMonth: 1_000,
+    maxConcurrentScans: 8,
     features: ["Personal workspace", "Higher scan limits", "Saved report history"],
     stripePriceEnv: "STRIPE_PRICE_PRO",
   },
@@ -32,6 +45,7 @@ const PLAN_CATALOG = Object.freeze({
     workspace: "team",
     billing: "paid",
     scanLimitPerMonth: 10_000,
+    maxConcurrentScans: 32,
     features: ["Shared team workspace", "Member roles", "Shared report history"],
     stripePriceEnv: "STRIPE_PRICE_TEAM",
   },
@@ -41,6 +55,7 @@ const PLAN_CATALOG = Object.freeze({
     workspace: "team",
     billing: "contact",
     scanLimitPerMonth: null,
+    maxConcurrentScans: 64,
     features: ["Dedicated limits", "Enterprise authorization", "RPO/RTO support plan"],
     stripePriceEnv: "STRIPE_PRICE_ENTERPRISE",
   },
@@ -75,7 +90,12 @@ function getRuntimeConfig(env = process.env) {
       ),
       maxQueueDepth: positiveInteger(env.SCAN_MAX_QUEUE_DEPTH, 10_000),
     }),
+    dataStore: Object.freeze({
+      driver: env.DATA_STORE_DRIVER || "memory",
+      primary: "postgresql",
+    }),
     targets: ARCHITECTURE_TARGETS,
+    security: SECURITY_LIMITS,
   });
 }
 
@@ -83,6 +103,14 @@ function assertProductionRuntime(config) {
   if (config.environment === "production" && config.queue.driver === "memory") {
     throw new Error(
       "SCAN_QUEUE_DRIVER must be configured with a shared durable queue in production; the in-memory driver is development-only.",
+    );
+  }
+  if (config.environment === "production" && config.security.providerRetries > 2) {
+    throw new Error("Provider retry budget cannot exceed two retries.");
+  }
+  if (config.environment === "production" && config.dataStore.driver === "memory") {
+    throw new Error(
+      "DATA_STORE_DRIVER must be configured with PostgreSQL in production; in-memory records are development-only.",
     );
   }
 }
@@ -93,6 +121,10 @@ function publicPlatformConfig(config = getRuntimeConfig()) {
     queue: {
       driver: config.queue.driver,
       workerConcurrency: config.queue.workerConcurrency,
+    },
+    storage: {
+      primary: config.dataStore.primary,
+      configured: config.dataStore.driver !== "memory",
     },
     auth: {
       provider: "clerk",
@@ -132,6 +164,7 @@ function resolveWorkspacePolicy({ workspaceType = "personal", planId = "free" } 
 
 module.exports = {
   ARCHITECTURE_TARGETS,
+  SECURITY_LIMITS,
   PLAN_CATALOG,
   WORKSPACE_POLICIES,
   getRuntimeConfig,
