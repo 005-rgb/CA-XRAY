@@ -21,12 +21,19 @@ function snapshot(job) {
 }
 
 class InMemoryScanJobQueue {
-  constructor({ processor, concurrency = 8, maxQueueDepth = 10_000, clock = () => new Date() }) {
+  constructor({
+    processor,
+    concurrency = 8,
+    maxQueueDepth = 10_000,
+    clock = () => new Date(),
+    onStatusChange = null,
+  }) {
     if (typeof processor !== "function") throw new TypeError("A scan job processor is required.");
     this.processor = processor;
     this.concurrency = Math.max(1, Number(concurrency) || 1);
     this.maxQueueDepth = Math.max(1, Number(maxQueueDepth) || 1);
     this.clock = clock;
+    this.onStatusChange = typeof onStatusChange === "function" ? onStatusChange : null;
     this.jobs = new Map();
     this.pending = [];
     this.running = 0;
@@ -40,7 +47,7 @@ class InMemoryScanJobQueue {
     }
     const now = this.clock().toISOString();
     const job = {
-      id: `scan_${randomUUID()}`,
+      id: payload && payload.jobId ? payload.jobId : `scan_${randomUUID()}`,
       type: "contract-scan",
       payload,
       workspaceId: payload && payload.workspaceId ? payload.workspaceId : null,
@@ -82,6 +89,7 @@ class InMemoryScanJobQueue {
       this.running += 1;
       job.status = JOB_STATUS.RUNNING;
       job.startedAt = this.clock().toISOString();
+      this.#notify(job);
       Promise.resolve()
         .then(() => this.processor(job.payload))
         .then((scan) => {
@@ -97,14 +105,22 @@ class InMemoryScanJobQueue {
         })
         .finally(() => {
           job.completedAt = this.clock().toISOString();
+          this.#notify(job);
           this.running -= 1;
           this.#drain();
         });
     }
   }
+
+  #notify(job) {
+    if (!this.onStatusChange) return;
+    Promise.resolve(this.onStatusChange(snapshot(job))).catch((error) => {
+      console.error(`Scan persistence update failed for ${job.id}: ${error.message}`);
+    });
+  }
 }
 
-function createScanJobQueue({ processor, runtimeConfig }) {
+function createScanJobQueue({ processor, runtimeConfig, onStatusChange = null }) {
   if (runtimeConfig.environment === "production" && runtimeConfig.queue.driver === "memory") {
     throw new Error("The in-memory scan queue cannot be used in production.");
   }
@@ -117,6 +133,7 @@ function createScanJobQueue({ processor, runtimeConfig }) {
     processor,
     concurrency: runtimeConfig.queue.workerConcurrency,
     maxQueueDepth: runtimeConfig.queue.maxQueueDepth,
+    onStatusChange,
   });
 }
 

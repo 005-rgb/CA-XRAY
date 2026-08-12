@@ -1,0 +1,17 @@
+DROP TABLE IF EXISTS outbox_events;
+DROP TABLE IF EXISTS idempotency_keys;
+DROP TABLE IF EXISTS webhook_events;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS evidence;
+DROP TABLE IF EXISTS findings;
+DROP TABLE IF EXISTS scans;
+DROP TABLE IF EXISTS scan_jobs;
+DROP TABLE IF EXISTS usage_counters;
+DROP TABLE IF EXISTS entitlements;
+DROP TABLE IF EXISTS subscriptions;
+DROP TABLE IF EXISTS plans;
+DROP TABLE IF EXISTS memberships;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS workspaces;
+DROP TABLE IF EXISTS users;
+DELETE FROM schema_versions WHERE version = '001_phase3_persistence';

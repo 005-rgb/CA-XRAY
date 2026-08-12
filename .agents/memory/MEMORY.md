@@ -1,2 +1,3 @@
 - [Provider response contracts](provider-response-contracts.md) — treat DexScreener `pairs: null` as no pair, not malformed data; preserve provider distinctions.
 - [Replit configuration validation](replit-config-validation.md) — validate `.replit` through the platform callback rather than editing it directly.
+- [Phase 3 persistence](phase3-persistence.md) — select PostgreSQL explicitly; keep development memory-backed and migrations explicit.

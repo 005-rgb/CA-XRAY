@@ -30,6 +30,9 @@ npm test
 - Live evidence keeps internal provenance (provider ID, adapter/schema/engine versions, retrieval time, confidence, and evidence reference), while public reports redact provider identity. Risk score, reliability score, and data status remain separate.
 - Provider conflicts are explicit and excluded from silent scoring; missing, null, malformed, unavailable, and provider-error values never become zero, false, or a safe status.
 - Production startup rejects in-memory queue and data-store drivers; configure PostgreSQL via `DATA_STORE_DRIVER` and a shared queue via `SCAN_QUEUE_DRIVER` before deployment.
+- Phase 3 persistence is implemented through `src/persistence/index.js`: memory and PostgreSQL adapters share scan idempotency, usage, tenant-scoped job reads, webhook deduplication, outbox, and lifecycle metadata contracts.
+- PostgreSQL schema and rollback are versioned in `migrations/001_phase3_persistence.sql` and `migrations/001_phase3_persistence.down.sql`; run `npm run db:migrate` with `DATABASE_URL` before using the PostgreSQL adapter.
+- Phase 3 operations and backup/restore drill are documented in `DOC/PHASE-3-OPERATIONS.md`.
 
 ## User preferences
 

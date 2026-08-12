@@ -17,10 +17,7 @@ const {
 const { toPublicScan } = require("./src/engine");
 const { createScanJobQueue } = require("./src/jobs/scan-queue");
 const {
-  AppendOnlyAuditLog,
-  IdempotencyStore,
   KeyedRateLimiter,
-  QuotaLedger,
   RateLimitError,
   sha256,
 } = require("./src/security/controls");
@@ -30,17 +27,26 @@ const {
   createVisitorContext,
 } = require("./src/security/policy");
 const { PLAN_CATALOG } = require("./src/platform/config");
+const { createPersistence } = require("./src/persistence");
 
 const PORT = Number(process.env.PORT || 5000);
 const HOST = "0.0.0.0";
 const PUBLIC_DIR = path.join(__dirname, "public");
 const runtimeConfig = getRuntimeConfig();
 assertProductionRuntime(runtimeConfig);
-const scanQueue = createScanJobQueue({ processor: scanLive, runtimeConfig });
+const persistence = createPersistence({ runtimeConfig });
+const persistenceReady = persistence.init();
+const scanQueue = createScanJobQueue({
+  processor: scanLive,
+  runtimeConfig,
+  onStatusChange: (job) => {
+    if (job.status === "RUNNING") return persistence.markJobRunning(job);
+    if (job.status === "SUCCEEDED") return persistence.markJobSucceeded(job);
+    if (job.status === "FAILED") return persistence.markJobFailed(job);
+    return undefined;
+  },
+});
 const requestRateLimiter = new KeyedRateLimiter();
-const quotaLedger = new QuotaLedger();
-const idempotencyStore = new IdempotencyStore();
-const auditLog = new AppendOnlyAuditLog();
 const visitorSigningKey = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 
 function sendJson(res, status, body, { context = null, headers = {} } = {}) {
@@ -156,6 +162,7 @@ function enforceScanProtection(req, context, networkId) {
 }
 
 async function handleApi(req, res, url, context) {
+  await persistenceReady;
   if (req.method === "GET" && url.pathname === "/api/platform") {
     sendJson(res, 200, publicPlatformConfig(runtimeConfig), { context });
     return true;
@@ -211,47 +218,62 @@ async function handleApi(req, res, url, context) {
         return true;
       }
       const idempotencyKey = headerKey || `scan:${sha256(`${address.toLowerCase()}:${networkId}`)}`;
-      const existing = idempotencyStore.get(context.workspaceId, idempotencyKey);
+      const existing = await persistence.getIdempotency(context.workspaceId, idempotencyKey);
       if (existing) {
         sendJson(res, 202, existing, { context });
         return true;
       }
       const plan = PLAN_CATALOG[context.planId];
-      const quota = quotaLedger.consume({
+      const created = await persistence.createScanRequest({
         workspaceId: context.workspaceId,
+        actorId: context.actor.id,
         planId: context.planId,
         limit: plan.scanLimitPerMonth,
+        idempotencyKey,
+        address,
+        networkId,
+        engineVersion: "2.0.0",
       });
-      if (!quota.allowed) {
+      if (created.duplicate) {
+        sendJson(res, 202, created.response, { context });
+        return true;
+      }
+      try {
+        scanQueue.enqueue({
+          jobId: created.job.id,
+          address,
+          networkId,
+          workspaceId: context.workspaceId,
+          actorId: context.actor.id,
+        });
+      } catch (queueError) {
+        await persistence.markJobFailed({
+          id: created.job.id,
+          completedAt: new Date().toISOString(),
+          error: {
+            code: queueError.code || "SCAN_QUEUE_FAILED",
+            message: queueError.message || "The scan could not be queued.",
+          },
+        });
+        throw queueError;
+      }
+      const response = created.response;
+      sendJson(res, 202, response, { context });
+    } catch (error) {
+      if (error.code === "MONTHLY_SCAN_QUOTA_EXCEEDED") {
         sendJson(res, 429, {
-          error: "MONTHLY_SCAN_QUOTA_EXCEEDED",
+          error: error.code,
           message: "This workspace has reached its monthly scan limit.",
         }, { context, headers: { "Retry-After": "3600" } });
         return true;
       }
-      const job = scanQueue.enqueue({
-        address,
-        networkId,
-        workspaceId: context.workspaceId,
-        actorId: context.actor.id,
-      });
-      const response = {
-        job: {
-          id: job.id,
-          status: job.status,
-          statusUrl: `/api/scan/${job.id}`,
-          createdAt: job.createdAt,
-        },
-      };
-      idempotencyStore.set(context.workspaceId, idempotencyKey, response);
-      auditLog.append({
-        action: "SCAN_CREATED",
-        actorId: context.actor.id,
-        workspaceId: context.workspaceId,
-        metadata: { networkId, address: address.toLowerCase(), jobId: job.id },
-      });
-      sendJson(res, 202, response, { context });
-    } catch (error) {
+      if (error.code === "IDEMPOTENCY_REQUEST_IN_PROGRESS") {
+        sendJson(res, 409, {
+          error: error.code,
+          message: "An identical scan request is already being created. Retry shortly.",
+        }, { context, headers: { "Retry-After": "1" } });
+        return true;
+      }
       if (error.code === "SCAN_QUEUE_FULL") {
         sendJson(res, 429, {
           error: error.code,
@@ -279,7 +301,7 @@ async function handleApi(req, res, url, context) {
 
   const jobMatch = url.pathname.match(/^\/api\/scan\/([^/]+)$/);
   if (req.method === "GET" && jobMatch) {
-    const scopedJob = scanQueue.getForWorkspace(jobMatch[1], context.workspaceId);
+    const scopedJob = await persistence.getScanJob(jobMatch[1], context.workspaceId);
     if (!scopedJob) {
       sendJson(res, 404, { error: "JOB_NOT_FOUND", message: "Scan job not found." }, { context });
       return true;
