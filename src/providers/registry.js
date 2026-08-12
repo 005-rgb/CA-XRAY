@@ -16,33 +16,99 @@ function assertControlledProviderUrl(value, allowedOrigins = CONTROLLED_PROVIDER
   return url;
 }
 
+class ProviderRuntime {
+  constructor({ concurrencyLimit = 2, quotaLimit = 120, quotaWindowMs = 60_000 } = {}) {
+    this.concurrencyLimit = Math.max(1, Number(concurrencyLimit) || 1);
+    this.quotaLimit = Math.max(1, Number(quotaLimit) || 1);
+    this.quotaWindowMs = Math.max(1, Number(quotaWindowMs) || 1);
+    this.active = 0;
+    this.calls = [];
+    this.successes = 0;
+    this.failures = 0;
+    this.lastError = null;
+  }
+
+  checkQuota(now = Date.now()) {
+    this.calls = this.calls.filter((timestamp) => now - timestamp < this.quotaWindowMs);
+    if (this.calls.length >= this.quotaLimit) {
+      throw Object.assign(new Error("PROVIDER_QUOTA_EXCEEDED"), {
+        code: "PROVIDER_QUOTA_EXCEEDED",
+      });
+    }
+    this.calls.push(now);
+  }
+
+  async run(operation) {
+    if (this.active >= this.concurrencyLimit) {
+      throw Object.assign(new Error("PROVIDER_CONCURRENCY_LIMIT"), {
+        code: "PROVIDER_CONCURRENCY_LIMIT",
+      });
+    }
+    this.checkQuota();
+    this.active += 1;
+    try {
+      const result = await operation();
+      this.successes += 1;
+      return result;
+    } catch (error) {
+      this.failures += 1;
+      this.lastError = error.code || "PROVIDER_ERROR";
+      throw error;
+    } finally {
+      this.active -= 1;
+    }
+  }
+
+  snapshot() {
+    return Object.freeze({
+      active: this.active,
+      concurrencyLimit: this.concurrencyLimit,
+      quotaLimit: this.quotaLimit,
+      successes: this.successes,
+      failures: this.failures,
+      lastError: this.lastError,
+    });
+  }
+}
+
 function validateAdapter(adapter) {
   if (!adapter || typeof adapter !== "object") {
     throw new TypeError("Provider adapter must be an object.");
   }
-  for (const key of ["id", "source", "fetch", "apply", "validate"]) {
+  for (const key of ["id", "source", "fetch"]) {
     if (!adapter[key]) throw new TypeError(`Provider adapter is missing ${key}.`);
   }
-  if (typeof adapter.fetch !== "function" || typeof adapter.apply !== "function") {
-    throw new TypeError("Provider adapter fetch and apply members must be functions.");
+  if (typeof adapter.fetch !== "function") {
+    throw new TypeError("Provider adapter fetch member must be a function.");
   }
-  if (typeof adapter.validate !== "function") {
-    throw new TypeError("Provider adapter validate member must be a function.");
+  const validateResponse = adapter.validateResponse || adapter.validate;
+  if (typeof validateResponse !== "function") {
+    throw new TypeError("Provider adapter validateResponse member must be a function.");
+  }
+  if (typeof adapter.normalizeResponse !== "function") {
+    throw new TypeError("Provider adapter normalizeResponse member must be a function.");
   }
   if (typeof adapter.id !== "string" || !/^[a-z0-9-]{2,64}$/.test(adapter.id)) {
     throw new TypeError("Provider adapter id must be a stable lowercase identifier.");
   }
-  return Object.freeze({ ...adapter });
+  return Object.freeze({
+    ...adapter,
+    version: adapter.version || "1.0.0",
+    capabilities: Object.freeze([...(adapter.capabilities || [])]),
+    validateResponse,
+  });
 }
 
-function createProviderRegistry(adapters = []) {
+function createProviderRegistry(adapters = [], runtimeOptions = {}) {
   const registered = new Map();
+  const runtime = new Map();
   for (const adapter of adapters) {
     const validated = validateAdapter(adapter);
     if (registered.has(validated.id)) {
       throw new Error(`Provider adapter already registered: ${validated.id}`);
     }
     registered.set(validated.id, validated);
+    runtime.set(validated.id, new ProviderRuntime(runtimeOptions[validated.id] || runtimeOptions));
   }
 
   return Object.freeze({
@@ -52,21 +118,43 @@ function createProviderRegistry(adapters = []) {
     get(id) {
       return registered.get(id) || null;
     },
+    async fetch(id, context) {
+      const adapter = registered.get(id);
+      if (!adapter) throw new Error(`Unknown provider adapter: ${id}`);
+      return runtime.get(id).run(() => adapter.fetch({ ...context, providerId: id }));
+    },
     validateResponse(id, response) {
       const adapter = registered.get(id);
       if (!adapter) throw new Error(`Unknown provider adapter: ${id}`);
-      const result = adapter.validate(response);
+      const result = adapter.validateResponse(response);
       if (result === true) return true;
       const error = new Error(result?.message || "PROVIDER_RESPONSE_INVALID");
       error.code = result?.code || "PROVIDER_RESPONSE_INVALID";
-      error.provider = adapter.source;
+      error.providerId = adapter.id;
       throw error;
+    },
+    normalizeResponse(id, context) {
+      const adapter = registered.get(id);
+      if (!adapter) throw new Error(`Unknown provider adapter: ${id}`);
+      const result = adapter.normalizeResponse({ ...context, providerId: id });
+      if (!result || typeof result !== "object" || !["valid", "unknown", "unavailable", "provider_error"].includes(result.status)) {
+        throw Object.assign(new Error("PROVIDER_NORMALIZATION_INVALID"), {
+          code: "PROVIDER_NORMALIZATION_INVALID",
+          providerId: id,
+        });
+      }
+      return result;
+    },
+    health(id = null) {
+      if (id) return runtime.get(id)?.snapshot() || null;
+      return Object.fromEntries([...runtime.entries()].map(([key, value]) => [key, value.snapshot()]));
     },
   });
 }
 
 module.exports = {
   CONTROLLED_PROVIDER_ORIGINS,
+  ProviderRuntime,
   assertControlledProviderUrl,
   createProviderRegistry,
   validateAdapter,

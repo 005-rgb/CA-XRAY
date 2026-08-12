@@ -1,0 +1,35 @@
+APPROVED — proceed with Phase 2 scope A–G, with the following mandatory amendments:
+
+Core engine must consume only normalized evidence and must never depend directly on raw provider schemas.
+Implement the canonical provider result taxonomy exactly as proposed: valid, unknown, unavailable, provider_error.
+Never silently convert missing, null, malformed, unavailable, or provider-error values into 0, false, or a safe status.
+Keep riskScore, reliabilityScore, and dataStatus strictly separate. UNKNOWN must never automatically mean safe or risky.
+Add provider conflict detection when multiple normalized sources disagree. Do not silently choose conflicting values.
+Make validation chain-aware. A contract address must be validated against the selected network before provider queries are executed.
+Make provider adapters fully replaceable. GoPlus and DexScreener must never be hardcoded into the core risk engine.
+Preserve the existing approved scoring rubric and product behavior. Do not redesign the scoring model during Phase 2.
+Provenance must be stored internally for every important evidence item, including provider identity, adapter version, retrieval time, confidence, engine version, schema version, and evidence reference. Provider names must NOT be exposed in the public user-facing report/UI.
+Live scans must never silently fall back to demo fixtures.
+Keep provider resilience implementation lightweight: bounded timeout, transient-error retry with exponential backoff/jitter, circuit breaker, per-provider concurrency limit, and quota protection. Do not over-engineer.
+Add the proposed regression/contract test matrix, especially null handling, malformed responses, 429/5xx, timeout, duplicate pairs, wrong-network data, missing numerics, provider conflicts, provider-order determinism, and live-without-demo-fallback.
+Do not implement PostgreSQL, Clerk, workspace/tenant, Stripe, billing, developer API, microservices, new providers, or major UI changes in Phase 2.
+
+Additional mandatory architecture rule:
+
+Chain Validation
+      ↓
+Provider Adapter
+      ↓
+Normalized Evidence
+      ↓
+Evidence Validation
+      ↓
+Forensic Engine
+      ↓
+Risk Engine
+      ↓
+Report Engine
+
+The Risk Engine must remain deterministic and provider-agnostic.
+
+Phase 2 is complete only when A–G and all amendments above pass their acceptance tests. Do not claim completion if any test is failing.

@@ -14,6 +14,7 @@ const {
   publicPlanCatalog,
   publicPlatformConfig,
 } = require("./src/platform/config");
+const { toPublicScan } = require("./src/engine");
 const { createScanJobQueue } = require("./src/jobs/scan-queue");
 const {
   AppendOnlyAuditLog,
@@ -176,7 +177,7 @@ async function handleApi(req, res, url, context) {
       sendJson(res, 400, { error: "INVALID_DEMO", message: "Unknown demo scenario." }, { context });
       return true;
     }
-    sendJson(res, 200, { scan: createDemoScan(scenario) }, { context });
+    sendJson(res, 200, { scan: toPublicScan(createDemoScan(scenario)) }, { context });
     return true;
   }
 
@@ -283,7 +284,11 @@ async function handleApi(req, res, url, context) {
       sendJson(res, 404, { error: "JOB_NOT_FOUND", message: "Scan job not found." }, { context });
       return true;
     }
-    sendJson(res, 200, { job: scopedJob }, { context });
+    sendJson(res, 200, {
+      job: scopedJob && scopedJob.scan
+        ? { ...scopedJob, scan: toPublicScan(scopedJob.scan) }
+        : scopedJob,
+    }, { context });
     return true;
   }
 

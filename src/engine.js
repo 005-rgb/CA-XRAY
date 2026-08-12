@@ -1,9 +1,9 @@
-const { createProviderRegistry } = require("./providers/registry");
 const {
-  assertControlledProviderUrl,
-  CONTROLLED_PROVIDER_ORIGINS,
-} = require("./providers/registry");
-const { CircuitBreaker, withProviderPolicy } = require("./security/controls");
+  ENGINE_VERSION,
+  EVIDENCE_SCHEMA_VERSION,
+  PROVIDER_RESULT_STATUS,
+} = require("./providers/contracts");
+const { createDefaultProviderRegistry } = require("./providers/default-adapters");
 
 const STATUS = Object.freeze({
   VERIFIED: "VERIFIED",
@@ -50,23 +50,55 @@ function clamp(value, min = 0, max = 100) {
   return Math.min(max, Math.max(min, number));
 }
 
-function point(value, status, source, confidence = "UNKNOWN", evidenceId = null, retrievedAt = null, derived = false) {
-  return { value, status, source, confidence, evidenceId, retrievedAt, derived };
+function point(
+  value,
+  status,
+  source,
+  confidence = "UNKNOWN",
+  evidenceId = null,
+  retrievedAt = null,
+  derived = false,
+  evidenceStatus = null,
+  provenance = null,
+) {
+  return {
+    value,
+    status,
+    source,
+    confidence,
+    evidenceId,
+    retrievedAt,
+    derived,
+    evidenceStatus: evidenceStatus || (
+      status === STATUS.UNKNOWN || status === STATUS.UNAVAILABLE || status === STATUS.ERROR
+        ? PROVIDER_RESULT_STATUS.UNKNOWN
+        : PROVIDER_RESULT_STATUS.VALID
+    ),
+    provenance,
+  };
 }
 
 function unknown(source = "No provider evidence") {
-  return point(null, STATUS.UNKNOWN, source);
+  return point(null, STATUS.UNKNOWN, source, "UNKNOWN", null, null, false, PROVIDER_RESULT_STATUS.UNKNOWN);
 }
 
 function errorPoint(source, message) {
-  return point(null, STATUS.ERROR, source, "UNKNOWN", null, null, false, message);
+  return {
+    ...point(null, STATUS.ERROR, source, "UNKNOWN", null, null, false, PROVIDER_RESULT_STATUS.PROVIDER_ERROR),
+    error: message || "Provider evidence error.",
+  };
 }
 
 function hasEvidence(dataPoint, mode) {
   if (!dataPoint) return false;
   return mode === "DEMO"
     ? dataPoint.status === STATUS.DEMO
-    : dataPoint.status === STATUS.VERIFIED || dataPoint.status === STATUS.DETECTED;
+    : dataPoint.status !== STATUS.UNKNOWN
+      && dataPoint.status !== STATUS.UNAVAILABLE
+      && dataPoint.status !== STATUS.ERROR
+      && (dataPoint.evidenceStatus === PROVIDER_RESULT_STATUS.VALID
+        || dataPoint.status === STATUS.VERIFIED
+        || dataPoint.status === STATUS.DETECTED);
 }
 
 function statusForValue(value, source, retrievedAt, mode = "LIVE", confidence = "HIGH", derived = false) {
@@ -113,9 +145,14 @@ function fieldCoverage(fields, mode) {
 
 function createBaseScan({ mode, address, network, timestamp }) {
   return {
+    engineVersion: ENGINE_VERSION,
+    schemaVersion: EVIDENCE_SCHEMA_VERSION,
     scanId: `${mode.toLowerCase()}-${address.slice(2, 10).toLowerCase()}-${timestamp.replace(/\D/g, "").slice(-10)}`,
     mode,
     timestamp,
+    dataStatus: mode === "DEMO" ? "valid" : PROVIDER_RESULT_STATUS.UNKNOWN,
+    riskScore: null,
+    reliabilityScore: null,
     network: {
       id: network.id,
       name: network.name,
@@ -146,6 +183,8 @@ function createBaseScan({ mode, address, network, timestamp }) {
     findings: [],
     evidence: [],
     errors: [],
+    conflicts: [],
+    providerResults: [],
     limitations: [],
     stages: ["VALIDATING", "FETCHING DATA", "NORMALIZING DATA", "ANALYZING CONTRACT", "CALCULATING RISK", "CALCULATING RELIABILITY", "BUILDING REPORT"],
   };
@@ -414,7 +453,10 @@ function calculateReliability(scan, risk) {
   const E = scan.mode === "DEMO" ? 100 : clamp(coverageWeighted / Object.values(CATEGORY_WEIGHTS).reduce((a, b) => a + b, 0));
   const sources = new Set();
   const collectSources = (value) => {
-    if (value && typeof value === "object" && value.source) sources.add(value.source);
+    if (value && typeof value === "object") {
+      if (value.source) sources.add(value.source);
+      if (value.provenance?.providerId) sources.add(value.provenance.providerId);
+    }
   };
   for (const section of [scan.security, scan.trading, scan.holders, scan.liquidity, scan.market, scan.deployer, scan.project]) {
     Object.values(section).forEach(collectSources);
@@ -750,7 +792,9 @@ function impactForFinding(finding) {
 function finalizeScan(scan) {
   const risk = calculateCategoryScores(scan);
   scan.risk = risk;
+  scan.riskScore = risk.finalScore;
   scan.reliability = calculateReliability(scan, risk);
+  scan.reliabilityScore = scan.reliability.score;
   scan.findings = generateFindings(scan, risk);
   scan.intelligence = buildIntelligence(scan, risk);
   if (risk.partialData) scan.stages.push("PARTIAL DATA");
@@ -762,6 +806,29 @@ function finalizeScan(scan) {
   if (scan.errors.length) scan.limitations.push("One or more providers returned an error; missing fields remain UNKNOWN and were not replaced.");
   if (scan.risk.finalScore === null) scan.limitations.push("Insufficient category evidence for a reliable final risk score.");
   return scan;
+}
+
+function toPublicScan(scan) {
+  const publicScan = JSON.parse(JSON.stringify(scan));
+  const stripPointProvenance = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      value.forEach(stripPointProvenance);
+      return;
+    }
+    delete value.source;
+    delete value.provenance;
+    delete value.evidenceStatus;
+    for (const child of Object.values(value)) stripPointProvenance(child);
+  };
+  for (const section of ["token", "security", "trading", "holders", "liquidity", "market", "deployer", "project", "verification"]) {
+    stripPointProvenance(publicScan[section]);
+  }
+  publicScan.findings = (publicScan.findings || []).map(({ source, ...finding }) => finding);
+  publicScan.evidence = (publicScan.evidence || []).map(({ source, ...evidence }) => evidence);
+  publicScan.errors = (publicScan.errors || []).map(({ provider, ...error }) => error);
+  delete publicScan.providerResults;
+  return publicScan;
 }
 
 function createDemoScan(scenario = "high") {
@@ -777,256 +844,186 @@ function createDemoScan(scenario = "high") {
   return finalizeScan(scan);
 }
 
-function providerValue(data, key) {
-  if (!Object.prototype.hasOwnProperty.call(data || {}, key)) return null;
-  const raw = data[key];
-  if (raw === "" || raw === null || raw === undefined) return null;
-  if (raw === "0") return false;
-  if (raw === "1") return true;
-  return raw;
+function stableValue(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && !Number.isFinite(value)) return null;
+  return value;
 }
 
-function parseBooleanField(data, key, source, retrievedAt) {
-  const value = providerValue(data, key);
-  if (value === null) return unknown(source);
-  return statusForValue(Boolean(value), source, retrievedAt, "LIVE");
+function equivalentValues(left, right) {
+  return JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right));
 }
 
-function parseNumberField(data, key, source, retrievedAt, transform = (value) => Number(value)) {
-  const value = providerValue(data, key);
-  if (value === null) return unknown(source);
-  const parsed = transform(value);
-  return Number.isFinite(parsed) ? statusForValue(parsed, source, retrievedAt, "LIVE", "HIGH", transform !== Number) : unknown(source);
+function isNormalizedPoint(value) {
+  return value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "evidenceStatus");
 }
 
-function parseTax(value) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return NaN;
-  return parsed <= 1 ? parsed * 100 : parsed;
-}
-
-function isProviderObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value);
-}
-
-async function fetchJson(url, provider, timeout = 12000) {
-  assertControlledProviderUrl(url, CONTROLLED_PROVIDER_ORIGINS);
-  if (!fetchJson.breakers) fetchJson.breakers = new Map();
-  if (!fetchJson.breakers.has(provider)) fetchJson.breakers.set(provider, new CircuitBreaker());
-  return withProviderPolicy(async ({ signal }) => {
-    const retrievedAt = new Date().toISOString();
-    const response = await fetch(url, {
-      signal,
-      headers: { Accept: "application/json", "User-Agent": "CA-XRAY/1.0" },
-    });
-    const text = await response.text();
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      throw Object.assign(new Error("MALFORMED_RESPONSE"), {
-        code: "MALFORMED_RESPONSE",
-        provider,
-        status: response.status,
-      });
+function mergeNormalizedEvidence(scan, result) {
+  const mergeSection = (target, incoming, path = []) => {
+    for (const [key, value] of Object.entries(incoming || {})) {
+      if (isNormalizedPoint(value)) {
+        const current = target[key];
+        if (!current || !isNormalizedPoint(current)) {
+          target[key] = value;
+          continue;
+        }
+        const currentValid = current.evidenceStatus === PROVIDER_RESULT_STATUS.VALID && current.status !== STATUS.UNKNOWN;
+        const incomingValid = value.evidenceStatus === PROVIDER_RESULT_STATUS.VALID && value.status !== STATUS.UNKNOWN;
+        if (!currentValid && incomingValid) {
+          target[key] = value;
+          continue;
+        }
+        if (currentValid && incomingValid && !equivalentValues(current.value, value.value)) {
+          const conflictPath = [...path, key].join(".");
+          scan.conflicts.push({
+            path: conflictPath,
+            status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR,
+            values: [stableValue(current.value), stableValue(value.value)],
+            evidenceReferences: [current.evidenceId, value.evidenceId].filter(Boolean),
+          });
+          target[key] = point(
+            null,
+            STATUS.UNKNOWN,
+            "Conflicting normalized evidence",
+            "UNKNOWN",
+            null,
+            null,
+            false,
+            PROVIDER_RESULT_STATUS.UNKNOWN,
+            {
+              engineVersion: ENGINE_VERSION,
+              schemaVersion: EVIDENCE_SCHEMA_VERSION,
+              conflictPath,
+            },
+          );
+        }
+        continue;
+      }
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        if (!target[key] || typeof target[key] !== "object") target[key] = {};
+        mergeSection(target[key], value, [...path, key]);
+      }
     }
-    if (!response.ok) {
-      throw Object.assign(new Error(`HTTP_${response.status}`), {
-        code: response.status === 429 ? "RATE_LIMIT" : "PROVIDER_ERROR",
-        provider,
-        status: response.status,
-      });
-    }
-    return { json, retrievedAt };
-  }, {
-    provider,
-    breaker: fetchJson.breakers.get(provider),
-    timeoutMs: timeout,
-    retries: 1,
+  };
+  mergeSection(scan, result.evidence);
+}
+
+function applyProviderResult(scan, result) {
+  scan.providerResults.push({
+    providerId: result.providerId,
+    status: result.status,
+    adapterVersion: result.adapterVersion,
+    retrievedAt: result.retrievedAt,
+    confidence: result.confidence,
+    errorCode: result.errorCode,
+    limitations: result.limitations,
   });
+  if (result.limitations?.length) scan.limitations.push(...result.limitations);
+  if (result.status === PROVIDER_RESULT_STATUS.VALID) {
+    mergeNormalizedEvidence(scan, result);
+    return true;
+  }
+  if (result.status === PROVIDER_RESULT_STATUS.PROVIDER_ERROR || result.status === PROVIDER_RESULT_STATUS.UNAVAILABLE) {
+    scan.errors.push({
+      provider: result.providerId,
+      code: result.errorCode || result.status.toUpperCase(),
+      message: result.message || "Provider evidence was not usable.",
+      status: result.status,
+    });
+  }
+  return false;
 }
 
-function applyGoPlus(scan, response, retrievedAt, network) {
-  const source = "GoPlus Security API";
-  if (!isProviderObject(response) || ![1, "1"].includes(response.code) || !isProviderObject(response.result)) {
-    scan.errors.push({ provider: source, code: "MALFORMED_RESPONSE", message: "GoPlus returned an invalid response shape." });
-    return false;
-  }
-  const key = Object.keys(response.result)[0];
-  const data = key ? response.result[key] : null;
-  if (!isProviderObject(data)) {
-    scan.errors.push({ provider: source, code: "CONTRACT_NOT_FOUND", message: "GoPlus returned no record for this contract." });
-    return false;
-  }
-  const boolMap = {
-    canMint: "is_mintable",
-    canBlacklist: "is_blacklisted",
-    canWhitelist: "is_whitelisted",
-    canPause: "transfer_pausable",
-    canChangeTax: "slippage_modifiable",
-    isUpgradeable: "is_proxy",
-    canWithdraw: "can_take_back_ownership",
-  };
-  scan.security = Object.fromEntries(Object.entries(boolMap).map(([name, keyName]) => [name, parseBooleanField(data, keyName, source, retrievedAt)]));
-  scan.security.canChangeTax = providerValue(data, "can_set_tax") === null ? scan.security.canChangeTax : parseBooleanField(data, "can_set_tax", source, retrievedAt);
-  const ownerAddress = providerValue(data, "owner_address");
-  scan.security.ownerAddress = statusForValue(ownerAddress, source, retrievedAt, "LIVE");
-  scan.security.ownerControl = ownerAddress
-    ? statusForValue(/^0x0{40}$/i.test(String(ownerAddress)) ? "RENOUNCED" : "ACTIVE", source, retrievedAt, "LIVE")
-    : unknown(source);
-  scan.security.sourceVerified = parseBooleanField(data, "is_open_source", source, retrievedAt);
-  scan.contract.capabilities = scan.security;
-  scan.trading = {
-    buyTax: parseNumberField(data, "buy_tax", source, retrievedAt, parseTax),
-    sellTax: parseNumberField(data, "sell_tax", source, retrievedAt, parseTax),
-    transferTax: parseNumberField(data, "transfer_tax", source, retrievedAt, parseTax),
-    sellRestriction: parseBooleanField(data, "cannot_sell_all", source, retrievedAt),
-    buyRestriction: parseBooleanField(data, "cannot_buy", source, retrievedAt),
-    maliciousTradingSignal: parseBooleanField(data, "is_honeypot", source, retrievedAt),
-    taxChangeable: scan.security.canChangeTax,
-    maxTransactionRestriction: parseBooleanField(data, "anti_whale_modifiable", source, retrievedAt),
-    maxWalletRestriction: parseBooleanField(data, "anti_whale_modifiable", source, retrievedAt),
-    tradingPause: scan.security.canPause,
-    hasPair: unknown(source),
-  };
-  scan.verification = { sourceCode: scan.security.sourceVerified };
-  scan.token = {
-    name: statusForValue(providerValue(data, "token_name"), source, retrievedAt),
-    symbol: statusForValue(providerValue(data, "token_symbol"), source, retrievedAt),
-    decimals: parseNumberField(data, "decimals", source, retrievedAt),
-    totalSupply: statusForValue(providerValue(data, "total_supply"), source, retrievedAt),
-  };
-  scan._providerIdentity = { goplus: true, network };
-  return true;
-}
-
-function choosePrimaryPair(pairs) {
-  return [...pairs].sort((a, b) => {
-    const liquidityDiff = Number(b.liquidity && b.liquidity.usd || 0) - Number(a.liquidity && a.liquidity.usd || 0);
-    if (liquidityDiff) return liquidityDiff;
-    const volumeDiff = Number(b.volume && b.volume.h24 || 0) - Number(a.volume && b.volume.h24 || 0);
-    if (volumeDiff) return volumeDiff;
-    return String(a.pairAddress || "").localeCompare(String(b.pairAddress || ""));
-  })[0] || null;
-}
-
-function applyDexScreener(scan, response, retrievedAt, network, address) {
-  const source = "DexScreener API";
-  if (!isProviderObject(response) || (response.pairs !== null && !Array.isArray(response.pairs))) {
-    scan.errors.push({ provider: source, code: "MALFORMED_RESPONSE", message: "DexScreener returned an invalid response shape." });
-    return false;
-  }
-  const pairs = (response.pairs || []).filter((pair) => pair && pair.chainId === network.dexChainId && (pair.baseToken?.address?.toLowerCase() === address.toLowerCase() || pair.quoteToken?.address?.toLowerCase() === address.toLowerCase()));
-  const pair = choosePrimaryPair(pairs);
-  if (!pair) {
-    scan.errors.push({ provider: source, code: "PAIR_NOT_FOUND", message: "No supported-network pair was returned for this contract." });
-    return false;
-  }
-  const q = (value) => statusForValue(value, source, retrievedAt);
-  scan.liquidity = {
-    liquidityUsd: q(Number(pair.liquidity?.usd)),
-    volume24h: q(Number(pair.volume?.h24)),
-    pair: q(pair.pairAddress),
-    dex: q(pair.dexId),
-    price: q(Number(pair.priceUsd)),
-    change24h: q(Number(pair.priceChange?.h24)),
-    primaryPairRule: "Highest USD liquidity, then 24h volume, then lexicographic pair address.",
-  };
-  scan.market = {
-    price: scan.liquidity.price,
-    volume24h: scan.liquidity.volume24h,
-    liquidityUsd: scan.liquidity.liquidityUsd,
-    fdv: q(Number(pair.fdv)),
-    change24h: scan.liquidity.change24h,
-    change7d: unknown(source),
-  };
-  scan.trading = scan.trading || {};
-  scan.trading.hasPair = q(true);
-  if (scan.token.symbol.status === STATUS.UNKNOWN) scan.token.symbol = q(pair.baseToken?.symbol);
-  if (scan.token.name.status === STATUS.UNKNOWN) scan.token.name = q(pair.baseToken?.name);
-  scan._providerIdentity = { ...(scan._providerIdentity || {}), dexscreener: true, network };
-  return true;
-}
-
-function createDefaultProviderRegistry() {
-  return createProviderRegistry([
-    {
-      id: "goplus-security",
-      source: "GoPlus Security API",
-      validate: (response) =>
-        isProviderObject(response) && [1, "1"].includes(response.code) && isProviderObject(response.result)
-          ? true
-          : { code: "MALFORMED_RESPONSE", message: "GoPlus returned an invalid response shape." },
-      fetch: ({ address, network }) => {
-        const url = `https://api.gopluslabs.io/api/v1/token_security/${network.goplusChainId}?contract_addresses=${encodeURIComponent(address)}`;
-        return fetchJson(url, "GoPlus Security API");
-      },
-      apply: ({ scan, response, retrievedAt, network }) => applyGoPlus(scan, response, retrievedAt, network),
-    },
-    {
-      id: "dexscreener",
-      source: "DexScreener API",
-      validate: (response) =>
-        isProviderObject(response) && (response.pairs === null || Array.isArray(response.pairs))
-          ? true
-          : { code: "MALFORMED_RESPONSE", message: "DexScreener returned an invalid response shape." },
-      fetch: ({ address }) => {
-        const url = `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(address)}`;
-        return fetchJson(url, "DexScreener API");
-      },
-      apply: ({ scan, response, retrievedAt, network, address }) =>
-        applyDexScreener(scan, response, retrievedAt, network, address),
-    },
-  ]);
+function validateScanTarget(address, networkId) {
+  const addressValidation = validateAddress(address);
+  if (!addressValidation.valid) return addressValidation;
+  const network = networkById(networkId);
+  if (!network) return { valid: false, code: "UNSUPPORTED_NETWORK", message: "Select a supported network." };
+  return { valid: true, normalized: addressValidation.normalized, network };
 }
 
 async function scanLive({ address, networkId, providerRegistry = createDefaultProviderRegistry() }) {
-  const validation = validateAddress(address);
-  if (!validation.valid) throw new Error(validation.code);
-  const network = networkById(networkId);
-  if (!network) throw new Error("UNSUPPORTED_NETWORK");
+  const validation = validateScanTarget(address, networkId);
+  if (!validation.valid) {
+    const validationError = new Error(validation.code);
+    const { message, ...validationDetails } = validation;
+    Object.assign(validationError, validationDetails, { validationMessage: message });
+    throw validationError;
+  }
   const timestamp = new Date().toISOString();
-  const scan = createBaseScan({ mode: "LIVE", address: validation.normalized, network, timestamp });
-  const providers = providerRegistry.list();
-  const context = { address: validation.normalized, network };
-  const results = await Promise.allSettled(providers.map((provider) => provider.fetch(context)));
+  const scan = createBaseScan({ mode: "LIVE", address: validation.normalized, network: validation.network, timestamp });
+  const providers = providerRegistry.list().slice().sort((left, right) => left.id.localeCompare(right.id));
+  const context = {
+    address: validation.normalized,
+    network: validation.network,
+  };
+  const results = await Promise.allSettled(providers.map((provider) => providerRegistry.fetch(provider.id, context)));
   let successes = 0;
   for (const [index, result] of results.entries()) {
     const provider = providers[index];
     if (result.status === "fulfilled") {
       try {
         providerRegistry.validateResponse(provider.id, result.value.json);
-        const applied = provider.apply({
-          scan,
+        const normalized = providerRegistry.normalizeResponse(provider.id, {
           response: result.value.json,
           retrievedAt: result.value.retrievedAt,
           ...context,
         });
-        if (applied) successes += 1;
+        if (applyProviderResult(scan, normalized)) successes += 1;
       } catch (error) {
-        scan.errors.push({
-          provider: provider.source,
-          code: error.code || "PROVIDER_RESPONSE_INVALID",
-          message: error.message || "Provider response failed validation.",
+        applyProviderResult(scan, {
+          providerId: provider.id,
+          adapterVersion: provider.version,
+          status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR,
+          retrievedAt: result.value.retrievedAt,
+          confidence: "UNKNOWN",
+          errorCode: error.code || "PROVIDER_RESPONSE_INVALID",
+          message: "Provider response failed validation or normalization.",
+          limitations: [],
         });
       }
     } else {
       const error = result.reason;
-      scan.errors.push({
-        provider: provider.source,
-        code: error.code || "PROVIDER_ERROR",
-        message: error.message,
+      applyProviderResult(scan, {
+        providerId: provider.id,
+        adapterVersion: provider.version,
+        status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR,
+        retrievedAt: null,
+        confidence: "UNKNOWN",
+        errorCode: error.code || "PROVIDER_ERROR",
+        message: "Provider request failed.",
+        limitations: [],
       });
     }
   }
-  if (!scan.security.canMint) scan.security = { canMint: unknown("GoPlus Security API"), ...scan.security };
-  if (!scan.trading.buyTax) scan.trading = { buyTax: unknown("GoPlus Security API"), ...scan.trading };
-  if (!scan.holders.totalHolders) scan.holders = { totalHolders: unknown("Optional holder endpoint not configured"), top10Percent: unknown("Optional holder endpoint not configured"), deployerPercent: unknown("Optional holder endpoint not configured"), ...scan.holders };
-  if (!scan.deployer.address) scan.deployer = { address: unknown("Optional explorer endpoint not configured"), ...scan.deployer };
-  if (!scan.project.website) scan.project = { website: unknown("No independent project metadata endpoint configured"), addressConsistency: unknown("No independent project metadata endpoint configured"), auditClaim: unknown("No independent project metadata endpoint configured"), ...scan.project };
+  const missing = {
+    token: ["name", "symbol", "decimals", "totalSupply"],
+    security: ["canMint", "canBlacklist", "canWhitelist", "canPause", "canChangeTax", "isUpgradeable", "canWithdraw", "sourceVerified", "ownerAddress", "ownerControl"],
+    trading: ["buyTax", "sellTax", "transferTax", "sellRestriction", "buyRestriction", "maliciousTradingSignal", "taxChangeable", "maxTransactionRestriction", "maxWalletRestriction", "tradingPause", "hasPair"],
+    holders: ["totalHolders", "top10Percent", "deployerPercent"],
+    deployer: ["address"],
+    project: ["website", "addressConsistency", "auditClaim"],
+  };
+  for (const [section, fields] of Object.entries(missing)) {
+    for (const field of fields) {
+      if (!scan[section][field]) scan[section][field] = unknown("No normalized provider evidence");
+    }
+  }
   scan.stages.push(successes ? "COMPLETE" : "ERROR");
-  if (successes < 2) scan.limitations.push("Coverage is partial because not every primary provider returned usable data.");
-  delete scan._providerIdentity;
+  if (successes < providers.length) scan.limitations.push("Coverage is partial because not every provider returned usable normalized evidence.");
+  if (scan.conflicts.length) {
+    scan.errors.push({
+      provider: "normalized-evidence",
+      code: "PROVIDER_CONFLICT",
+      message: "Multiple normalized sources returned conflicting values.",
+      status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR,
+    });
+  }
+  scan.dataStatus = scan.errors.length
+    ? (scan.conflicts.length ? "provider_error" : "partial")
+    : successes
+      ? PROVIDER_RESULT_STATUS.VALID
+      : PROVIDER_RESULT_STATUS.UNKNOWN;
   return finalizeScan(scan);
 }
 
@@ -1049,9 +1046,11 @@ module.exports = {
   TAX_THRESHOLDS,
   LIQUIDITY_THRESHOLDS,
   validateAddress,
+  validateScanTarget,
   truncateAddress,
   createDemoScan,
   createDefaultProviderRegistry,
+  toPublicScan,
   calculateCategoryScores,
   calculateReliability,
   generateFindings,

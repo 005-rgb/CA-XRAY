@@ -73,9 +73,16 @@ test("provider URLs and response schemas are controlled", () => {
   const registry = createProviderRegistry([{
     id: "strict-test",
     source: "Strict test",
-    validate: (response) => response && response.ok === true,
+    version: "1.0.0",
+    capabilities: ["test"],
+    validateResponse: (response) => response && response.ok === true,
     fetch: async () => ({ json: { ok: true } }),
-    apply: () => true,
+    normalizeResponse: () => ({
+      status: "valid",
+      providerId: "strict-test",
+      adapterVersion: "1.0.0",
+      evidence: {},
+    }),
   }]);
   assert.equal(registry.validateResponse("strict-test", { ok: true }), true);
   assert.throws(() => registry.validateResponse("strict-test", { ok: false }), /PROVIDER_RESPONSE_INVALID/);

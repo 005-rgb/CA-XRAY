@@ -32,16 +32,23 @@ test("provider registry enforces an adapter contract", () => {
   const registry = createProviderRegistry([{
     id: "test-provider",
     source: "Test provider",
-    validate: () => true,
+    version: "1.0.0",
+    capabilities: ["test"],
+    validateResponse: () => true,
     fetch: async () => ({ json: {}, retrievedAt: "2026-01-01T00:00:00.000Z" }),
-    apply: () => true,
+    normalizeResponse: () => ({
+      status: "valid",
+      providerId: "test-provider",
+      adapterVersion: "1.0.0",
+      evidence: {},
+    }),
   }]);
   assert.equal(registry.list().length, 1);
   assert.throws(() => createProviderRegistry([{
     id: "invalid",
     source: "Invalid",
     fetch: () => {},
-  }]), /missing apply/);
+  }]), /validateResponse/);
 });
 
 test("scan jobs leave the request path and preserve terminal state", async () => {

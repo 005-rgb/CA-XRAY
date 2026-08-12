@@ -176,6 +176,7 @@ async function withProviderPolicy(operation, {
   timeoutMs = 12_000,
   retries = 1,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  random = Math.random,
 } = {}) {
   if (!breaker.allow()) {
     throw Object.assign(new Error("PROVIDER_CIRCUIT_OPEN"), {
@@ -195,11 +196,15 @@ async function withProviderPolicy(operation, {
       const normalized = error?.name === "AbortError"
         ? Object.assign(new Error("PROVIDER_TIMEOUT"), { code: "PROVIDER_TIMEOUT", provider })
         : error;
-      if (attempt + 1 >= attempts || !TRANSIENT_PROVIDER_CODES.has(normalized?.code)) {
+      const transient = TRANSIENT_PROVIDER_CODES.has(normalized?.code)
+        || /^HTTP_5\d\d$/.test(String(normalized?.code || ""));
+      if (attempt + 1 >= attempts || !transient) {
         breaker.failure();
         throw normalized;
       }
-      await sleep(25 * (attempt + 1));
+      const baseDelay = 25 * (2 ** attempt);
+      const jitter = Math.max(0, Math.min(1, Number(random()) || 0));
+      await sleep(Math.round(baseDelay * (0.75 + (jitter * 0.5))));
     } finally {
       clearTimeout(timer);
     }
