@@ -138,7 +138,20 @@ async function scanLive() {
     });
     const body = await response.json();
     if (!response.ok) throw new Error(body.message || "The scan failed.");
-    currentScan = body.scan;
+    if (!body.job?.id) throw new Error("The scan job could not be created.");
+    let job = null;
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const jobResponse = await fetch(`/api/scan/${encodeURIComponent(body.job.id)}`);
+      const jobBody = await jobResponse.json();
+      if (!jobResponse.ok) throw new Error(jobBody.message || "The scan job could not be read.");
+      job = jobBody.job;
+      if (job.status === "SUCCEEDED") break;
+      if (job.status === "FAILED") throw new Error(job.error?.message || "The scan failed.");
+      updateLoading({ stages: job.status === "RUNNING" ? ["VALIDATING", "FETCHING DATA", "ANALYZING CONTRACT"] : ["VALIDATING", "QUEUED"] });
+    }
+    if (!job || job.status !== "SUCCEEDED") throw new Error("The scan timed out while waiting for the worker.");
+    currentScan = job.scan;
     updateLoading(currentScan);
     renderReport(currentScan);
   } catch (error) {

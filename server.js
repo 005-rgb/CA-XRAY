@@ -7,10 +7,20 @@ const {
   scanLive,
   validateAddress,
 } = require("./src/engine");
+const {
+  assertProductionRuntime,
+  getRuntimeConfig,
+  publicPlanCatalog,
+  publicPlatformConfig,
+} = require("./src/platform/config");
+const { createScanJobQueue } = require("./src/jobs/scan-queue");
 
 const PORT = Number(process.env.PORT || 5000);
 const HOST = "0.0.0.0";
 const PUBLIC_DIR = path.join(__dirname, "public");
+const runtimeConfig = getRuntimeConfig();
+assertProductionRuntime(runtimeConfig);
+const scanQueue = createScanJobQueue({ processor: scanLive, runtimeConfig });
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body);
@@ -64,6 +74,16 @@ async function readBody(req) {
 }
 
 async function handleApi(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/platform") {
+    sendJson(res, 200, publicPlatformConfig(runtimeConfig));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/plans") {
+    sendJson(res, 200, { plans: publicPlanCatalog() });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/networks") {
     sendJson(res, 200, { networks: NETWORKS });
     return true;
@@ -99,17 +119,42 @@ async function handleApi(req, res, url) {
         });
         return true;
       }
-      const scan = await scanLive({ address, networkId });
-      sendJson(res, 200, { scan });
+      const job = scanQueue.enqueue({ address, networkId });
+      sendJson(res, 202, {
+        job: {
+          id: job.id,
+          status: job.status,
+          statusUrl: `/api/scan/${job.id}`,
+          createdAt: job.createdAt,
+        },
+      });
     } catch (error) {
+      if (error.code === "SCAN_QUEUE_FULL") {
+        sendJson(res, 429, {
+          error: error.code,
+          message: "The scan queue is at capacity. Retry after a short delay.",
+        });
+        return true;
+      }
       const known = error && error.message === "REQUEST_TOO_LARGE";
       sendJson(res, known ? 413 : 500, {
         error: known ? "REQUEST_TOO_LARGE" : "SCAN_FAILED",
         message: known
           ? "The request was too large."
-          : "The scan could not be completed. The failure was preserved instead of using fallback data.",
+          : "The scan could not be queued.",
       });
     }
+    return true;
+  }
+
+  const jobMatch = url.pathname.match(/^\/api\/scan\/([^/]+)$/);
+  if (req.method === "GET" && jobMatch) {
+    const job = scanQueue.get(jobMatch[1]);
+    if (!job) {
+      sendJson(res, 404, { error: "JOB_NOT_FOUND", message: "Scan job not found." });
+      return true;
+    }
+    sendJson(res, 200, { job });
     return true;
   }
 
@@ -118,6 +163,14 @@ async function handleApi(req, res, url) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  if (req.method === "GET" && url.pathname === "/healthz") {
+    sendJson(res, 200, { status: "ok" });
+    return;
+  }
+  if (req.method === "GET" && url.pathname === "/readyz") {
+    sendJson(res, 200, { status: "ready", queue: runtimeConfig.queue.driver });
+    return;
+  }
   if (url.pathname.startsWith("/api/")) {
     const handled = await handleApi(req, res, url);
     if (!handled) sendJson(res, 404, { error: "NOT_FOUND", message: "API route not found." });

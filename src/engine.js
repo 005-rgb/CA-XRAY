@@ -1,3 +1,5 @@
+const { createProviderRegistry } = require("./providers/registry");
+
 const STATUS = Object.freeze({
   VERIFIED: "VERIFIED",
   DETECTED: "DETECTED",
@@ -930,31 +932,59 @@ function applyDexScreener(scan, response, retrievedAt, network, address) {
   return true;
 }
 
-async function scanLive({ address, networkId }) {
+function createDefaultProviderRegistry() {
+  return createProviderRegistry([
+    {
+      id: "goplus-security",
+      source: "GoPlus Security API",
+      fetch: ({ address, network }) => {
+        const url = `https://api.gopluslabs.io/api/v1/token_security/${network.goplusChainId}?contract_addresses=${encodeURIComponent(address)}`;
+        return fetchJson(url, "GoPlus Security API");
+      },
+      apply: ({ scan, response, retrievedAt, network }) => applyGoPlus(scan, response, retrievedAt, network),
+    },
+    {
+      id: "dexscreener",
+      source: "DexScreener API",
+      fetch: ({ address }) => {
+        const url = `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(address)}`;
+        return fetchJson(url, "DexScreener API");
+      },
+      apply: ({ scan, response, retrievedAt, network, address }) =>
+        applyDexScreener(scan, response, retrievedAt, network, address),
+    },
+  ]);
+}
+
+async function scanLive({ address, networkId, providerRegistry = createDefaultProviderRegistry() }) {
   const validation = validateAddress(address);
   if (!validation.valid) throw new Error(validation.code);
   const network = networkById(networkId);
   if (!network) throw new Error("UNSUPPORTED_NETWORK");
   const timestamp = new Date().toISOString();
   const scan = createBaseScan({ mode: "LIVE", address: validation.normalized, network, timestamp });
-  const goplusUrl = `https://api.gopluslabs.io/api/v1/token_security/${network.goplusChainId}?contract_addresses=${encodeURIComponent(validation.normalized)}`;
-  const dexUrl = `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(validation.normalized)}`;
-  const results = await Promise.allSettled([
-    fetchJson(goplusUrl, "GoPlus Security API"),
-    fetchJson(dexUrl, "DexScreener API"),
-  ]);
+  const providers = providerRegistry.list();
+  const context = { address: validation.normalized, network };
+  const results = await Promise.allSettled(providers.map((provider) => provider.fetch(context)));
   let successes = 0;
-  if (results[0].status === "fulfilled") {
-    if (applyGoPlus(scan, results[0].value.json, results[0].value.retrievedAt, network)) successes += 1;
-  } else {
-    const error = results[0].reason;
-    scan.errors.push({ provider: "GoPlus Security API", code: error.code || "PROVIDER_ERROR", message: error.message });
-  }
-  if (results[1].status === "fulfilled") {
-    if (applyDexScreener(scan, results[1].value.json, results[1].value.retrievedAt, network, validation.normalized)) successes += 1;
-  } else {
-    const error = results[1].reason;
-    scan.errors.push({ provider: "DexScreener API", code: error.code || "PROVIDER_ERROR", message: error.message });
+  for (const [index, result] of results.entries()) {
+    const provider = providers[index];
+    if (result.status === "fulfilled") {
+      const applied = provider.apply({
+        scan,
+        response: result.value.json,
+        retrievedAt: result.value.retrievedAt,
+        ...context,
+      });
+      if (applied) successes += 1;
+    } else {
+      const error = result.reason;
+      scan.errors.push({
+        provider: provider.source,
+        code: error.code || "PROVIDER_ERROR",
+        message: error.message,
+      });
+    }
   }
   if (!scan.security.canMint) scan.security = { canMint: unknown("GoPlus Security API"), ...scan.security };
   if (!scan.trading.buyTax) scan.trading = { buyTax: unknown("GoPlus Security API"), ...scan.trading };
@@ -988,6 +1018,7 @@ module.exports = {
   validateAddress,
   truncateAddress,
   createDemoScan,
+  createDefaultProviderRegistry,
   calculateCategoryScores,
   calculateReliability,
   generateFindings,
