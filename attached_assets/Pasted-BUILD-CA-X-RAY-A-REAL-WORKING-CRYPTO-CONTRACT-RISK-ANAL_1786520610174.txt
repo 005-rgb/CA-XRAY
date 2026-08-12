@@ -1,0 +1,1546 @@
+BUILD CA X-RAY — A REAL, WORKING CRYPTO CONTRACT RISK ANALYZER
+
+This is a competition project. Build one small, trustworthy product:
+
+PASTE CONTRACT ADDRESS → ANALYZE → EXPLAIN RISK → SHOW EVIDENCE
+
+The product is a contract risk assessment tool. It is not an absolute
+scam detector, investment adviser, trading terminal, wallet, or audit
+replacement.
+
+The highest priorities, in order, are:
+
+1. A real working core
+2. Real public data when available
+3. Deterministic risk calculation
+4. Evidence-based findings
+5. A numerical reliability score separate from risk
+6. A professional forensic report
+7. A clean, readable UX
+8. Low credit and low resource usage
+
+STOP after the core product and report work. Do not expand the product
+outside this specification.
+
+
+==================================================
+0. NON-NEGOTIABLE TRUST RULES
+==================================================
+
+1. Never fabricate live data.
+2. Never invent, approximate, or silently replace an API result.
+3. Never display UNKNOWN, UNAVAILABLE, or missing values as 0.
+4. Never state or imply that a token is definitely a scam.
+5. Never state or imply that a token is safe, audited, or risk-free.
+6. Never give BUY, SELL, LONG, or SHORT recommendations.
+7. Every material finding must include:
+   - WHAT
+   - WHY
+   - EVIDENCE
+   - SOURCE
+   - CONFIDENCE
+8. If evidence is unavailable, use STATUS = UNKNOWN or UNAVAILABLE as
+   defined below. Do not guess.
+9. If the available evidence is insufficient for a meaningful score, do
+   not produce a numerical final risk score. Show:
+
+   INSUFFICIENT DATA FOR RELIABLE SCORE
+
+10. Clearly distinguish LIVE, DEMO, and ERROR states.
+11. If an API fails, show the actual failure or partial-data state. Do not
+    substitute demo data or hardcoded live-looking values.
+12. The report must say that it is an assessment based on available data
+    at scan time, not financial advice.
+
+
+==================================================
+1. PRODUCT SCOPE
+==================================================
+
+Build only:
+
+- Contract address input
+- Optional network selection
+- Address and network validation
+- Live scan pipeline
+- Three deterministic demo scenarios
+- GoPlus integration
+- DexScreener integration
+- Optional public blockchain/explorer metadata
+- One normalized scan object
+- Deterministic risk engine
+- Deterministic reliability engine
+- Evidence-based finding engine
+- Professional report
+- Explicit partial-data and error states
+- Current-session scan-result cache
+
+Do not build:
+
+- AI chatbot or AI copilot
+- WhatsApp
+- CRM
+- notifications
+- realtime updates
+- WebSockets
+- marketplace features
+- accounting
+- supplier or inventory management
+- team management
+- complex roles
+- dark mode
+- native mobile application
+- complex animations
+- payment system
+- social feed
+- portfolio management
+- wallet connection
+- private-key or wallet-signature flows
+- trading, swapping, buying, or selling
+- NFT functionality
+- unnecessary admin panel
+- PDF generation
+- browser print/export
+- complex backend infrastructure
+
+
+==================================================
+2. DATA PROVIDERS AND PROVIDER BOUNDARIES
+==================================================
+
+Use providers in this order:
+
+PRIMARY:
+
+1. GoPlus Security API
+2. DexScreener API
+
+OPTIONAL:
+
+3. Public blockchain or explorer endpoint/API, only where it is available
+   without making the application dependent on a user-supplied API key.
+
+GoPlus may provide:
+
+- contract security signals
+- honeypot or malicious-trading signals
+- owner privileges
+- mint capability
+- blacklist capability
+- whitelist capability
+- pause capability
+- proxy and upgradeability
+- tax information
+- trading restrictions
+- token security indicators
+
+DexScreener may provide:
+
+- token price
+- liquidity
+- volume
+- DEX
+- pair
+- market activity
+- price change
+- FDV
+- market-cap-related data when available
+- pair information
+
+Public blockchain or explorer endpoints may provide, only when actually
+available:
+
+- basic contract metadata
+- network information
+- contract address validation
+- source-code verification status
+- deployment metadata
+- holder data
+- deployer data
+
+Provider rules:
+
+1. Do not assume that a provider supports every chain.
+2. Do not use one provider to claim data that belongs to another provider.
+3. Do not require an Etherscan API key for the application to work.
+4. If an optional key is needed, read it only from an environment variable.
+5. Never hardcode API keys.
+6. If a provider is unavailable, continue with other available providers and
+   show partial coverage.
+7. Never label a token a honeypot only because a provider returned no data.
+8. Never claim liquidity is locked unless a reliable source explicitly
+   verifies that fact.
+
+
+==================================================
+3. SUPPORTED NETWORKS
+==================================================
+
+Initially support only networks reliably supported by the selected free
+providers. Prioritize:
+
+- Ethereum
+- BNB Chain
+- Base
+- Arbitrum
+- Polygon
+
+Maintain an explicit network registry containing:
+
+- canonical network ID
+- display name
+- address format
+- provider support status
+
+If the network is not selected, detect it only when the provider response
+unambiguously identifies it. If detection is ambiguous, require the user
+to select a network or show:
+
+NETWORK SUPPORT UNKNOWN
+
+Never fabricate cross-chain results. Never merge data from different
+networks into one scan.
+
+
+==================================================
+4. INPUT AND VALIDATION
+==================================================
+
+Homepage:
+
+CA X-RAY
+Crypto Contract Forensic Analysis
+
+Main input:
+
+PASTE CONTRACT ADDRESS
+
+Optional input:
+
+NETWORK
+
+Actions:
+
+- SCAN CONTRACT
+- TRY DEMO
+
+Validation requirements:
+
+- empty input: show a clear validation message
+- malformed address: reject before provider calls
+- unsupported network: show the supported-network state
+- valid address with no provider result: show CONTRACT NOT FOUND or
+  DATA UNAVAILABLE, depending on the actual response
+- valid contract that is not recognized as a token: do not invent token data
+- long addresses: truncate only for display, never for requests
+- provide a COPY button for the full address
+
+Do not show the full report on the landing page. The landing page is a
+standalone product introduction.
+
+
+==================================================
+5. SCAN MODES AND STATE MODEL
+==================================================
+
+Every scan has exactly one mode:
+
+- LIVE
+- DEMO
+
+Every provider result has exactly one data status:
+
+- VERIFIED
+- DETECTED
+- NOT_DETECTED
+- UNKNOWN
+- UNAVAILABLE
+- DEMO
+- ERROR
+
+Definitions:
+
+VERIFIED:
+The provider explicitly verified the value or property.
+
+DETECTED:
+The provider explicitly detected the property or signal.
+
+NOT_DETECTED:
+The provider explicitly checked the property and reported that it was not
+detected. This is not the same as UNKNOWN.
+
+UNKNOWN:
+The provider or available data cannot establish whether the property exists.
+
+UNAVAILABLE:
+The required endpoint, field, or provider is not available.
+
+DEMO:
+Deterministic fixture data used only by DEMO mode.
+
+ERROR:
+The request failed or returned an invalid response. Preserve the error
+state and do not convert it into a value.
+
+Rules:
+
+1. DEMO data must never be mixed with LIVE data.
+2. ERROR, UNKNOWN, and UNAVAILABLE must never silently become zero.
+3. NOT_DETECTED is allowed to contribute a positive/no-risk signal only
+   when the provider explicitly checked that capability.
+4. A missing field is UNKNOWN, not NOT_DETECTED.
+5. A provider timeout is ERROR or UNAVAILABLE, not NOT_DETECTED.
+
+The visible scan states are:
+
+- VALIDATING
+- FETCHING DATA
+- NORMALIZING DATA
+- ANALYZING CONTRACT
+- CALCULATING RISK
+- CALCULATING RELIABILITY
+- BUILDING REPORT
+- COMPLETE
+- PARTIAL DATA
+- ERROR
+
+Show only states that actually occur. Do not fake progress with arbitrary
+timers or artificial delays.
+
+
+==================================================
+6. NORMALIZED SCAN OBJECT
+==================================================
+
+Create exactly one normalized scan object for both LIVE and DEMO:
+
+scan
+  scanId
+  mode
+  timestamp
+  network
+  token
+  contract
+  security
+  trading
+  holders
+  liquidity
+  market
+  deployer
+  project
+  verification
+  risk
+  reliability
+  findings
+  evidence
+  errors
+  limitations
+
+Every normalized data point must contain:
+
+- value
+- status
+- source
+- retrievedAt, when available
+- confidence
+- evidenceId, when material
+
+The normalized object must preserve:
+
+- original provider source
+- provider response timestamp, when available
+- whether the value was directly provided or derived
+- whether the value belongs to LIVE or DEMO mode
+- conflicts between providers
+
+Do not use a fake fallback object when a provider fails.
+
+
+==================================================
+7. DATA SUFFICIENCY AND CATEGORY STATUS
+==================================================
+
+Each of the six risk categories has:
+
+- category score: 0–100, only when sufficient evidence exists
+- category status: AVAILABLE, PARTIAL, UNKNOWN, or UNAVAILABLE
+- evidence coverage: 0–100
+- list of supporting evidence IDs
+
+Category availability rules:
+
+CONTRACT:
+AVAILABLE when at least one direct contract-security capability result
+exists and contract identity is validated. Verification status may be
+separately UNKNOWN.
+
+TRADING:
+AVAILABLE when at least one direct trading-security or trading-restriction
+result exists. Missing taxes alone must not make the whole category UNKNOWN.
+
+HOLDER:
+AVAILABLE when holder distribution or top-holder data exists. If no holder
+data exists, status is UNKNOWN.
+
+LIQUIDITY:
+AVAILABLE when an actual pair and liquidity result exists. If no pair or
+liquidity data exists, status is UNKNOWN.
+
+DEPLOYER:
+AVAILABLE when deployer identity or relevant deployment activity exists.
+Unknown deployer behavior does not mean malicious behavior.
+
+MARKET/PROJECT:
+AVAILABLE when actual market data or independently verifiable project
+signals exist. Missing website information alone must not erase available
+market data.
+
+A category may be PARTIAL when some required fields exist but other fields
+are unavailable. PARTIAL categories may be used in scoring only if their
+category evidence coverage is at least 50.
+
+Category coverage must be calculated from explicit required fields, not from
+the number of API calls.
+
+
+==================================================
+8. RISK ENGINE — EXACT SPECIFICATION
+==================================================
+
+The risk engine must be a pure deterministic local function:
+
+same normalized scan snapshot + same rubric = same result.
+
+Final risk score:
+
+0–100, where higher means higher observed risk.
+
+Original category weights:
+
+- Contract Risk: 30%
+- Trading Risk: 20%
+- Holder Risk: 15%
+- Liquidity Risk: 15%
+- Deployer Risk: 10%
+- Market/Project Risk: 10%
+
+For available categories:
+
+rawWeightedScore =
+  contract × 0.30
+  + trading × 0.20
+  + holder × 0.15
+  + liquidity × 0.15
+  + deployer × 0.10
+  + marketProject × 0.10
+
+If one or more categories are UNKNOWN or UNAVAILABLE:
+
+1. Do not award risk points for the unavailable category.
+2. Do not treat the missing score as 0.
+3. Redistribute only the original weights of available categories.
+4. Normalize by the sum of available original weights:
+
+normalizedFinalScore =
+  sum(availableCategoryScore × originalCategoryWeight)
+  / sum(availableCategoryWeight)
+
+5. Show all omitted categories and their statuses.
+6. Mark the result PARTIAL DATA.
+
+Score eligibility:
+
+A numerical FINAL RISK SCORE is allowed only when:
+
+- contract category is AVAILABLE or PARTIAL with coverage >= 50
+- trading category is AVAILABLE or PARTIAL with coverage >= 50
+- total original weight of score-eligible categories is at least 60%
+- contract identity and network are validated
+
+Otherwise show:
+
+INSUFFICIENT DATA FOR RELIABLE SCORE
+
+Do not show 0 as a substitute.
+
+Rounding:
+
+- calculate internally using full precision
+- clamp each category to 0–100
+- clamp the final score to 0–100
+- round the displayed final score to the nearest integer
+- display calculation lines with at most two decimal places
+- never return NaN or Infinity
+
+
+==================================================
+9. CONTRACT RISK RUBRIC — MAXIMUM 100
+==================================================
+
+Start at 0. Add points only for VERIFIED or DETECTED findings. Cap at 100.
+
+- owner can mint additional tokens: +30
+- owner can change transaction tax: +20
+- owner can blacklist addresses: +20
+- owner can pause transfers: +15
+- owner can modify whitelist restrictions: +10
+- contract is upgradeable/proxy with privileged control: +15
+- owner can withdraw token or contract funds: +15
+- source code is explicitly unverified: +10
+
+Do not double-count identical underlying permissions. For example, the same
+privileged setter must not be counted repeatedly under multiple labels unless
+the normalized evidence distinguishes the permissions.
+
+UNKNOWN does not add points.
+
+
+==================================================
+10. TRADING RISK RUBRIC — MAXIMUM 100
+==================================================
+
+Start at 0. Add points only for VERIFIED or DETECTED findings. Cap at 100.
+
+- strong malicious-trading signal from a security provider: +50
+- sell restriction detected: +30
+- buy restriction detected: +20
+- very high sell tax: +20
+- very high buy tax: +15
+- tax can be changed by privileged address: +15
+- max transaction restriction detected: +10
+- max wallet restriction detected: +10
+- trading can be paused: +10
+
+Tax thresholds must be defined as named constants in the risk engine and
+used consistently by LIVE and DEMO modes. Do not invent a tax value when
+the provider does not return one.
+
+Do not call a token a honeypot merely because data is missing, stale,
+conflicting, or unavailable.
+
+
+==================================================
+11. HOLDER RISK RUBRIC — MAXIMUM 100
+==================================================
+
+Use actual holder data only.
+
+Top 10 holder concentration:
+
+- below 20%: 0
+- 20% through below 40%: 20
+- 40% through below 60%: 40
+- 60% through 80%: 70
+- above 80%: 90
+
+For exactly 80%, use the 60–80% band. For exactly 40% or 60%, use the
+higher applicable band as written above. Define the comparison logic in
+code so boundary behavior is deterministic.
+
+Deployer or owner concentration:
+
+- 10% through below 20%: +10
+- 20% through below 40%: +25
+- 40% or above: +40
+
+Cap at 100.
+
+If holder data is unavailable:
+
+HOLDER RISK = UNKNOWN
+
+Do not replace it with zero and do not imply healthy distribution.
+
+
+==================================================
+12. LIQUIDITY RISK RUBRIC — MAXIMUM 100
+==================================================
+
+Use actual pair and liquidity data only.
+
+Liquidity:
+
+- below $10,000: +60
+- $10,000 through below $25,000: +40
+- $25,000 through below $100,000: +20
+- $100,000 or above: 0
+
+Additional signals:
+
+- 24-hour volume extremely low relative to liquidity: +15
+- liquidity appears highly concentrated in one pair: +10
+
+Cap at 100.
+
+The threshold for “extremely low relative to liquidity” must be an explicit
+named constant. Do not use a subjective description in code.
+
+Do not claim that liquidity is locked without an explicit reliable source.
+
+If liquidity is unavailable:
+
+LIQUIDITY RISK = UNKNOWN
+
+
+==================================================
+13. DEPLOYER RISK RUBRIC — MAXIMUM 100
+==================================================
+
+Add points only when reliable deployer evidence exists:
+
+- suspicious deployer behavior: +30
+- multiple related contracts detected: +20
+- very recent deployment: +15
+- large deployer token concentration: +25
+- known malicious association verified by a reliable source: +50
+
+Cap at 100.
+
+“Suspicious behavior” and “known malicious association” must not be inferred
+from age alone, ownership alone, or a generic address label. Each requires
+explicit evidence and a source.
+
+If deployer information is unavailable:
+
+DEPLOYER RISK = UNKNOWN
+
+Do not automatically classify the deployer as malicious.
+
+
+==================================================
+14. MARKET / PROJECT RISK RUBRIC — MAXIMUM 100
+==================================================
+
+Add points only for actual evidence:
+
+- very low liquidity: +20
+- very low volume: +15
+- extreme price instability: +20
+- website or project information unavailable: +10
+- contract address inconsistent with publicly presented project address: +30
+- audit claim cannot be independently verified: +5
+
+Cap at 100.
+
+“Audit claim cannot be independently verified” is not the same as “the
+contract is unsafe”. Use cautious language.
+
+“MISMATCH” is allowed only when actual evidence supports a mismatch.
+
+
+==================================================
+15. RISK LEVELS
+==================================================
+
+Map the final numerical Risk Score exactly:
+
+- 0–20: LOW
+- 21–40: MODERATE
+- 41–60: ELEVATED
+- 61–80: HIGH
+- 81–100: VERY HIGH
+
+Always display:
+
+- SCORE
+- LEVEL
+- RELIABILITY
+- CONFIDENCE
+- DATA COVERAGE
+
+Never display the score as a probability of fraud, scam, loss, or safety.
+
+
+==================================================
+16. RELIABILITY ENGINE — EXACT SPECIFICATION
+==================================================
+
+Reliability measures the strength of the analysis and its supporting data.
+It is separate from the Risk Score.
+
+Calculate six components, each from 0 to 100:
+
+E = Evidence Coverage
+S = Source Quality and Independence
+F = Data Freshness
+C = Cross-Source Consistency
+R = Reproducibility and Traceability
+I = Identity Validation
+
+Overall Reliability Score:
+
+reliabilityRaw =
+  E × 0.35
+  + S × 0.20
+  + F × 0.15
+  + C × 0.15
+  + R × 0.10
+  + I × 0.05
+
+Clamp to 0–100 and round only for display.
+
+Evidence Coverage E:
+
+- explicitly supported required field: 100
+- partially supported field: 50
+- UNKNOWN or UNAVAILABLE: 0
+- DEMO: excluded from LIVE coverage
+
+Calculate E from weighted required fields across all six categories. Do not
+calculate it from the number of successful network requests.
+
+Source Quality S:
+
+- two independent primary sources agree: 100
+- one primary provider gives a direct result: 85
+- one public chain or explorer endpoint gives a direct result: 70
+- deterministic derived value with a complete source chain: 65
+- indirect or project-claimed information: 30
+- no evidence: 0
+
+Freshness F for volatile data:
+
+- age <= 15 minutes: 100
+- age > 15 minutes and <= 1 hour: 85
+- age > 1 hour and <= 24 hours: 60
+- age > 24 hours: 30
+- timestamp unavailable: 10
+- data unavailable: 0
+
+For static contract properties, a result retrieved during the current scan
+may receive 100 freshness if the provider gives no older snapshot warning.
+
+Consistency C:
+
+- identity and values agree across sources: 100
+- minor explainable discrepancy: 70
+- unresolved provider conflict: 40
+- contract or network identity mismatch: 0
+
+Reproducibility R:
+
+- same normalized snapshot always produces the same score, findings,
+  reliability, and calculation trace: 100
+- deterministic engine but incomplete traceability: 70
+- partially reproducible result: 40
+- nondeterministic or manually altered result: 0
+
+Identity Validation I:
+
+- valid address, supported network, and provider identity match: 100
+- valid address but network or provider identity is incomplete: 50
+- invalid address, unsupported network, or identity mismatch: 0
+
+Reliability labels:
+
+- 85–100: HIGH
+- 65–84: MEDIUM
+- 40–64: LOW
+- 0–39: UNKNOWN
+
+Reliability guardrails:
+
+1. If identity validation I = 0, do not produce a final risk score.
+2. If E < 40, show INSUFFICIENT DATA FOR RELIABLE SCORE.
+3. If two or more core categories are UNKNOWN or UNAVAILABLE, reliability
+   cannot exceed 59.
+4. If there is an unresolved source conflict, reliability cannot exceed 74.
+5. If volatile data has no usable timestamp, reliability cannot exceed 69.
+6. If the scan is PARTIAL DATA, explicitly show the missing categories.
+7. A high Risk Score with low Reliability is valid and must remain visible.
+8. A low Risk Score with low Reliability must not be described as reassuring.
+
+These caps are applied after calculating reliabilityRaw:
+
+reliabilityScore = minimum(reliabilityRaw, all applicable caps)
+
+
+==================================================
+17. FINDING CONFIDENCE
+==================================================
+
+Generate findings only from normalized data with evidence. Never create
+generic findings based on a page template.
+
+Every finding must contain:
+
+- id
+- severity
+- title
+- what
+- why
+- evidence
+- source
+- confidence
+- evidenceId
+- status
+
+Allowed severities:
+
+- CRITICAL
+- HIGH
+- MEDIUM
+- LOW
+- POSITIVE
+
+Finding confidence:
+
+HIGH:
+Direct provider evidence, valid identity, no unresolved conflict, and
+adequate freshness.
+
+MEDIUM:
+Some direct evidence exists, but coverage, freshness, or source
+independence is incomplete.
+
+LOW:
+Limited, indirect, stale, or partially conflicting evidence.
+
+UNKNOWN:
+The available data cannot establish the finding.
+
+If a finding is UNKNOWN, explain what data is missing. Do not turn it into
+a negative finding.
+
+Examples:
+
+- “Owner can mint” requires explicit mint capability evidence.
+- “Honeypot” requires an explicit strong malicious-trading signal or an
+  equivalent direct test result from a reliable provider.
+- “Liquidity is unsafe” is not allowed as a generic statement. Use the
+  observed liquidity value and explain the applicable rubric threshold.
+
+
+==================================================
+18. DEMO MODE
+==================================================
+
+Demo mode is required and must use exactly the same:
+
+- normalized scan object
+- risk engine
+- reliability engine
+- finding engine
+- report components
+
+Only the data source differs.
+
+Create three deterministic scenarios:
+
+1. HIGH RISK TOKEN
+2. MODERATE RISK TOKEN
+3. LOWER RISK TOKEN
+
+Demo fixtures must:
+
+- be internally consistent
+- contain explicit DEMO status on every data point
+- use stable addresses and timestamps or a documented fixed demo timestamp
+- produce repeatable results
+- demonstrate different findings
+- never resemble live provider responses without the DEMO label
+
+HIGH RISK demo characteristics may include:
+
+- significant owner powers
+- high holder concentration
+- risky trading permissions
+- high or mutable tax
+- weak liquidity
+
+MODERATE demo characteristics must include mixed positive and negative
+signals.
+
+LOWER RISK demo characteristics must include:
+
+- stronger positive signals
+- lower owner control
+- better holder distribution
+- healthier liquidity signals
+
+The report must prominently show:
+
+DEMO DATA — NOT LIVE BLOCKCHAIN DATA
+
+Demo engine validation may be reported separately:
+
+ENGINE REPRODUCIBILITY: HIGH
+LIVE EVIDENCE: NOT APPLICABLE IN DEMO MODE
+
+Do not describe demo data as evidence about a real token.
+
+
+==================================================
+19. REPORT — EXACTLY 8 CORE SECTIONS
+==================================================
+
+The report has exactly these eight top-level sections:
+
+1. EXECUTIVE SUMMARY
+2. RISK BREAKDOWN
+3. CONTRACT & TRADING FORENSICS
+4. HOLDER & LIQUIDITY ANALYSIS
+5. MARKET & DEPLOYER SIGNALS
+6. KEY FINDINGS
+7. EVIDENCE REGISTER
+8. FINAL ASSESSMENT
+
+Do not create an oversized report with 15 or more top-level sections.
+
+
+==================================================
+20. EXECUTIVE SUMMARY
+==================================================
+
+Show:
+
+- token
+- symbol
+- network
+- contract
+- scan mode
+- scan time
+- data coverage
+
+Then prominently show:
+
+OVERALL RISK
+XX / 100 or INSUFFICIENT DATA FOR RELIABLE SCORE
+
+RISK LEVEL
+LOW / MODERATE / ELEVATED / HIGH / VERY HIGH
+
+RELIABILITY
+XX / 100
+
+CONFIDENCE
+HIGH / MEDIUM / LOW / UNKNOWN
+
+The assessment paragraph must be generated from actual findings and actual
+data limitations. It must not be hardcoded to one scenario.
+
+Also show:
+
+- TOP 3 RISKS
+- TOP 3 POSITIVE SIGNALS
+- the most important limitations
+
+
+==================================================
+21. RISK BREAKDOWN
+==================================================
+
+Show this table:
+
+| Category | Score | Original Weight | Applied Weight | Status | Coverage |
+|----------|-------|-----------------|----------------|--------|----------|
+| Contract |       | 30%             |                |        |          |
+| Trading |       | 20%             |                |        |          |
+| Holder |        | 15%             |                |        |          |
+| Liquidity |     | 15%             |                |        |          |
+| Deployer |      | 10%             |                |        |          |
+| Market/Project | | 10%             |                |        |          |
+
+Applied weights must show the normalized weight when one or more categories
+are unavailable.
+
+Show:
+
+HOW THE SCORE WAS CALCULATED
+
+Example format:
+
+Contract:
+70 × 30% = 21.00
+
+Trading:
+60 × 20% = 12.00
+
+Holder:
+UNKNOWN — excluded from numerator and weight redistributed
+
+Final:
+sum of available weighted values ÷ sum of available original weights
+
+Also show:
+
+RELIABILITY CALCULATION
+
+E: xx × 35%
+S: xx × 20%
+F: xx × 15%
+C: xx × 15%
+R: xx × 10%
+I: xx × 5%
+Reliability: xx / 100
+
+
+==================================================
+22. CONTRACT & TRADING FORENSICS
+==================================================
+
+Use readable tables.
+
+CONTRACT:
+
+| Capability | Status | Impact | Evidence | Source | Confidence |
+|------------|--------|--------|----------|--------|------------|
+
+Check:
+
+- mint
+- blacklist
+- whitelist
+- pause
+- tax modification
+- upgradeability
+- owner control
+- withdrawal
+- source verification
+
+TRADING:
+
+| Signal | Value/Status | Impact | Evidence | Source | Confidence |
+|--------|--------------|--------|----------|--------|------------|
+
+Check:
+
+- buy tax
+- sell tax
+- transfer tax
+- trading restriction
+- honeypot/security signal
+- max wallet
+- max transaction
+- trading pause
+
+UNKNOWN must be clearly visible and must not be styled as a healthy result.
+
+
+==================================================
+23. HOLDER & LIQUIDITY ANALYSIS
+==================================================
+
+HOLDER SUMMARY:
+
+- total holders
+- top 1%
+- top 5%
+- top 10%
+- deployer %
+- owner %
+- burn %
+- liquidity-related addresses
+- data status
+
+If holder data is unavailable, show:
+
+HOLDER DATA UNAVAILABLE
+
+Do not invent holder percentages.
+
+LIQUIDITY:
+
+- liquidity
+- 24-hour volume
+- pair
+- DEX
+- price
+- 24-hour change
+- liquidity assessment
+- timestamp
+
+If multiple pairs exist, identify the primary pair using a deterministic
+rule and disclose the rule. Do not silently combine incompatible pair
+values. If aggregation is used, disclose the aggregation method.
+
+
+==================================================
+24. MARKET & DEPLOYER SIGNALS
+==================================================
+
+MARKET:
+
+- price
+- volume
+- liquidity
+- market cap or FDV when available
+- 24-hour change
+- 7-day change when available
+- source and timestamp
+
+DEPLOYER:
+
+- address
+- deployment date when available
+- relevant activity
+- related contracts when reliably detected
+- token concentration when available
+
+If a field is unavailable, show UNKNOWN or UNAVAILABLE, not a guessed value.
+
+PROJECT SIGNALS may include:
+
+- website
+- documentation
+- official links
+- audit claims
+- address consistency
+
+Allowed project statuses:
+
+- MATCH
+- MISMATCH
+- UNKNOWN
+
+Only use MISMATCH when actual evidence supports it.
+
+Never say:
+
+AUDITED = SAFE
+NO AUDIT = SCAM
+
+
+==================================================
+25. KEY FINDINGS
+==================================================
+
+Show a concise table:
+
+| Severity | Finding | Why It Matters | Confidence | Evidence |
+|----------|---------|----------------|------------|----------|
+
+Initially show only the top five findings, ordered deterministically:
+
+1. severity priority
+2. risk contribution
+3. confidence
+4. stable finding ID
+
+Provide:
+
+VIEW ALL FINDINGS
+
+Do not flood the initial report.
+
+
+==================================================
+26. EVIDENCE REGISTER
+==================================================
+
+Every material finding must have a stable evidence ID:
+
+- E-001
+- E-002
+- E-003
+
+Show:
+
+| ID | Finding | Source | Retrieved At | Confidence |
+|----|---------|--------|--------------|------------|
+
+Expandable detail must contain:
+
+- WHAT
+- WHY
+- EVIDENCE
+- SOURCE
+- RETRIEVED AT
+- STATUS
+- CONFIDENCE
+- provider limitations, if any
+
+Technical details may be collapsed. The default view must be understandable
+to non-technical users.
+
+
+==================================================
+27. FINAL ASSESSMENT
+==================================================
+
+Show:
+
+- overall risk
+- risk score or insufficient-data state
+- risk level, when score exists
+- reliability score
+- confidence
+- data coverage
+- primary risks
+- positive signals
+- data limitations
+
+Then show:
+
+WHAT TO VERIFY BEFORE TRUSTING THIS TOKEN
+
+Checklist:
+
+- verify contract address
+- review owner permissions
+- review holder concentration
+- review liquidity
+- review trading restrictions
+- review audit claims
+- review deployer activity
+
+Include:
+
+This is not financial advice. This assessment does not guarantee safety and
+does not establish that a token is a scam.
+
+Do not provide BUY, SELL, LONG, or SHORT recommendations.
+
+
+==================================================
+28. LANDING PAGE AND VISUAL DESIGN
+==================================================
+
+Landing page:
+
+CA X-RAY
+
+Understand a crypto contract before you trust it.
+
+Show:
+
+- short explanation
+- contract input
+- network selector
+- SCAN CONTRACT
+- TRY DEMO
+- three concise value propositions:
+  - CONTRACT CONTROL
+  - TRADING RISK
+  - ON-CHAIN SIGNALS
+
+Do not display a user's scan report on the landing page.
+
+Visual direction:
+
+- premium
+- minimal
+- technical
+- professional
+- financial
+- forensic
+- white background
+- black or dark typography
+- subtle gray borders
+- subtle green for positive signals
+- orange/red only for risk severity
+- one font family
+- no gradient backgrounds
+- no giant colorful panels
+- no excessive card UI
+- no unnecessary illustrations
+- no decorative graphics
+- no excessive icons
+- no complex animations
+
+Tables must:
+
+- remain readable
+- wrap long text
+- truncate long addresses safely, for example 0x1234...ABCD
+- provide copy for full addresses
+- avoid overflow, overlap, clipping, and layout breakage
+- use controlled horizontal scrolling only when necessary
+- remain usable on smaller screens
+
+The product should feel like professional financial/forensic software, not
+a crypto casino or speculative trading dashboard.
+
+
+==================================================
+29. ERROR HANDLING
+==================================================
+
+Handle explicitly:
+
+- empty input
+- invalid address
+- unsupported network
+- ambiguous network
+- contract not found
+- token not found
+- API unavailable
+- API timeout
+- rate limit
+- malformed provider response
+- partial data
+- unverified contract
+- conflicting provider data
+- missing holder data
+- missing deployer data
+
+Requirements:
+
+- never crash
+- never show a blank screen
+- never show fabricated fallback values
+- preserve the actual error category
+- continue with valid providers when safe
+- mark the report PARTIAL DATA when appropriate
+- list limitations in the report
+
+
+==================================================
+30. PERFORMANCE AND RESOURCE DISCIPLINE
+==================================================
+
+Use one scan pipeline:
+
+validate → detect network → fetch available data → normalize → calculate
+risk → calculate reliability → generate findings → render report
+
+Rules:
+
+- avoid duplicate API calls
+- cache scan results during the current session
+- do not repeatedly request the same endpoint
+- use pure local functions for normalization, scoring, reliability,
+  finding generation, and formatting
+- avoid unnecessary dependencies
+- do not spend credits trying to make an unreliable feature work
+- if a requested feature cannot be reliably implemented with free data,
+  show DATA UNAVAILABLE and continue
+
+
+==================================================
+31. SECURITY AND PRIVACY
+==================================================
+
+Never request or handle:
+
+- private key
+- seed phrase
+- wallet password
+- wallet signature
+- wallet connection
+- user funds
+
+No transaction execution. No trading. No wallet custody.
+
+API keys:
+
+- never hardcode
+- use environment variables only
+- do not expose them in the browser
+- do not print them in logs
+
+
+==================================================
+32. TESTING REQUIREMENTS
+==================================================
+
+Before declaring the product done, test all of the following:
+
+1. High-risk demo
+2. Moderate-risk demo
+3. Lower-risk demo
+4. Invalid contract address
+5. Empty contract address
+6. Unsupported network
+7. Ambiguous network
+8. Provider failure
+9. Provider timeout
+10. Rate limit
+11. Partial data
+12. UNKNOWN data
+13. Conflicting provider data
+14. Risk score calculation
+15. Weight normalization
+16. Reliability score calculation
+17. Reliability caps
+18. No NaN
+19. No Infinity
+20. Long contract address
+21. Table overflow
+22. Evidence expansion
+23. DEMO/LIVE distinction
+24. Copy address
+25. Responsive layout
+26. Report readability
+27. Same demo input produces same output
+28. Same normalized snapshot produces same risk and reliability scores
+29. Unknown data never becomes zero
+30. Failed API never becomes NOT_DETECTED
+
+Record actual results. Do not claim PASS unless the test was actually run.
+
+
+==================================================
+33. ACCEPTANCE CRITERIA
+==================================================
+
+The application passes only if:
+
+PASS:
+User can enter a contract address.
+
+PASS:
+Address validation works.
+
+PASS:
+Supported-network handling works.
+
+PASS:
+All three demos work.
+
+PASS:
+Live and demo data are clearly distinguished.
+
+PASS:
+Live provider data is not fabricated.
+
+PASS:
+The normalized scan object is shared by LIVE and DEMO.
+
+PASS:
+The risk engine is deterministic.
+
+PASS:
+The risk rubric and category weights are exactly implemented.
+
+PASS:
+Unknown data is never treated as zero.
+
+PASS:
+Weight redistribution is transparent.
+
+PASS:
+Reliability is calculated separately from risk.
+
+PASS:
+Reliability uses evidence coverage, source quality, freshness, consistency,
+reproducibility, and identity validation.
+
+PASS:
+Insufficient data blocks a misleading final score.
+
+PASS:
+Findings contain evidence, source, and confidence.
+
+PASS:
+Conflicting data is visible.
+
+PASS:
+The report is readable.
+
+PASS:
+Tables do not break.
+
+PASS:
+Long addresses do not destroy layout.
+
+PASS:
+Provider failures do not crash the application.
+
+PASS:
+No private wallet information is requested.
+
+PASS:
+No unnecessary expensive features exist.
+
+
+==================================================
+34. IMPLEMENTATION PRIORITY
+==================================================
+
+Implement in this exact order:
+
+P0:
+
+1. Contract input
+2. Address validation
+3. Supported-network handling
+4. Three deterministic demo fixtures
+5. Shared normalized scan object
+6. GoPlus integration
+7. DexScreener integration
+8. Explicit provider error and partial-data states
+9. Deterministic risk engine
+10. Deterministic reliability engine
+11. Finding engine
+12. Executive Summary
+13. Risk Breakdown
+14. Contract and Trading Forensics
+15. Holder and Liquidity Analysis
+16. Evidence Register
+17. Final Assessment
+18. Responsive and overflow-safe report
+19. Required tests
+
+Only after all P0 requirements pass:
+
+P1:
+
+- market refinements
+- deployer refinements
+- project signals
+- audit signals
+- additional presentation refinements
+
+If resources run low, stop adding features and polish P0.
+
+
+==================================================
+35. FINAL STOP RULE
+==================================================
+
+Stop building when all of the following work:
+
+- contract input
+- validation
+- live data
+- demo mode
+- shared normalized data
+- deterministic risk engine
+- deterministic reliability engine
+- evidence-based findings
+- evidence register
+- professional report
+- explicit limitations
+- error handling
+- required tests
+
+The goal is not maximum feature count.
+
+The goal is a small, precise, auditable product.
+
+
+==================================================
+36. FINAL BUILDER REPORT
+==================================================
+
+At the end, report only facts that were actually verified:
+
+BUILD STATUS
+
+WORKING FEATURES
+
+LIVE PROVIDERS
+
+DEMO STATUS
+
+RISK ENGINE STATUS
+
+RELIABILITY ENGINE STATUS
+
+TEST RESULTS
+
+KNOWN LIMITATIONS
+
+Do not claim PASS unless the corresponding test was actually run.
+
+Final product principle:
+
+“DO NOT TELL THE USER WHAT TO THINK.
+
+SHOW THEM WHAT THE CONTRACT CAN DO,
+WHAT THE DATA SHOWS,
+HOW RELIABLE THE ANALYSIS IS,
+WHY IT MATTERS,
+AND THE EVIDENCE BEHIND IT.”

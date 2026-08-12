@@ -1,0 +1,1 @@
+- [Provider response contracts](provider-response-contracts.md) — treat DexScreener `pairs: null` as no pair, not malformed data; preserve provider distinctions.

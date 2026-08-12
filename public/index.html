@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="CA X-RAY — evidence-based crypto contract forensic analysis." />
+    <title>CA X-RAY — Contract Forensic Analysis</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="CA X-RAY home">
+        <span class="brand-mark">CA</span>
+        <span class="brand-copy"><strong>CA X-RAY</strong><small>CONTRACT FORENSIC ANALYSIS</small></span>
+      </a>
+      <div class="header-meta"><span class="status-dot"></span> PUBLIC DATA ANALYSIS</div>
+    </header>
+
+    <main id="app">
+      <section id="landing" class="landing-page">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">ON-CHAIN DUE DILIGENCE / 01</p>
+            <h1>Understand a crypto contract<br /><em>before you trust it.</em></h1>
+            <p class="hero-lede">CA X-RAY turns contract permissions, trading controls, holder concentration, and market signals into an evidence-backed assessment.</p>
+            <div class="trust-line"><span class="line"></span><span>Not a scam detector. Not financial advice.</span></div>
+          </div>
+          <div class="scan-panel">
+            <div class="panel-kicker"><span>START AN ANALYSIS</span><span class="mono">CA-XRAY / LIVE</span></div>
+            <form id="scan-form" novalidate>
+              <label for="contract-address">PASTE CONTRACT ADDRESS</label>
+              <div class="input-wrap">
+                <input id="contract-address" name="address" autocomplete="off" spellcheck="false" placeholder="0x..." />
+                <button id="clear-address" class="input-action" type="button" aria-label="Clear address" hidden>×</button>
+              </div>
+              <p id="address-error" class="field-error" role="alert"></p>
+              <label for="network">NETWORK <span class="label-note">REQUIRED FOR LIVE SCANS</span></label>
+              <select id="network" name="network">
+                <option value="">Select network</option>
+                <option value="ethereum">Ethereum</option>
+                <option value="bsc">BNB Chain</option>
+                <option value="base">Base</option>
+                <option value="arbitrum">Arbitrum</option>
+                <option value="polygon">Polygon</option>
+              </select>
+              <p id="network-error" class="field-error" role="alert"></p>
+              <button class="primary-button" type="submit"><span>SCAN CONTRACT</span><span>→</span></button>
+            </form>
+            <div class="demo-divider"><span>OR EXPLORE A FIXED SCENARIO</span></div>
+            <div class="demo-actions">
+              <button class="demo-button" data-demo="high"><span class="demo-swatch danger"></span><span><strong>HIGH RISK</strong><small>Privileged controls / thin liquidity</small></span><span>→</span></button>
+              <button class="demo-button" data-demo="moderate"><span class="demo-swatch warning"></span><span><strong>MODERATE RISK</strong><small>Mixed signals / partial control</small></span><span>→</span></button>
+              <button class="demo-button" data-demo="low"><span class="demo-swatch positive"></span><span><strong>LOWER RISK</strong><small>Stronger controls / deeper market</small></span><span>→</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="value-strip">
+          <div><span class="value-index">01</span><strong>CONTRACT CONTROL</strong><p>See what privileged addresses can change.</p></div>
+          <div><span class="value-index">02</span><strong>TRADING RISK</strong><p>Review tax, restriction, and pause signals.</p></div>
+          <div><span class="value-index">03</span><strong>ON-CHAIN SIGNALS</strong><p>Put market and concentration data in context.</p></div>
+        </div>
+        <footer class="landing-footer"><span>CA X-RAY / V1.0</span><span>ASSESSMENT BASED ON AVAILABLE DATA AT SCAN TIME</span></footer>
+      </section>
+
+      <section id="scan-loading" class="loading-page" hidden>
+        <div class="loading-orbit" aria-hidden="true"></div>
+        <p class="eyebrow">ANALYSIS IN PROGRESS</p>
+        <h2 id="loading-title">Building a forensic snapshot.</h2>
+        <div id="loading-stages" class="loading-stages"></div>
+        <p class="loading-note">Provider responses are preserved as returned. No fallback values are being substituted.</p>
+      </section>
+
+      <section id="report" hidden></section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
