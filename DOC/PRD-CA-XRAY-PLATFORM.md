@@ -2,9 +2,9 @@
 
 ---
 
-Version: 1.0  
+Version: 1.1
 Last updated: 2026-08-12  
-Status: Draft  
+Status: Draft — strategic expansion approved
 Owner: Product / Engineering  
 Approver: Product Owner
 
@@ -54,6 +54,24 @@ silent fallback, modularity over premature microservices.**
 - Migrasi ke microservices sebelum bottleneck terukur.
 - Membuat subscription/billing provider tertentu sebelum keputusan integrasi.
 
+### Positioning dan competitive moat
+
+CA X-RAY bukan hanya scanner sekali pakai. Produk diposisikan sebagai **continuous
+contract intelligence**: setiap kontrak memiliki Risk Passport, histori evidence,
+monitoring perubahan, dan penjelasan mengapa tingkat risikonya berubah.
+
+Pembeda yang harus dipertahankan:
+
+- **Trust moat:** evidence provenance, provider consensus, reliability terpisah dari
+  risk, dan tidak ada silent fallback.
+- **Retention moat:** Watchtower, risk timeline, alert, dan weekly intelligence
+  digest.
+- **Revenue moat:** workspace team, verified report, collaboration, bulk screening,
+  API, dan webhook.
+
+Alternatif yang harus dikalahkan bukan hanya pesaing langsung, tetapi juga scan
+manual, spreadsheet, dashboard black-box, dan keputusan tanpa evidence.
+
 ## 3. Pengguna dan akses
 
 | Persona | Kebutuhan utama | Akses |
@@ -92,6 +110,10 @@ kemudian:
    bukan dicek langsung dari UI.
 8. **Admin & operations** — provider configuration, plan, subscription, audit,
    health, feature flags, dan incident controls.
+9. **Continuous intelligence** — Risk Passport, risk snapshots, Watchtower,
+   evidence graph, provider consensus, compare, dan scenario simulation.
+10. **Collaboration & distribution** — workspace workflow, verified report, export,
+    developer API, dan webhook.
 
 Scan berat berjalan sebagai background job. API publik mengembalikan `job_id` dan
 status; hasil final disimpan immutable dengan referensi evidence dan versi engine.
@@ -149,8 +171,10 @@ Data minimum:
 - `users`, `workspaces`, `memberships`, `roles`;
 - `plans`, `subscriptions`, `entitlements`, `usage_counters`;
 - `scan_jobs`, `scans`, `findings`, `evidence`;
+- `risk_snapshots`, `watchlists`, `alert_rules`, `notification_events`;
+- `evidence_relations`, `report_shares`, `comments`, `approval_items`;
 - `provider_configs`, `provider_health`, `webhook_events`;
-- `audit_logs`, `schema/engine version metadata`.
+- `api_clients`, `api_usage`, `audit_logs`, `schema/engine version metadata`.
 
 Aturan data:
 
@@ -185,9 +209,45 @@ Dashboard user menampilkan:
 - anggota/workspace sesuai role;
 - export hanya jika diizinkan entitlement.
 
+#### 5.6 Continuous intelligence dan retention moat
+
+- Setiap kontrak memiliki **Risk Passport** dengan risk, reliability, findings,
+  evidence, engine version, timestamp, dan status current/outdated.
+- User dapat membuat watchlist dan jadwal monitoring per kontrak/network.
+- Watchtower memberi alert untuk perubahan owner/privilege, proxy, tax, liquidity,
+  holder concentration, trading controls, provider disagreement, dan perubahan
+  risiko yang melewati threshold.
+- Risk timeline menyimpan snapshot sebelum/sesudah dan fitur **Why Did Risk
+  Change?** dengan evidence serta confidence.
+- Evidence graph menghubungkan contract, owner, privileged wallet, proxy, pair,
+  liquidity, dan holder cluster tanpa menyamarkan data yang tidak tersedia.
+- Provider consensus menampilkan konflik antar-provider secara eksplisit.
+- Compare/benchmark memungkinkan perbandingan kontrak, periode, network, atau
+  kategori yang relevan.
+- Scenario simulator wajib diberi label simulasi dan tidak boleh menjadi prediksi
+  pasar atau nasihat finansial.
+- Weekly intelligence digest hanya mengirim ringkasan evidence yang berubah,
+  bukan engagement noise.
+
+#### 5.7 Team workflow dan verified report
+
+- Workspace team dapat memberi komentar, assign finding, memberi status
+  `open/reviewing/resolved`, dan menyimpan approval checklist.
+- User dapat membuat verified report dengan report ID, timestamp, engine version,
+  evidence hash, expiration, dan kontrol public/private.
+- Report yang sudah selesai immutable; revisi dibuat sebagai versi baru.
+
+#### 5.8 Developer/API product
+
+- API dan webhook tersedia untuk scan, perubahan risiko, status job, dan report.
+- Bulk screening, usage quota, API key rotation, scoped permission, dan
+  correlation ID wajib.
+- API output menggunakan contract version dan tidak mengekspos secret/provider
+  internal.
+
 ### P1 — Superadmin dan monetisasi
 
-#### 5.6 Superadmin: API management
+#### 5.9 Superadmin: API management
 
 Halaman superadmin menyediakan:
 
@@ -206,7 +266,7 @@ Tidak boleh:
 - mengedit config tanpa audit trail;
 - mengaktifkan fallback yang menyamarkan kegagalan live data.
 
-#### 5.7 Superadmin: subscription management
+#### 5.10 Superadmin: subscription management
 
 Halaman superadmin menyediakan:
 
@@ -222,7 +282,7 @@ Halaman superadmin menyediakan:
 Data pembayaran sensitif tetap berada di billing provider. Sistem hanya menyimpan
 identifier, status, entitlement, dan metadata minimum yang dibutuhkan.
 
-#### 5.8 Entitlement
+#### 5.11 Entitlement
 
 - Satu policy layer menentukan apakah user/workspace boleh menjalankan action.
 - Entitlement memiliki source, status, effective time, expiry, dan audit trail.
@@ -236,6 +296,10 @@ identifier, status, entitlement, dan metadata minimum yang dibutuhkan.
 - `POST /api/scans` — membuat scan job terautentikasi.
 - `GET /api/scans/:id` — mengambil status/hasil yang diizinkan tenant.
 - `GET /api/me`, `/api/workspaces`, `/api/usage`.
+- `GET/POST/PATCH /api/watchlists`, `/api/alerts`, `/api/risk-timeline`.
+- `GET /api/scans/:id/graph`, `POST /api/compare`, `POST /api/simulate`.
+- `GET/POST/PATCH /api/reports` — verified report dan share policy.
+- `POST /api/webhooks/risk` — delivery perubahan risiko sesuai entitlement.
 - `GET/POST/PATCH /api/admin/providers` — superadmin only.
 - `GET/POST/PATCH /api/admin/plans` dan `/api/admin/subscriptions` —
   superadmin only.
@@ -264,16 +328,27 @@ memiliki correlation/request id.
    **then** sistem menolak secara konsisten dan mencatat usage/audit event.
 8. **Given** sistem dipulihkan dari backup, **when** restore drill dijalankan,
    **then** data dan audit trail dapat dipulihkan sesuai RPO/RTO yang disepakati.
+9. **Given** kontrak berada dalam watchlist, **when** evidence penting berubah,
+   **then** sistem menyimpan snapshot before/after dan mengirim alert sesuai rule
+   tanpa membuat duplicate event.
+10. **Given** provider memberikan hasil berbeda, **when** report dibuat, **then**
+    konflik provider dan reliability terlihat tanpa dipaksa menjadi satu fakta.
+11. **Given** report dibagikan publik, **when** report expired atau engine baru
+    tersedia, **then** statusnya menjadi outdated dan data private tetap terlindungi.
+12. **Given** API client tidak memiliki entitlement bulk scan, **when** endpoint
+    bulk dipanggil, **then** request ditolak server-side dan usage dicatat.
 
 ## 8. Roadmap eksekusi
 
 | Fase | Fokus | Output keputusan |
 |---|---|---|
-| Now | Architecture, threat model, core audit | Boundary, risk register, contract |
-| Next | PostgreSQL, persistence, job model | Schema, migrations, retention, recovery |
-| Next | Auth, RBAC, tenant isolation | Private dashboard yang aman |
-| Later | Superadmin provider & subscription | Operasional platform dan monetisasi |
-| Later | Scale test & observability | Capacity baseline, SLO, alert, runbook |
+| Now | Architecture, threat model, core audit | Boundary, risk register, provider contract |
+| Next | PostgreSQL, persistence, auth, tenant isolation | Durable private platform |
+| Next | Private dashboard dan scan jobs | User workflow yang aman |
+| Next | Continuous intelligence & retention | Risk Passport, Watchtower, evidence moat |
+| Later | Superadmin provider operations | Platform control tanpa secret leakage |
+| Later | Subscription, entitlements, API product | Monetisasi dan developer distribution |
+| Later | Scale, observability, go-live hardening | Capacity, SLO, recovery, release gate |
 
 Setiap fase harus menghasilkan test, migration/rollback plan, dan operational
 documentation sebelum fase berikutnya dimulai.
@@ -285,6 +360,12 @@ documentation sebelum fase berikutnya dimulai.
 - 100% scan live memiliki provenance dan engine version.
 - 100% webhook billing diproses idempotently.
 - Provider failure terlihat oleh user/operator dan tidak menjadi data palsu.
+- Minimal 30% user yang menyelesaikan scan pertama memiliki minimal satu kontrak
+  aktif di watchlist (target awal, disesuaikan setelah baseline).
+- Weekly monitored contracts dan alert engagement menjadi metrik retensi utama.
+- Setiap shared report dapat diverifikasi dan memiliki status freshness yang benar.
+- False-positive rate dan provider disagreement terukur sebelum dijadikan dasar
+  automated alert.
 - P95 API dan scan queue latency ditetapkan setelah baseline load test.
 - RPO, RTO, availability SLO, serta capacity limit disepakati sebelum scale-out.
 
@@ -296,6 +377,9 @@ documentation sebelum fase berikutnya dimulai.
 - Negara/currency/tax/compliance subscription.
 - Paket awal, kuota, overage, dan policy refund/cancellation.
 - Provider resmi yang dipakai, batas penggunaan, serta policy data retention.
+- Channel notifikasi, cadence monitoring, threshold alert, dan weekly digest policy.
+- Aturan verified report: public/private default, expiration, dan revocation.
+- Apakah API product dimulai dari read-only report, scan API, atau bulk screening.
 
 ## 11. Baseline teknis saat ini
 
@@ -304,3 +388,10 @@ documentation sebelum fase berikutnya dimulai.
 - UI: `public/`
 - Existing demo/live separation dan deterministic engine tests dipertahankan sebagai
   baseline, lalu diperluas dengan contract, security, persistence, dan load tests.
+
+### Changelog
+
+| Version | Date | Change |
+|---|---|---|
+| 1.0 | 2026-08-12 | Initial platform PRD |
+| 1.1 | 2026-08-12 | Added approved differentiation, retention, collaboration, report, simulator, and API requirements |

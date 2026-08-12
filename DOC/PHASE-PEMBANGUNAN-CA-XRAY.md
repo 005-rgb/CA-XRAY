@@ -1,6 +1,8 @@
 # Fase Pembangunan CA X-RAY
 
 Dokumen ini adalah urutan eksekusi dari PRD `DOC/PRD-CA-XRAY-PLATFORM.md`.
+Roadmap kini berisi **10 fase (Fase 0–9)** setelah capability differentiation,
+retention, dan developer distribution disetujui.
 Fase berikut harus dikerjakan berurutan; setiap fase memiliki gate sebelum fase
 berikutnya dimulai.
 
@@ -22,9 +24,10 @@ berikutnya dimulai.
 | 3 | PostgreSQL dan persistence | P0 | Data durable, tenant-ready, recoverable |
 | 4 | Authentication dan tenant isolation | P0 | Tidak ada akses lintas tenant |
 | 5 | Private dashboard dan scan jobs | P0 | User dapat menjalankan dan menelusuri scan |
-| 6 | Superadmin operations | P1 | API provider dan platform dapat dikelola aman |
-| 7 | Subscription dan entitlements | P1 | Billing state aman dan idempotent |
-| 8 | Scale, observability, dan go-live hardening | P0 | SLO, load baseline, recovery, dan security gate lulus |
+| 6 | Continuous intelligence dan retention | P1 | Risk Passport dan Watchtower menghasilkan repeat value |
+| 7 | Superadmin operations | P1 | API provider dan platform dapat dikelola aman |
+| 8 | Subscription, entitlements, dan API product | P1 | Monetisasi dan developer distribution aman |
+| 9 | Scale, observability, dan go-live hardening | P0 | SLO, load baseline, recovery, dan security gate lulus |
 
 ---
 
@@ -128,7 +131,33 @@ migration rollback, dan restore drill.
 **Gate:** user dapat membuat scan, melihat progress, membuka hasil miliknya, dan
   menelusuri evidence tanpa blocking request atau kebocoran tenant.
 
-## Fase 6 — Superadmin operations
+## Fase 6 — Continuous intelligence dan retention moat
+
+**Tujuan:** mengubah scan satu kali menjadi sistem intelligence yang membuat user
+terus kembali dan memiliki alasan kuat untuk berlangganan.
+
+**Output:**
+
+- Risk Passport per kontrak: risk, reliability, findings, evidence, timestamp,
+  engine version, dan status current/outdated.
+- Watchlist, jadwal monitoring, deduplication, alert threshold, dan notification
+  delivery.
+- Risk timeline serta **Why Did Risk Change?** dengan snapshot before/after,
+  evidence, confidence, dan dampak perubahan.
+- Evidence graph untuk contract, owner, privileged wallet, proxy, pair, liquidity,
+  dan holder cluster.
+- Provider consensus yang memperlihatkan konflik provider tanpa silent averaging.
+- Compare/benchmark, verified report dengan evidence hash dan expiration, serta
+  scenario simulator yang jelas berlabel simulasi.
+- Team workflow: komentar, assign finding, status `open/reviewing/resolved`, dan
+  approval checklist.
+- Weekly intelligence digest berbasis perubahan evidence, bukan engagement noise.
+
+**Gate:** perubahan evidence menghasilkan snapshot dan alert yang idempotent;
+report dapat diverifikasi; data private tetap tenant-scoped; simulator tidak
+dipresentasikan sebagai prediksi atau nasihat finansial.
+
+## Fase 7 — Superadmin operations
 
 **Tujuan:** memberi operator kontrol platform tanpa mengekspos secret.
 
@@ -144,7 +173,7 @@ migration rollback, dan restore drill.
 **Gate:** superadmin wajib MFA/RBAC; secret tidak pernah masuk response browser,
   database plaintext, analytics, atau log; semua perubahan dapat ditelusuri.
 
-## Fase 7 — Subscription dan entitlements
+## Fase 8 — Subscription, entitlements, dan API product
 
 **Tujuan:** mengubah billing menjadi hak akses yang konsisten dan dapat berkembang.
 
@@ -157,11 +186,16 @@ migration rollback, dan restore drill.
   history, replay aman, serta reconciliation.
 - Superadmin dapat melihat subscription dan memberi grant/revoke sementara dengan
   alasan, expiry, dan audit log.
+- Tier awal: Free untuk scan dasar; Pro untuk monitoring dan history; Team untuk
+  collaboration/bulk screening; Enterprise untuk API, SLA, dan custom retention.
+- Developer API, scoped API key, key rotation, bulk screening, risk webhook,
+  contract version, usage quota, dan API-specific audit trail.
 
 **Gate:** duplicate/out-of-order webhook tidak merusak state; user tanpa entitlement
-  tidak dapat melewati limit melalui API atau manipulasi UI.
+tidak dapat melewati limit melalui API atau manipulasi UI; API client hanya
+mengakses capability yang diizinkan plan.
 
-## Fase 8 — Scale, observability, dan go-live hardening
+## Fase 9 — Scale, observability, dan go-live hardening
 
 **Tujuan:** membuktikan platform siap digunakan dan dioperasikan pada skala besar.
 
@@ -193,16 +227,21 @@ Fase 2 ───────┐
   ↓           │
 Fase 3 ───────┤
   ↓           │
-Fase 4       Fase 6
-  ↓           ↓
-Fase 5 ───→ Fase 7
-      \       /
-       └→ Fase 8
+Fase 4
+  ↓
+Fase 5 ───→ Fase 6
+              ↓
+       ┌──────┴──────┐
+       ↓             ↓
+     Fase 7       Fase 8
+       \             /
+        └────→ Fase 9
 ```
 
-Fase 6 dapat mulai setelah boundary dan core provider contract stabil, tetapi
-superadmin subscription tidak boleh aktif untuk user sebelum Fase 4, 5, dan 7
-melewati gate masing-masing.
+Fase 6 dapat mulai setelah Fase 2, 3, 4, dan 5 stabil. Fase 7 dapat berjalan
+paralel setelah boundary dan core provider contract stabil, tetapi subscription,
+API product, dan entitlement tidak boleh aktif untuk user sebelum Fase 4, 5, 6,
+dan 8 melewati gate masing-masing.
 
 ## Definition of Done lintas fase
 
