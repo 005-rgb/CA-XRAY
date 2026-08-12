@@ -11,9 +11,9 @@ const loadingStages = document.querySelector("#loading-stages");
 let currentScan = null;
 
 const categoryLabels = {
-  contract: "Contract",
+  contract: "Contract Control",
   trading: "Trading",
-  holder: "Holder",
+  holder: "Holder Concentration",
   liquidity: "Liquidity",
   deployer: "Deployer",
   marketProject: "Market / Project",
@@ -81,6 +81,11 @@ function pointText(dataPoint, formatter = formatValue) {
 function pointEvidence(dataPoint) {
   if (!dataPoint) return "UNKNOWN";
   return dataPoint.evidenceId ? `<span class="evidence-id">${escapeHtml(dataPoint.evidenceId)}</span>` : "—";
+}
+
+function evidenceLabel(dataPoint) {
+  if (!dataPoint || dataPoint.status === "UNKNOWN" || dataPoint.status === "UNAVAILABLE" || dataPoint.status === "ERROR") return "UNKNOWN";
+  return currentScan?.mode === "DEMO" ? "Contract Analysis (Demo)" : "Contract Analysis";
 }
 
 function showLanding() {
@@ -168,6 +173,7 @@ function scoreTone(score) {
 
 function dataCoverage(scan) {
   if (scan.mode === "DEMO") return "DEMO FIXTURE";
+  if (scan.intelligence?.dataCoverage) return `${scan.intelligence.dataCoverage.overall}%`;
   const values = Object.values(scan.risk?.categories || {});
   if (!values.length) return "UNKNOWN";
   return `${Math.round(values.reduce((total, category) => total + category.coverage, 0) / values.length)}%`;
@@ -183,10 +189,10 @@ function coverageClass(coverage) {
 
 function summaryParagraph(scan) {
   if (!scan.risk || scan.risk.finalScore === null) {
-    return "The available evidence does not support a reliable final risk score. Missing categories and provider limitations are shown below; UNKNOWN is not treated as a healthy result.";
+    return "The available evidence does not support a reliable final risk score. Missing categories and data limitations are shown below; UNKNOWN is not treated as a healthy result.";
   }
   const risks = scan.findings.filter((finding) => !finding.positive).slice(0, 2).map((finding) => finding.title.toLowerCase());
-  const limitation = scan.risk.partialData ? "The assessment is partial because some categories are not sufficiently covered." : "All six risk categories have usable evidence for this snapshot.";
+  const limitation = scan.risk.partialData ? "The assessment is partial because some categories are not sufficiently covered." : "The available evidence covers the six risk categories for this snapshot.";
   return `The observed evidence maps to a ${scan.risk.level.toLowerCase()} risk level. ${risks.length ? `The most material signals are ${risks.join(" and ")}.` : "No material negative finding was generated from the available evidence."} ${limitation} This is an assessment based on available data at scan time, not financial advice.`;
 }
 
@@ -208,7 +214,7 @@ function renderHero(scan) {
       <div class="report-meta"><span>${escapeHtml(scan.scanId)}</span><span class="mode-badge ${scan.mode === "DEMO" ? "demo" : ""}">${escapeHtml(scan.mode)} SCAN</span></div>
     </div>
     ${scan.mode === "DEMO" ? `<div class="demo-banner">DEMO DATA — NOT LIVE BLOCKCHAIN DATA &nbsp; / &nbsp; ENGINE REPRODUCIBILITY: HIGH &nbsp; / &nbsp; LIVE EVIDENCE: NOT APPLICABLE</div>` : ""}
-    ${scan.errors.length ? `<div class="error-banner"><strong>PARTIAL DATA:</strong> ${scan.errors.map((error) => `${escapeHtml(error.provider)} — ${escapeHtml(error.code)}`).join(" · ")}</div>` : ""}
+    ${scan.errors.length ? `<div class="error-banner"><strong>PARTIAL DATA:</strong> Some evidence was unavailable for this scan. Missing fields remain UNKNOWN and were not replaced.</div>` : ""}
     <div class="report-hero">
       <div class="report-identity">
         <p class="eyebrow">CA X-RAY / FORENSIC REPORT</p>
@@ -281,19 +287,19 @@ function capabilityRow(label, dataPoint, impact) {
   const state = dataPoint?.status || "UNKNOWN";
   const isDetected = dataPoint?.value === true;
   const isNegative = isDetected || (label === "Source verification" && dataPoint?.value === false);
-  return `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${pointText(dataPoint)}</td><td class="impact">${isNegative ? escapeHtml(impact) : "No observed addition"}</td><td>${pointEvidence(dataPoint)}</td><td>${escapeHtml(dataPoint?.source || "UNKNOWN")}</td><td>${statusPill(dataPoint, dataPoint?.confidence || "UNKNOWN")}</td></tr>`;
+  return `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${pointText(dataPoint)}</td><td class="impact">${isNegative ? escapeHtml(impact) : "No observed addition"}</td><td>${pointEvidence(dataPoint)}</td><td>${escapeHtml(evidenceLabel(dataPoint))}</td><td>${statusPill(dataPoint, dataPoint?.confidence || "UNKNOWN")}</td></tr>`;
 }
 
 function tradingRow(label, dataPoint, formatter = formatValue, impact = "—") {
-  return `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${pointText(dataPoint, formatter)}</td><td class="impact">${escapeHtml(impact)}</td><td>${pointEvidence(dataPoint)}</td><td>${escapeHtml(dataPoint?.source || "UNKNOWN")}</td><td>${statusPill(dataPoint, dataPoint?.confidence || "UNKNOWN")}</td></tr>`;
+  return `<tr><td><strong>${escapeHtml(label)}</strong></td><td>${pointText(dataPoint, formatter)}</td><td class="impact">${escapeHtml(impact)}</td><td>${pointEvidence(dataPoint)}</td><td>${escapeHtml(evidenceLabel(dataPoint))}</td><td>${statusPill(dataPoint, dataPoint?.confidence || "UNKNOWN")}</td></tr>`;
 }
 
 function renderForensics(scan) {
   const s = scan.security || {};
   const t = scan.trading || {};
   return `<section class="report-section full">${sectionHeading("03", "CONTRACT & TRADING FORENSICS", "03 / 08")}
-    <div class="forensic-grid">
-      <div><h3 class="subheading">CONTRACT CAPABILITIES</h3><div class="table-wrap"><table><thead><tr><th>CAPABILITY</th><th>STATUS</th><th>IMPACT</th><th>EVIDENCE</th><th>SOURCE</th><th>CONFIDENCE</th></tr></thead><tbody>
+     <div class="forensic-grid">
+       <div><h3 class="subheading">CONTRACT CAPABILITIES</h3><div class="table-wrap"><table><thead><tr><th>CAPABILITY</th><th>STATUS</th><th>IMPACT</th><th>EVIDENCE</th><th>EVIDENCE TYPE</th><th>CONFIDENCE</th></tr></thead><tbody>
         ${capabilityRow("Mint additional tokens", s.canMint, "+30")}
         ${capabilityRow("Blacklist addresses", s.canBlacklist, "+20")}
         ${capabilityRow("Whitelist restrictions", s.canWhitelist, "+10")}
@@ -303,7 +309,7 @@ function renderForensics(scan) {
         ${capabilityRow("Withdraw funds", s.canWithdraw, "+15")}
         ${capabilityRow("Source verification", s.sourceVerified, "Unverified +10")}
       </tbody></table></div></div>
-      <div><h3 class="subheading">TRADING SIGNALS</h3><div class="table-wrap"><table><thead><tr><th>SIGNAL</th><th>VALUE / STATUS</th><th>IMPACT</th><th>EVIDENCE</th><th>SOURCE</th><th>CONFIDENCE</th></tr></thead><tbody>
+       <div><h3 class="subheading">TRADING SIGNALS</h3><div class="table-wrap"><table><thead><tr><th>SIGNAL</th><th>VALUE / STATUS</th><th>IMPACT</th><th>EVIDENCE</th><th>EVIDENCE TYPE</th><th>CONFIDENCE</th></tr></thead><tbody>
         ${tradingRow("Buy tax", t.buyTax, formatPercent, "≥15% adds +15")}
         ${tradingRow("Sell tax", t.sellTax, formatPercent, "≥20% adds +20")}
         ${tradingRow("Transfer tax", t.transferTax, formatPercent)}
@@ -345,7 +351,7 @@ function renderHolderLiquidity(scan) {
         ${metric("DEX", l.dex)}
         ${metric("Price", l.price, (value) => `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 8 })}`)}
         ${metric("24h change", l.change24h, formatPercent)}
-      </div><p class="pair-note">Primary pair rule: ${escapeHtml(l.primaryPairRule || "Provider-selected pair.")} Liquidity lock status is not claimed because no reliable lock source is configured.</p>`}</div>
+      </div><p class="pair-note">Primary pair rule: ${escapeHtml(l.primaryPairRule || "Highest-evidence pair selection rule.")} Liquidity lock status is not claimed because no reliable lock source is configured.</p>`}</div>
     </div>
   </section>`;
 }
@@ -397,8 +403,8 @@ function renderFindings(scan) {
 
 function renderEvidence(scan) {
   return `<section class="report-section full">${sectionHeading("07", "EVIDENCE REGISTER", "07 / 08")}
-    <p class="section-intro">Expand an item for WHAT, WHY, EVIDENCE, SOURCE, timestamp, status, confidence, and provider limitations.</p>
-    ${scan.evidence?.length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>FINDING</th><th>SOURCE</th><th>RETRIEVED AT</th><th>CONFIDENCE</th></tr></thead><tbody>${scan.evidence.map((evidence) => `<tr><td><span class="evidence-id">${escapeHtml(evidence.id)}</span></td><td>${escapeHtml(evidence.finding)}<details class="evidence-detail"><summary>VIEW EVIDENCE DETAIL</summary><div class="detail-grid"><strong>WHAT</strong><span>${escapeHtml(evidence.what)}</span><strong>WHY</strong><span>${escapeHtml(evidence.why)}</span><strong>EVIDENCE</strong><span>${escapeHtml(evidence.evidence)}</span><strong>SOURCE</strong><span>${escapeHtml(evidence.source)}</span><strong>RETRIEVED AT</strong><span>${escapeHtml(formatDate(evidence.retrievedAt))}</span><strong>STATUS</strong><span>${statusPill(evidence, evidence.status)}</span><strong>CONFIDENCE</strong><span>${escapeHtml(evidence.confidence)}</span>${evidence.limitations ? `<strong>LIMITATIONS</strong><span>${escapeHtml(evidence.limitations)}</span>` : ""}</div></details></td><td>${escapeHtml(evidence.source)}</td><td>${escapeHtml(formatDate(evidence.retrievedAt))}</td><td>${escapeHtml(evidence.confidence)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="unknown-message">NO MATERIAL EVIDENCE REGISTERED</div>`}
+    <p class="section-intro">Expand an item for WHAT, WHY, EVIDENCE, timestamp, status, confidence, and limitations.</p>
+    ${scan.evidence?.length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>FINDING</th><th>EVIDENCE TYPE</th><th>RETRIEVED AT</th><th>CONFIDENCE</th></tr></thead><tbody>${scan.evidence.map((evidence) => `<tr><td><span class="evidence-id">${escapeHtml(evidence.id)}</span></td><td>${escapeHtml(evidence.finding)}<details class="evidence-detail"><summary>VIEW EVIDENCE DETAIL</summary><div class="detail-grid"><strong>WHAT</strong><span>${escapeHtml(evidence.what)}</span><strong>WHY</strong><span>${escapeHtml(evidence.why)}</span><strong>EVIDENCE</strong><span>${escapeHtml(evidence.evidence)}</span><strong>EVIDENCE TYPE</strong><span>${escapeHtml(evidenceLabel(evidence))}</span><strong>RETRIEVED AT</strong><span>${escapeHtml(formatDate(evidence.retrievedAt))}</span><strong>STATUS</strong><span>${statusPill(evidence, evidence.status)}</span><strong>CONFIDENCE</strong><span>${escapeHtml(evidence.confidence)}</span>${evidence.limitations ? `<strong>LIMITATIONS</strong><span>${escapeHtml(evidence.limitations)}</span>` : ""}</div></details></td><td>${escapeHtml(evidenceLabel(evidence))}</td><td>${escapeHtml(formatDate(evidence.retrievedAt))}</td><td>${escapeHtml(evidence.confidence)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="unknown-message">NO MATERIAL EVIDENCE REGISTERED</div>`}
   </section>`;
 }
 
@@ -423,13 +429,124 @@ function renderFinalAssessment(scan) {
   </section>`;
 }
 
+function renderRiskProfile(scan) {
+  const profile = scan.intelligence?.riskProfile || [];
+  return `<section class="report-section full intelligence-section">${sectionHeading("02", "RISK PROFILE", "02 / 16")}
+    <p class="section-intro">Explanatory dimensions derived from the canonical overall risk score. UNKNOWN means the available evidence is not sufficient for a category conclusion.</p>
+    <div class="profile-grid">${profile.map((item) => `<article class="profile-card">
+      <div class="profile-card-top"><div class="data-label">${escapeHtml(item.label)}</div><span class="profile-score">${item.score === null ? "UNKNOWN" : `${Math.round(item.score)} / 100`}</span></div>
+      ${statusPill({ status: item.level }, item.level)}
+      <p>${escapeHtml(item.reason)}</p>
+      <div class="coverage-line"><span>DATA COVERAGE</span><strong>${escapeHtml(String(item.coverage))}%</strong></div>
+    </article>`).join("")}</div>
+  </section>`;
+}
+
+function renderCapabilities(scan) {
+  const intelligence = scan.intelligence || {};
+  const capabilities = intelligence.capabilities || [];
+  return `<section class="report-section full intelligence-section">${sectionHeading("03", "WHAT CAN THIS CONTRACT DO?", "03 / 16")}
+    <p class="section-intro">Technical permissions are translated into potential user impact. A detected capability is a risk signal, not proof of malicious behavior.</p>
+    <div class="capability-grid">${capabilities.map((capability) => `<article class="capability-card ${capability.detected ? "detected" : ""}">
+      <div class="capability-head"><h3>${escapeHtml(capability.label)}</h3>${statusPill({ status: capability.status }, capability.status)}</div>
+      <div class="data-label">MEANING</div><p>${escapeHtml(capability.detected ? capability.meaning : capability.status === "UNKNOWN" ? "Not enough evidence to determine this capability." : "The capability was not detected in available evidence.")}</p>
+      <div class="capability-meta"><div><span class="data-label">POTENTIAL IMPACT</span><strong>${escapeHtml(capability.impact)}</strong></div><div><span class="data-label">CONTROL</span><strong>${escapeHtml(capability.control)}</strong></div></div>
+      <div class="capability-foot"><span>EVIDENCE: ${escapeHtml(capability.detected || capability.status === "NOT_DETECTED" ? evidenceLabel({ status: capability.status }) : "UNKNOWN")}</span><span>CONFIDENCE: ${escapeHtml(capability.confidence)}</span></div>
+    </article>`).join("")}</div>
+  </section>`;
+}
+
+function renderPowerMap(scan) {
+  const map = scan.intelligence?.powerMap || {};
+  const capabilities = map.capabilities || [];
+  return `<section class="report-section full intelligence-section">${sectionHeading("04", "CONTRACT POWER MAP", "04 / 16")}
+    <div class="power-map">
+      <div class="power-node"><span class="data-label">OWNER / ADMIN</span><strong class="address-text">${escapeHtml(map.owner || "UNKNOWN")}</strong><span class="status-note">${escapeHtml(map.control || "UNKNOWN")}</span></div>
+      <div class="power-arrow">↓</div>
+      <div class="power-node"><span class="data-label">CAN CONTROL</span><div class="power-tags">${(capabilities.length ? capabilities : ["UNKNOWN"]).map((item) => `<span class="power-tag">${escapeHtml(item)}</span>`).join("")}</div></div>
+      <div class="power-arrow">↓</div>
+      <div class="power-node"><span class="data-label">POTENTIAL USER IMPACT</span><ul class="compact-list">${((map.impacts || []).length ? map.impacts : ["Insufficient evidence available."]).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>
+    </div>
+  </section>`;
+}
+
+function renderExitability(scan) {
+  const exit = scan.intelligence?.exitability || {};
+  return `<section class="report-section full intelligence-section">${sectionHeading("05", "CAN I EXIT?", "05 / 16")}
+    <p class="section-intro">Technical exitability assessment only. This is not investment advice and does not guarantee execution or safety.</p>
+    <div class="exit-grid"><div class="exit-summary"><div class="data-label">EXITABILITY</div><div class="exit-level ${statusClass(exit.level)}">${escapeHtml(exit.level || "UNKNOWN")}</div><p>${escapeHtml(exit.explanation || "Insufficient evidence is available to assess practical exit conditions.")}</p></div>
+      <div class="exit-signals">${(exit.signals || []).map((signal) => `<div class="exit-signal"><span class="data-label">${escapeHtml(signal.label)}</span><strong>${escapeHtml(signal.value)}</strong></div>`).join("")}</div>
+    </div>
+  </section>`;
+}
+
+function renderUserImpacts(scan) {
+  const impacts = scan.intelligence?.impacts || [];
+  return `<section class="report-section full intelligence-section">${sectionHeading("06", "USER IMPACT", "06 / 16")}
+    <p class="section-intro">Each material finding is expressed as capability or signal → potential user impact → control → evidence confidence.</p>
+    <div class="impact-grid">${(impacts.length ? impacts : [{ title: "No evidence-backed impact finding", what: "No material negative finding was generated.", why: "Available evidence did not establish one.", impact: "No conclusion beyond available evidence.", control: "UNKNOWN", evidence: "Contract Analysis", confidence: "UNKNOWN" }]).map((item) => `<article class="impact-card">
+      <div class="impact-card-head"><h3>${escapeHtml(item.title)}</h3><span class="evidence-id">${escapeHtml(item.confidence)}</span></div>
+      <div class="impact-detail"><strong>WHAT</strong><span>${escapeHtml(item.what)}</span><strong>WHY</strong><span>${escapeHtml(item.why)}</span><strong>POTENTIAL IMPACT</strong><span>${escapeHtml(item.impact)}</span><strong>CONTROL</strong><span>${escapeHtml(item.control)}</span><strong>EVIDENCE</strong><span>${escapeHtml(item.evidence)} · CONFIDENCE ${escapeHtml(item.confidence)}</span></div>
+    </article>`).join("")}</div>
+  </section>`;
+}
+
+function renderScoreExplanation(scan) {
+  const explanation = scan.intelligence?.scoreExplanation || {};
+  const items = explanation.items || [];
+  const total = Number.isFinite(Number(explanation.total)) ? Number(explanation.total).toFixed(2) : "UNKNOWN";
+  const final = explanation.final === null || explanation.final === undefined ? "INSUFFICIENT DATA" : `${Number(explanation.final).toFixed(2)} / 100`;
+  return `<section class="report-section full intelligence-section">${sectionHeading("08", "WHY THIS SCORE?", "08 / 16")}
+    <p class="section-intro">The canonical score is unchanged. Contributions below use each eligible category's original weight, then normalize by the available weight when evidence is partial.</p>
+    <div class="score-explanation">${items.length ? items.map((item) => `<div class="score-line"><strong>${escapeHtml(item.label)}</strong><span>${Number(item.score).toFixed(2)} × ${(item.weight * 100).toFixed(0)}%</span><b>= ${Number(item.contribution).toFixed(2)}</b></div>`).join("") : `<div class="unknown-message">No eligible category contribution is available.</div>`}
+      <div class="score-total"><span>TOTAL EVIDENCED CONTRIBUTION</span><strong>${escapeHtml(total)}</strong></div><div class="score-total"><span>FINAL CANONICAL SCORE</span><strong>${escapeHtml(final)}</strong></div>
+    </div><p class="main-driver"><span class="data-label">MAIN SCORE DRIVER</span>${escapeHtml(explanation.mainDriver || "No score driver established.")}</p>
+  </section>`;
+}
+
+function renderCompoundRisk(scan) {
+  const compounds = scan.intelligence?.compoundRisks || [];
+  return `<section class="report-section full intelligence-section">${sectionHeading("12", "COMPOUND RISK", "12 / 16")}
+    <p class="section-intro">Compound findings trigger only when each underlying signal is supported by available evidence. They do not replace the canonical score.</p>
+    ${compounds.length ? `<div class="compound-grid">${compounds.map((compound) => `<article class="compound-card"><div class="capability-head"><h3>${escapeHtml(compound.title)}</h3>${statusPill({ status: compound.level }, compound.level)}</div><p>${escapeHtml(compound.explanation)}</p><div class="data-label">SUPPORTING SIGNALS</div><div class="power-tags">${compound.signals.map((signal) => `<span class="power-tag">${escapeHtml(signal)}</span>`).join("")}</div></article>`).join("")}</div>` : `<div class="unknown-message">NO COMPOUND RISK CONDITION ESTABLISHED FROM AVAILABLE EVIDENCE</div>`}
+  </section>`;
+}
+
+function renderSignalContext(scan) {
+  const risks = (scan.findings || []).filter((finding) => !finding.positive).slice(0, 6);
+  return `<section class="report-section full intelligence-section">${sectionHeading("13", "SIGNAL CONTEXT", "13 / 16")}
+    <p class="section-intro">A detected signal is not, by itself, proof of malicious behavior. The report separates what the evidence establishes from what still requires independent verification.</p>
+    <div class="context-grid">${(risks.length ? risks : [{ title: "No material signal established", what: "No evidence-backed negative finding was generated.", confidence: "UNKNOWN" }]).map((finding) => `<article class="context-card"><div class="context-card-head"><strong>${escapeHtml(finding.title)}</strong><span>${escapeHtml(finding.confidence)}</span></div><div><span class="data-label">SIGNAL STATUS</span><b>SIGNAL DETECTED</b></div><p>${escapeHtml(finding.what)}</p><div><span class="data-label">NOT ESTABLISHED BY THIS SIGNAL</span><p>Unauthorized or malicious behavior is not established by this finding alone.</p></div></article>`).join("")}</div>
+  </section>`;
+}
+
+function renderCoverage(scan) {
+  const coverage = scan.intelligence?.dataCoverage;
+  const categories = coverage?.categories || [];
+  const timeline = scan.intelligence?.timeline;
+  const relationships = scan.intelligence?.addressRelationships || [];
+  return `<section class="report-section full intelligence-section">${sectionHeading("15", "DATA COVERAGE & LIMITATIONS", "15 / 16")}
+    <div class="coverage-summary"><div><div class="data-label">OVERALL EVIDENCE COVERAGE</div><strong>${scan.mode === "DEMO" ? "DEMO FIXTURE" : `${coverage?.overall ?? "UNKNOWN"}%`}</strong></div><div><div class="data-label">SCAN LIMITATION</div><p>${scan.errors?.length ? "Some evidence was unavailable for this scan." : "Coverage reflects fields returned in the normalized snapshot."}</p></div></div>
+    <div class="coverage-cards">${categories.map((category) => `<div><span class="data-label">${escapeHtml(category.label)}</span><strong>${escapeHtml(String(category.coverage))}%</strong><span class="coverage-status">${escapeHtml(category.status)}</span></div>`).join("")}</div>
+    <div class="coverage-lower"><div><h3 class="subheading">TOKEN TIMELINE</h3>${timeline?.items?.length ? `<div class="timeline">${timeline.items.map((item) => `<div class="timeline-item"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(truncateAddress(String(item.value)))}</strong></div>`).join("")}</div>` : `<div class="unknown-message">TIMELINE LIMITED EVIDENCE</div>`}</div><div><h3 class="subheading">ADDRESS RELATIONSHIPS</h3>${relationships.length ? `<div class="relationship-list">${relationships.map((item) => `<div><span>${escapeHtml(item.label)}</span><strong class="address-text">${escapeHtml(truncateAddress(String(item.value)))}</strong></div>`).join("")}</div>` : `<div class="unknown-message">NO VERIFIED RELATIONSHIP FOUND</div>`}</div></div>
+    <div class="history-card"><div><span class="data-label">WHAT CHANGED?</span><strong>NO PREVIOUS SCAN</strong></div><p>Historical comparison is not available because no prior scan is stored in this application.</p></div>
+  </section>`;
+}
+
 function renderReport(scan) {
   updateLoading(scan);
   landing.hidden = true;
   loading.hidden = true;
   report.hidden = false;
-  report.innerHTML = `<div class="report-shell">${renderHero(scan)}<div class="report-grid">${renderExecutiveSummary(scan)}${renderRiskBreakdown(scan)}${renderForensics(scan)}${renderHolderLiquidity(scan)}${renderMarketDeployer(scan)}${renderFindings(scan)}${renderEvidence(scan)}${renderFinalAssessment(scan)}</div><div class="report-footer">CA X-RAY / ASSESSMENT BASED ON AVAILABLE DATA AT SCAN TIME / NO FINANCIAL ADVICE</div></div>`;
+  report.innerHTML = `<div class="report-shell">${renderHero(scan)}<div class="report-grid quick-xray">${renderExecutiveSummary(scan)}${renderRiskProfile(scan)}${renderCapabilities(scan)}${renderPowerMap(scan)}${renderExitability(scan)}</div>
+    <div class="investigation-switch"><div><span class="data-label">INVESTIGATION MODE</span><strong>QUICK X-RAY</strong><p>Open the detailed evidence and calculation sections when deeper review is required.</p></div><button class="view-all" id="toggle-investigation">OPEN DEEP INVESTIGATION</button></div>
+    <div id="deep-investigation" class="report-grid deep-investigation" hidden>${renderUserImpacts(scan)}${renderRiskBreakdown(scan)}${renderScoreExplanation(scan)}${renderForensics(scan)}${renderHolderLiquidity(scan)}${renderMarketDeployer(scan)}${renderCompoundRisk(scan)}${renderSignalContext(scan)}${renderFindings(scan)}${renderEvidence(scan)}${renderCoverage(scan)}${renderFinalAssessment(scan)}</div><div class="report-footer">CA X-RAY / ASSESSMENT BASED ON AVAILABLE DATA AT SCAN TIME / NO FINANCIAL ADVICE</div></div>`;
   document.querySelector("#back-home")?.addEventListener("click", showLanding);
+  document.querySelector("#toggle-investigation")?.addEventListener("click", (event) => {
+    const target = document.querySelector("#deep-investigation");
+    target.hidden = !target.hidden;
+    event.currentTarget.textContent = target.hidden ? "OPEN DEEP INVESTIGATION" : "CLOSE DEEP INVESTIGATION";
+  });
   document.querySelector("#view-all-findings")?.addEventListener("click", (event) => {
     const target = document.querySelector("#all-findings");
     target.hidden = !target.hidden;

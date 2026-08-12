@@ -218,6 +218,8 @@ function setDemoData(scan, scenario) {
   scan.liquidity.primaryPairRule = "Highest USD liquidity, then 24h volume, then lexicographic pair address.";
   const deployerNames = ["address", "deploymentDate", "suspiciousBehavior", "relatedContracts", "veryRecentDeployment", "tokenConcentration", "maliciousAssociation"];
   scan.deployer = Object.fromEntries(deployerNames.map((name, index) => [name, p(config.deployer[index], `E-${String(index + 34).padStart(3, "0")}`)]));
+  scan.security.ownerAddress = p(config.deployer[0], "E-041");
+  scan.security.ownerControl = p("ACTIVE", "E-042");
   scan.market = {
     price: scan.liquidity.price,
     volume24h: scan.liquidity.volume24h,
@@ -227,10 +229,10 @@ function setDemoData(scan, scenario) {
     change7d: p(scenario === "high" ? -44 : scenario === "moderate" ? 12 : 18),
   };
   scan.project = {
-    website: p(config.project[0], "E-041"),
-    documentation: p(config.project[1], "E-042"),
-    addressConsistency: p(config.project[2], "E-043"),
-    auditClaim: p(config.project[3], "E-044"),
+    website: p(config.project[0], "E-043"),
+    documentation: p(config.project[1], "E-044"),
+    addressConsistency: p(config.project[2], "E-045"),
+    auditClaim: p(config.project[3], "E-046"),
   };
   scan.verification = { sourceCode: scan.security.sourceVerified };
   return scan;
@@ -461,8 +463,9 @@ function findingConfidence(scan, dataPoint) {
 
 function generateFindings(scan, risk) {
   const findings = [];
-  const addFinding = ({ id, severity, title, what, why, dataPoint, impact = 0, positive = false }) => {
+  const addFinding = ({ id, severity, title, what, why, dataPoint, impact = 0, positive = false, when = () => true }) => {
     if (!dataPoint || !hasEvidence(dataPoint, scan.mode)) return;
+    if (!when(dataPoint)) return;
     const evidenceId = dataPoint.evidenceId || `E-${String(findings.length + 1).padStart(3, "0")}`;
     dataPoint.evidenceId = evidenceId;
     const source = dataPoint.source;
@@ -480,36 +483,36 @@ function generateFindings(scan, risk) {
   const l = scan.liquidity;
   const d = scan.deployer;
   const p = scan.project;
-  addFinding({ id: "contract-mint", severity: "HIGH", title: "Owner can mint additional tokens", what: "The normalized contract data indicates mint capability is enabled.", why: "Supply can potentially be expanded by privileged control, which can dilute holders.", dataPoint: s.canMint, impact: 30 });
-  addFinding({ id: "contract-tax", severity: "HIGH", title: "Transaction tax can be changed", what: "A privileged tax-setting capability was detected.", why: "A tax change can alter transfer economics after deployment.", dataPoint: s.canChangeTax, impact: 20 });
-  addFinding({ id: "contract-blacklist", severity: "HIGH", title: "Blacklist capability detected", what: "The provider reports that addresses can be blacklisted.", why: "Blacklisting can restrict specific addresses from transacting.", dataPoint: s.canBlacklist, impact: 20 });
-  addFinding({ id: "contract-pause", severity: "MEDIUM", title: "Transfers can be paused", what: "The contract exposes a transfer-pause capability.", why: "A privileged pause can interrupt transfers.", dataPoint: s.canPause, impact: 15 });
-  addFinding({ id: "contract-upgrade", severity: "HIGH", title: "Privileged upgradeability detected", what: "The contract is reported as upgradeable.", why: "Implementation changes can alter behavior after the current scan.", dataPoint: s.isUpgradeable, impact: 15 });
-  addFinding({ id: "contract-unverified", severity: "MEDIUM", title: "Source code is not verified", what: "The provider explicitly reports source code as unverified.", why: "Independent review of the deployed logic is more difficult.", dataPoint: s.sourceVerified, impact: 10 });
-  addFinding({ id: "trading-malicious", severity: "CRITICAL", title: "Strong malicious-trading signal", what: "A security provider explicitly returned a malicious-trading signal.", why: "This is a direct provider signal that trading behavior deserves immediate scrutiny.", dataPoint: t.maliciousTradingSignal, impact: 50 });
-  addFinding({ id: "trading-sell", severity: "CRITICAL", title: "Sell restriction detected", what: "The provider reports a sell restriction.", why: "A sell restriction can prevent or limit exits.", dataPoint: t.sellRestriction, impact: 30 });
-  addFinding({ id: "trading-buy", severity: "HIGH", title: "Buy restriction detected", what: "The provider reports a buy restriction.", why: "A buy restriction can limit access to the market.", dataPoint: t.buyRestriction, impact: 20 });
+  addFinding({ id: "contract-mint", severity: "HIGH", title: "Mint capability detected", what: "The normalized contract data indicates mint capability is enabled.", why: "Supply can potentially be expanded by privileged control, which can dilute holders.", dataPoint: s.canMint, impact: 30, when: (value) => value.value === true });
+  addFinding({ id: "contract-tax", severity: "HIGH", title: "Transaction tax can be changed", what: "A privileged tax-setting capability was detected.", why: "A tax change can alter transfer economics after deployment.", dataPoint: s.canChangeTax, impact: 20, when: (value) => value.value === true });
+  addFinding({ id: "contract-blacklist", severity: "HIGH", title: "Blacklist capability detected", what: "The normalized contract data indicates that addresses can be blacklisted.", why: "Blacklisting can restrict specific addresses from transacting.", dataPoint: s.canBlacklist, impact: 20, when: (value) => value.value === true });
+  addFinding({ id: "contract-pause", severity: "MEDIUM", title: "Transfers can be paused", what: "The contract exposes a transfer-pause capability.", why: "A privileged pause can interrupt transfers.", dataPoint: s.canPause, impact: 15, when: (value) => value.value === true });
+  addFinding({ id: "contract-upgrade", severity: "HIGH", title: "Privileged upgradeability detected", what: "The contract is reported as upgradeable.", why: "Implementation changes can alter behavior after the current scan.", dataPoint: s.isUpgradeable, impact: 15, when: (value) => value.value === true });
+  addFinding({ id: "contract-unverified", severity: "MEDIUM", title: "Source code is not verified", what: "Available evidence indicates that source code is not verified.", why: "Independent review of the deployed logic is more difficult.", dataPoint: s.sourceVerified, impact: 10, when: (value) => value.value === false });
+  addFinding({ id: "trading-malicious", severity: "CRITICAL", title: "Honeypot signal detected", what: "Available security analysis returned a honeypot signal.", why: "This direct risk signal means trading behavior deserves immediate scrutiny.", dataPoint: t.maliciousTradingSignal, impact: 50, when: (value) => value.value === true });
+  addFinding({ id: "trading-sell", severity: "CRITICAL", title: "Sell restriction detected", what: "Available evidence reports a sell restriction.", why: "A sell restriction can prevent or limit exits.", dataPoint: t.sellRestriction, impact: 30, when: (value) => value.value === true });
+  addFinding({ id: "trading-buy", severity: "HIGH", title: "Buy restriction detected", what: "Available evidence reports a buy restriction.", why: "A buy restriction can limit access to the market.", dataPoint: t.buyRestriction, impact: 20, when: (value) => value.value === true });
   const sellTax = Number(t.sellTax && t.sellTax.value);
   if (Number.isFinite(sellTax) && sellTax >= TAX_THRESHOLDS.veryHighSellTax) addFinding({ id: "trading-sell-tax", severity: "HIGH", title: "Very high sell tax observed", what: `The observed sell tax is ${formatValue(sellTax)}%.`, why: `The value meets the named ${TAX_THRESHOLDS.veryHighSellTax}% high-tax threshold.`, dataPoint: t.sellTax, impact: 20 });
   const buyTax = Number(t.buyTax && t.buyTax.value);
   if (Number.isFinite(buyTax) && buyTax >= TAX_THRESHOLDS.veryHighBuyTax) addFinding({ id: "trading-buy-tax", severity: "HIGH", title: "Very high buy tax observed", what: `The observed buy tax is ${formatValue(buyTax)}%.`, why: `The value meets the named ${TAX_THRESHOLDS.veryHighBuyTax}% high-tax threshold.`, dataPoint: t.buyTax, impact: 15 });
-  addFinding({ id: "holder-top10", severity: "HIGH", title: "Top-10 holder concentration is elevated", what: `Top-10 holders account for ${formatValue(h.top10Percent && h.top10Percent.value)}%.`, why: "Concentrated holdings can increase the impact of a small number of wallets on supply and liquidity.", dataPoint: h.top10Percent, impact: risk.categories.holder.score || 0 });
-  addFinding({ id: "holder-deployer", severity: "MEDIUM", title: "Deployer concentration is material", what: `The deployer concentration is ${formatValue(h.deployerPercent && h.deployerPercent.value)}%.`, why: "A concentrated deployer position can affect distribution risk.", dataPoint: h.deployerPercent, impact: 25 });
+  addFinding({ id: "holder-top10", severity: "HIGH", title: "Top-10 holder concentration is elevated", what: `Top-10 holders account for ${formatValue(h.top10Percent && h.top10Percent.value)}%.`, why: "Concentrated holdings can increase the impact of a small number of wallets on supply and liquidity.", dataPoint: h.top10Percent, impact: risk.categories.holder.score || 0, when: (value) => Number(value.value) >= 40 });
+  addFinding({ id: "holder-deployer", severity: "MEDIUM", title: "Deployer concentration is material", what: `The deployer concentration is ${formatValue(h.deployerPercent && h.deployerPercent.value)}%.`, why: "A concentrated deployer position can affect distribution risk.", dataPoint: h.deployerPercent, impact: 25, when: (value) => Number(value.value) >= 10 });
   const liquidityUsd = Number(l.liquidityUsd && l.liquidityUsd.value);
   if (Number.isFinite(liquidityUsd) && liquidityUsd < 100000) addFinding({ id: "liquidity-depth", severity: liquidityUsd < 10000 ? "HIGH" : "MEDIUM", title: "Liquidity depth is limited", what: `Primary-pair liquidity is ${formatCurrency(liquidityUsd)}.`, why: "Lower liquidity can increase execution impact and make market conditions more fragile.", dataPoint: l.liquidityUsd, impact: liquidityUsd < 10000 ? 60 : 20 });
   const volume = Number(l.volume24h && l.volume24h.value);
   if (Number.isFinite(liquidityUsd) && Number.isFinite(volume) && volume / Math.max(liquidityUsd, 1) < LIQUIDITY_THRESHOLDS.extremelyLowVolumeToLiquidity) addFinding({ id: "liquidity-volume", severity: "MEDIUM", title: "Volume is extremely low relative to liquidity", what: `24-hour volume is ${formatCurrency(volume)} against ${formatCurrency(liquidityUsd)} liquidity.`, why: `The volume/liquidity ratio is below the named ${LIQUIDITY_THRESHOLDS.extremelyLowVolumeToLiquidity} threshold.`, dataPoint: l.volume24h, impact: 15 });
-  addFinding({ id: "deployer-suspicious", severity: "HIGH", title: "Suspicious deployer behavior reported", what: "Reliable deployer evidence flags suspicious behavior.", why: "This is a source-backed activity signal, not an inference from age or ownership alone.", dataPoint: d.suspiciousBehavior, impact: 30 });
-  addFinding({ id: "deployer-related", severity: "MEDIUM", title: "Related contracts detected", what: `${formatValue(d.relatedContracts && d.relatedContracts.value)} related contract(s) were detected.`, why: "Related deployments can provide context for deployer activity and should be reviewed together.", dataPoint: d.relatedContracts, impact: 20 });
+  addFinding({ id: "deployer-suspicious", severity: "HIGH", title: "Suspicious deployer behavior reported", what: "Reliable deployer evidence flags suspicious behavior.", why: "This is a source-backed activity signal, not an inference from age or ownership alone.", dataPoint: d.suspiciousBehavior, impact: 30, when: (value) => value.value === true });
+  addFinding({ id: "deployer-related", severity: "MEDIUM", title: "Related contracts detected", what: `${formatValue(d.relatedContracts && d.relatedContracts.value)} related contract(s) were detected.`, why: "Related deployments can provide context for deployer activity and should be reviewed together.", dataPoint: d.relatedContracts, impact: 20, when: (value) => Number(value.value) >= 2 });
   addFinding({ id: "market-volatility", severity: "MEDIUM", title: "Large 24-hour price movement", what: `The observed 24-hour change is ${formatValue(scan.market.change24h && scan.market.change24h.value)}%.`, why: "Large short-term movement is a market-risk signal, not a prediction of future performance.", dataPoint: scan.market.change24h, impact: 20 });
-  addFinding({ id: "project-website", severity: "LOW", title: "Project website information is unavailable", what: "No project website was available in the normalized data.", why: "The project context cannot be independently reviewed from this scan.", dataPoint: p.website, impact: 10 });
+  addFinding({ id: "project-website", severity: "LOW", title: "Project website information is unavailable", what: "No project website was available in the normalized data.", why: "The project context cannot be independently reviewed from this scan.", dataPoint: p.website, impact: 10, when: (value) => value.value === false });
   addFinding({ id: "project-audit", severity: "LOW", title: "Audit claim is not independently verified", what: "The normalized project signal is UNVERIFIED.", why: "An unverified audit claim is a limitation; it does not establish that the contract is unsafe.", dataPoint: p.auditClaim, impact: 5 });
 
-  addFinding({ id: "positive-source", severity: "POSITIVE", title: "Contract source is verified", what: "The provider explicitly reports verified source code.", why: "Verified source improves inspectability, although it does not guarantee safety.", dataPoint: s.sourceVerified, positive: true });
-  addFinding({ id: "positive-no-mint", severity: "POSITIVE", title: "No mint capability detected", what: "The provider explicitly checked and did not detect mint capability.", why: "This removes one observed privileged supply-control signal from the current scan.", dataPoint: s.canMint, positive: true });
-  addFinding({ id: "positive-distribution", severity: "POSITIVE", title: "Top-10 holder concentration is below 20%", what: `Top-10 holders account for ${formatValue(h.top10Percent && h.top10Percent.value)}%.`, why: "The observed distribution is below the highest concentration bands in this rubric.", dataPoint: h.top10Percent, positive: true });
-  addFinding({ id: "positive-liquidity", severity: "POSITIVE", title: "Primary-pair liquidity is substantial", what: `Primary-pair liquidity is ${formatCurrency(liquidityUsd)}.`, why: "The observed liquidity is at or above the rubric's $100,000 lower-risk threshold.", dataPoint: l.liquidityUsd, positive: true });
-  addFinding({ id: "positive-trading", severity: "POSITIVE", title: "No malicious-trading signal detected", what: "The provider explicitly checked and did not detect the strong malicious-trading signal.", why: "This is a positive provider result, not a guarantee of safe trading.", dataPoint: t.maliciousTradingSignal, positive: true });
+  addFinding({ id: "positive-source", severity: "POSITIVE", title: "Contract source is verified", what: "Available evidence reports verified source code.", why: "Verified source improves inspectability, although it does not guarantee safety.", dataPoint: s.sourceVerified, positive: true, when: (value) => value.value === true });
+  addFinding({ id: "positive-no-mint", severity: "POSITIVE", title: "No mint capability detected", what: "Available evidence checked and did not detect mint capability.", why: "This removes one observed privileged supply-control signal from the current scan.", dataPoint: s.canMint, positive: true, when: (value) => value.value === false });
+  addFinding({ id: "positive-distribution", severity: "POSITIVE", title: "Top-10 holder concentration is below 20%", what: `Top-10 holders account for ${formatValue(h.top10Percent && h.top10Percent.value)}%.`, why: "The observed distribution is below the highest concentration bands in this rubric.", dataPoint: h.top10Percent, positive: true, when: (value) => Number(value.value) < 20 });
+  addFinding({ id: "positive-liquidity", severity: "POSITIVE", title: "Primary-pair liquidity is substantial", what: `Primary-pair liquidity is ${formatCurrency(liquidityUsd)}.`, why: "The observed liquidity is at or above the rubric's $100,000 lower-risk threshold.", dataPoint: l.liquidityUsd, positive: true, when: (value) => Number(value.value) >= 100000 });
+  addFinding({ id: "positive-trading", severity: "POSITIVE", title: "No honeypot signal detected", what: "Available analysis checked and did not detect a honeypot signal.", why: "This is a positive result for the current snapshot, not a guarantee of safe trading.", dataPoint: t.maliciousTradingSignal, positive: true, when: (value) => value.value === false });
 
   const severityOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, POSITIVE: 4 };
   findings.sort((a, b) => (severityOrder[a.severity] - severityOrder[b.severity]) || (b.impact - a.impact) || (a.confidence.localeCompare(b.confidence)) || a.id.localeCompare(b.id));
@@ -529,11 +532,220 @@ function generateFindings(scan, risk) {
   return findings;
 }
 
+function evidencePoint(scan, dataPoint) {
+  return Boolean(dataPoint && hasEvidence(dataPoint, scan.mode));
+}
+
+function trueSignal(scan, dataPoint) {
+  return evidencePoint(scan, dataPoint) && dataPoint.value === true;
+}
+
+function falseSignal(scan, dataPoint) {
+  return evidencePoint(scan, dataPoint) && dataPoint.value === false;
+}
+
+function numericValue(scan, dataPoint) {
+  if (!evidencePoint(scan, dataPoint)) return null;
+  const value = Number(dataPoint.value);
+  return Number.isFinite(value) ? value : null;
+}
+
+function intelligenceConfidence(scan, dataPoints) {
+  const usable = dataPoints.filter((dataPoint) => evidencePoint(scan, dataPoint));
+  if (!usable.length) return "UNKNOWN";
+  if (scan.mode === "DEMO" || usable.every((dataPoint) => dataPoint.confidence === "HIGH")) return "HIGH";
+  return "MEDIUM";
+}
+
+function capabilityControl(scan, dataPoint) {
+  const ownerControl = scan.security?.ownerControl;
+  if (!evidencePoint(scan, dataPoint)) return "UNKNOWN";
+  if (evidencePoint(scan, ownerControl)) return ownerControl.value || "UNKNOWN";
+  return "UNKNOWN";
+}
+
+function buildIntelligence(scan, risk) {
+  const s = scan.security || {};
+  const t = scan.trading || {};
+  const h = scan.holders || {};
+  const l = scan.liquidity || {};
+  const d = scan.deployer || {};
+  const m = scan.market || {};
+  const categories = risk.categories || {};
+  const levelFor = (category) => category?.score === null || category?.score === undefined ? "UNKNOWN" : riskLevel(category.score);
+  const categoryReason = {
+    contract: trueSignal(scan, s.canMint) ? "Privileged supply control was detected." :
+      trueSignal(scan, s.canChangeTax) ? "A privileged tax-setting capability was detected." :
+        trueSignal(scan, s.isUpgradeable) ? "Upgradeable contract control was detected." :
+          falseSignal(scan, s.canMint) ? "No mint capability was detected in available evidence." : "No major contract-control signal was detected.",
+    trading: trueSignal(scan, t.sellRestriction) ? "A sell restriction was detected." :
+      trueSignal(scan, t.maliciousTradingSignal) ? "A honeypot signal was detected." :
+        numericValue(scan, t.sellTax) !== null && numericValue(scan, t.sellTax) >= TAX_THRESHOLDS.veryHighSellTax ? "Observed sell tax meets the high-tax threshold." :
+          falseSignal(scan, t.sellRestriction) ? "No sell restriction was detected in available evidence." : "Trading controls are only partially covered.",
+    holder: numericValue(scan, h.top10Percent) !== null ? `Top-10 holders control ${formatValue(h.top10Percent.value)}% of supply.` : "Holder concentration is not sufficiently evidenced.",
+    liquidity: numericValue(scan, l.liquidityUsd) !== null ? `Primary-pair liquidity is ${formatCurrency(l.liquidityUsd.value)}.` : "Liquidity depth is not sufficiently evidenced.",
+    deployer: trueSignal(scan, d.suspiciousBehavior) ? "Suspicious deployer behavior was reported." :
+      numericValue(scan, d.tokenConcentration) !== null && numericValue(scan, d.tokenConcentration) >= 20 ? "Material deployer token concentration was detected." : "No major deployer signal was detected.",
+    marketProject: numericValue(scan, m.change24h) !== null && Math.abs(numericValue(scan, m.change24h)) >= 25 ? "Large short-term market movement was observed." :
+      "Market and project context is based on available evidence.",
+  };
+  const profile = Object.entries(categoryLabelsForEngine()).map(([key, label]) => ({
+    key,
+    label,
+    score: categories[key]?.score ?? null,
+    level: levelFor(categories[key]),
+    reason: categories[key]?.score === null || categories[key]?.score === undefined ? "Insufficient evidence available." : categoryReason[key],
+    coverage: categories[key]?.coverage ?? 0,
+  }));
+
+  const capabilityDefinitions = [
+    ["canMint", "Mint new tokens", "A privileged address may be able to create additional tokens.", "Additional supply could dilute existing holders and create selling pressure.", "HIGH"],
+    ["canPause", "Pause transfers", "A privileged address may be able to interrupt token transfers.", "Transfers could become temporarily unavailable for users.", "HIGH"],
+    ["canBlacklist", "Blacklist addresses", "The contract may be able to restrict specific addresses.", "A targeted address may be prevented from transferring.", "HIGH"],
+    ["canWhitelist", "Whitelist addresses", "The contract exposes address-list control.", "Transfer access or exemptions may be selectively changed.", "MEDIUM"],
+    ["canChangeTax", "Modify taxes", "A privileged address may be able to change transaction taxes.", "Transfer economics could change after deployment.", "HIGH"],
+    ["maxTransactionRestriction", "Modify anti-whale limits", "Transaction or wallet limits may be modifiable.", "A privileged change could restrict transaction size or wallet balances.", "MEDIUM"],
+    ["canWithdraw", "Withdraw contract funds", "A privileged address may be able to withdraw contract-held funds.", "Assets held by the contract may be subject to privileged withdrawal.", "HIGH"],
+    ["isUpgradeable", "Upgrade / proxy", "The contract is reported as upgradeable.", "Future implementation changes could alter contract behavior.", "HIGH"],
+    ["ownerControl", "Ownership control", "An active privileged control address was identified.", "The privileged address may be able to exercise detected capabilities.", "HIGH"],
+  ];
+  const capabilities = capabilityDefinitions.map(([key, label, meaning, impact, severity]) => {
+    const dataPoint = key === "ownerControl" ? s.ownerControl : key === "maxTransactionRestriction" ? t.maxTransactionRestriction : s[key];
+    const detected = key === "ownerControl" ? dataPoint?.value === "ACTIVE" : trueSignal(scan, dataPoint);
+    const notDetected = key !== "ownerControl" && falseSignal(scan, dataPoint);
+    const status = !evidencePoint(scan, dataPoint) ? "UNKNOWN" : detected ? "DETECTED" : notDetected ? "NOT_DETECTED" : formatValue(dataPoint.value);
+    return {
+      key, label, status, detected, meaning, impact: detected ? impact : "No observed addition.",
+      control: detected ? capabilityControl(scan, dataPoint) : "—",
+      severity: detected ? severity : "—",
+      evidence: detected || notDetected ? (dataPoint.evidenceId || null) : null,
+      confidence: findingConfidence(scan, dataPoint),
+      owner: detected ? (valueForPoint(s.ownerAddress) || null) : null,
+    };
+  });
+  const detectedCapabilities = capabilities.filter((capability) => capability.detected);
+  const owner = valueForPoint(s.ownerAddress) || (evidencePoint(scan, d.address) ? d.address.value : null);
+  const activeOwner = trueSignal(scan, s.ownerControl) || (owner && owner !== "0x0000000000000000000000000000000000000000");
+  const impactItems = scan.findings.filter((finding) => !finding.positive).slice(0, 8).map((finding) => ({
+    id: finding.id,
+    title: finding.title,
+    what: finding.what,
+    why: finding.why,
+    impact: impactForFinding(finding),
+    control: finding.id.startsWith("contract-") ? "Privileged owner/admin." : "The relevant contract or market condition.",
+    evidence: "Contract Analysis",
+    confidence: finding.confidence,
+  }));
+
+  const sellTax = numericValue(scan, t.sellTax);
+  const buyTax = numericValue(scan, t.buyTax);
+  const liquidityUsd = numericValue(scan, l.liquidityUsd);
+  const exitSignals = [
+    { label: "SELL SIMULATION", value: trueSignal(scan, t.sellRestriction) || trueSignal(scan, t.maliciousTradingSignal) ? "FAIL" : falseSignal(scan, t.sellRestriction) && falseSignal(scan, t.maliciousTradingSignal) ? "PASS" : "UNKNOWN" },
+    { label: "SELL TAX", value: sellTax === null ? "UNKNOWN" : `${formatValue(sellTax)}%` },
+    { label: "SELL RESTRICTION", value: trueSignal(scan, t.sellRestriction) ? "DETECTED" : falseSignal(scan, t.sellRestriction) ? "NOT DETECTED" : "UNKNOWN" },
+    { label: "LIQUIDITY", value: liquidityUsd === null ? "UNKNOWN" : formatCurrency(liquidityUsd) },
+  ];
+  let exitLevel = "UNKNOWN";
+  if (trueSignal(scan, t.sellRestriction) || trueSignal(scan, t.maliciousTradingSignal) || (sellTax !== null && sellTax >= TAX_THRESHOLDS.veryHighSellTax)) exitLevel = "HIGH";
+  else if (liquidityUsd !== null && liquidityUsd < 10000) exitLevel = "HIGH";
+  else if (liquidityUsd !== null && liquidityUsd < 100000 || trueSignal(scan, t.maxTransactionRestriction) || trueSignal(scan, t.maxWalletRestriction)) exitLevel = "MODERATE";
+  else if (falseSignal(scan, t.sellRestriction) && falseSignal(scan, t.maliciousTradingSignal) && liquidityUsd !== null) exitLevel = "LOW RISK";
+  const exitExplanation = exitLevel === "UNKNOWN" ? "Insufficient evidence is available to assess practical exit conditions." :
+    exitLevel === "LOW RISK" ? "Available evidence indicates no major sell restriction signal, but this is not a guarantee of execution." :
+      "Available evidence indicates that selling may be possible, but trading controls, liquidity, or tax conditions may affect practical exit conditions.";
+
+  const compoundRisks = [];
+  const addCompound = (id, level, title, explanation, signals) => compoundRisks.push({ id, level, title, explanation, signals });
+  const highConcentration = (numericValue(scan, h.top10Percent) ?? -1) >= 60;
+  const lowLiquidity = liquidityUsd !== null && liquidityUsd < 10000;
+  const highTax = (sellTax !== null && sellTax >= TAX_THRESHOLDS.veryHighSellTax) || (buyTax !== null && buyTax >= TAX_THRESHOLDS.veryHighBuyTax);
+  const tradingRestriction = trueSignal(scan, t.sellRestriction) || trueSignal(scan, t.buyRestriction);
+  if (trueSignal(scan, s.canMint) && highConcentration && lowLiquidity) addCompound("mint-concentration-liquidity", "HIGH", "Privileged supply control + concentration + thin liquidity", "Multiple independent risk signals reinforce each other: privileged supply control, concentrated ownership and limited liquidity.", ["Mint capability", "Top-10 concentration", "Liquidity depth"]);
+  if (highConcentration && lowLiquidity) addCompound("concentration-liquidity", "HIGH", "Concentrated ownership + thin liquidity", "A concentrated holder base and limited liquidity can amplify the market impact of large holder activity.", ["Top-10 concentration", "Liquidity depth"]);
+  if (highTax && lowLiquidity) addCompound("tax-liquidity", "HIGH", "High tax + thin liquidity", "High transaction costs combined with limited liquidity may make practical exits more difficult.", ["Tax signal", "Liquidity depth"]);
+  if (trueSignal(scan, s.canPause) && activeOwner) addCompound("pause-active-owner", "HIGH", "Pause capability + active control", "A detected pause capability is paired with an active privileged control address.", ["Pause capability", "Active owner"]);
+  if (trueSignal(scan, s.isUpgradeable) && activeOwner) addCompound("proxy-active-owner", "HIGH", "Upgradeable contract + active control", "An active privileged address and upgradeability could allow future behavior changes.", ["Upgrade capability", "Active owner"]);
+  if (highTax && tradingRestriction) addCompound("tax-trading-restriction", "HIGH", "High tax + trading restriction", "Tax conditions and trading restrictions reinforce one another as an exitability concern.", ["Tax signal", "Trading restriction"]);
+
+  const scoreItems = (risk.calculation || []).map((item) => ({
+    name: item.name,
+    label: categoryLabelsForEngine()[item.name],
+    score: item.score,
+    weight: item.originalWeight,
+    appliedWeight: item.appliedWeight,
+    contribution: item.contribution,
+  }));
+  const driver = scoreItems.slice().sort((a, b) => b.contribution - a.contribution)[0] || null;
+  const overallCoverage = Object.values(categories).length ? Math.round(Object.values(categories).reduce((sum, category) => sum + category.coverage, 0) / Object.values(categories).length) : 0;
+  return {
+    riskProfile: profile,
+    capabilities,
+    powerMap: {
+      owner: owner ? truncateAddress(owner) : "UNKNOWN",
+      ownerFull: owner,
+      control: activeOwner ? "ACTIVE" : evidencePoint(scan, s.ownerControl) ? s.ownerControl.value : "UNKNOWN",
+      capabilities: detectedCapabilities.map((capability) => capability.label),
+      impacts: detectedCapabilities.map((capability) => capability.impact),
+    },
+    impacts: impactItems,
+    exitability: { level: exitLevel, signals: exitSignals, explanation: exitExplanation },
+    scoreExplanation: {
+      items: scoreItems,
+      total: scoreItems.reduce((sum, item) => sum + item.contribution, 0),
+      final: risk.finalScore,
+      mainDriver: driver ? `${driver.label} contributed the largest share of the current risk score.` : "No eligible category contributed to the current risk score.",
+    },
+    compoundRisks,
+    dataCoverage: {
+      overall: overallCoverage,
+      categories: profile.map(({ key, label, coverage }) => ({ key, label, coverage, status: coverage >= 100 ? "FULL" : coverage > 0 ? "PARTIAL" : "UNKNOWN" })),
+    },
+    timeline: {
+      status: evidencePoint(scan, d.deploymentDate) ? "AVAILABLE" : "LIMITED EVIDENCE",
+      items: [
+        { label: "DEPLOYED", value: valueForPoint(d.deploymentDate) || "UNKNOWN" },
+        { label: "OWNERSHIP", value: owner ? truncateAddress(owner) : "UNKNOWN" },
+        { label: "LIQUIDITY", value: liquidityUsd === null ? "UNKNOWN" : formatCurrency(liquidityUsd) },
+        { label: "CURRENT", value: formatDateValue(scan.timestamp) },
+      ],
+    },
+    addressRelationships: owner || evidencePoint(scan, d.address) ? [
+      { label: "DEPLOYER", value: valueForPoint(d.address) || "UNKNOWN" },
+      { label: "TOKEN CONTRACT", value: scan.contract.address },
+      { label: "OWNER", value: owner || "UNKNOWN" },
+    ] : [],
+  };
+}
+
+function categoryLabelsForEngine() {
+  return { contract: "Contract Control", trading: "Trading", holder: "Holder Concentration", liquidity: "Liquidity", deployer: "Deployer", marketProject: "Market / Project" };
+}
+
+function valueForPoint(dataPoint) {
+  return dataPoint && dataPoint.value !== null && dataPoint.value !== undefined && dataPoint.value !== "" ? dataPoint.value : null;
+}
+
+function formatDateValue(value) {
+  if (!value || !Number.isFinite(Date.parse(value))) return "UNKNOWN";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value)) + " UTC";
+}
+
+function impactForFinding(finding) {
+  if (finding.id.includes("mint")) return "Additional supply could reduce the relative ownership of existing holders and increase selling pressure.";
+  if (finding.id.includes("sell") || finding.id.includes("buy")) return "Trading access or practical exit conditions could be restricted.";
+  if (finding.id.includes("liquidity")) return "Limited market depth can increase execution impact and market fragility.";
+  if (finding.id.includes("holder")) return "A small number of wallets may have a larger effect on supply and liquidity.";
+  if (finding.id.includes("deployer")) return "Deployer activity may warrant review alongside the contract and distribution evidence.";
+  return "The signal may affect how the contract should be independently reviewed.";
+}
+
 function finalizeScan(scan) {
   const risk = calculateCategoryScores(scan);
   scan.risk = risk;
   scan.reliability = calculateReliability(scan, risk);
   scan.findings = generateFindings(scan, risk);
+  scan.intelligence = buildIntelligence(scan, risk);
   if (risk.partialData) scan.stages.push("PARTIAL DATA");
   else scan.stages.push("COMPLETE");
   if (scan.mode === "DEMO") {
@@ -639,7 +851,11 @@ function applyGoPlus(scan, response, retrievedAt, network) {
   };
   scan.security = Object.fromEntries(Object.entries(boolMap).map(([name, keyName]) => [name, parseBooleanField(data, keyName, source, retrievedAt)]));
   scan.security.canChangeTax = providerValue(data, "can_set_tax") === null ? scan.security.canChangeTax : parseBooleanField(data, "can_set_tax", source, retrievedAt);
-  scan.security.ownerControl = statusForValue(Boolean(data.owner_address), source, retrievedAt, "LIVE");
+  const ownerAddress = providerValue(data, "owner_address");
+  scan.security.ownerAddress = statusForValue(ownerAddress, source, retrievedAt, "LIVE");
+  scan.security.ownerControl = ownerAddress
+    ? statusForValue(/^0x0{40}$/i.test(String(ownerAddress)) ? "RENOUNCED" : "ACTIVE", source, retrievedAt, "LIVE")
+    : unknown(source);
   scan.security.sourceVerified = parseBooleanField(data, "is_open_source", source, retrievedAt);
   scan.contract.capabilities = scan.security;
   scan.trading = {

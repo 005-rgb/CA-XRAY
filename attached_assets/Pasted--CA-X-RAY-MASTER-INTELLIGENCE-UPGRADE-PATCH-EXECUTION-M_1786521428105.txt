@@ -1,0 +1,1277 @@
+# CA X-RAY — MASTER INTELLIGENCE UPGRADE PATCH
+
+## EXECUTION MODE
+
+This is an UPGRADE to the EXISTING CA X-RAY application.
+
+DO NOT rebuild the application.
+DO NOT replace the existing core system.
+DO NOT migrate framework.
+DO NOT redesign the entire application.
+DO NOT add unnecessary dependencies.
+DO NOT add new external APIs.
+DO NOT implement AI/LLM features.
+DO NOT implement chatbot.
+DO NOT implement notifications.
+DO NOT implement realtime monitoring.
+DO NOT implement payments.
+DO NOT implement accounts/subscriptions.
+DO NOT implement mobile app.
+DO NOT implement dark mode.
+DO NOT implement complex animation.
+
+Preserve all currently working functionality.
+
+The objective is to make the existing CA X-RAY report substantially smarter and more useful using the EXISTING DATA already available in the application.
+
+CREDIT DISCIPLINE IS CRITICAL.
+
+Reuse existing components, existing calculation engine, existing API adapters, existing data model, existing styles and existing report rendering wherever possible.
+
+Prefer:
+
+* calculated fields
+* deterministic rule engine
+* derived insights
+* existing data
+* existing components
+
+Avoid:
+
+* new infrastructure
+* new APIs
+* large dependencies
+* unnecessary refactoring
+* duplicated logic
+
+The application must remain functional after the patch.
+
+---
+
+# 1. PRIMARY PRODUCT OBJECTIVE
+
+Transform CA X-RAY from:
+
+"token risk scanner"
+
+into:
+
+"evidence-based crypto contract investigation tool."
+
+The user must understand not only:
+
+WHAT was detected,
+
+but:
+
+WHAT the contract can do,
+WHY it matters,
+WHAT could happen to the user,
+HOW severe it is,
+WHAT evidence supports the finding,
+WHAT remains unknown,
+WHAT the user should verify.
+
+Core principle:
+
+CONTRACT CAPABILITY
+→ USER IMPACT
+→ RISK
+→ EVIDENCE
+→ ACTION
+
+Do not claim certainty when evidence is incomplete.
+
+Never fabricate blockchain facts.
+
+Never convert UNKNOWN into SAFE.
+
+Never convert missing evidence into a negative finding.
+
+---
+
+# 2. CRITICAL PROVIDER BRANDING RULE
+
+The public-facing application must NOT expose the names of external data providers.
+
+REMOVE provider names from all user-facing areas, including:
+
+* report
+* tables
+* cards
+* evidence sections
+* findings
+* tooltips
+* badges
+* empty states
+* loading states
+* demo report
+* print/browser report
+* error messages
+* headings
+* descriptions
+
+Never display:
+
+"GoPlus"
+"DexScreener"
+"Honeypot.is"
+"Etherscan"
+"BscScan"
+or any other provider/API brand.
+
+Instead use neutral professional labels:
+
+"Blockchain Evidence"
+"Contract Analysis"
+"Security Analysis"
+"Market Data"
+"Trading Analysis"
+"On-chain Evidence"
+"Address Intelligence"
+"Liquidity Analysis"
+"Contract Verification"
+
+Example:
+
+BAD:
+Evidence: GoPlus
+
+GOOD:
+Evidence: Security Analysis
+
+BAD:
+Source: DexScreener
+
+GOOD:
+Evidence: Market Data
+
+BAD:
+GoPlus (Demo)
+
+GOOD:
+Security Analysis (Demo)
+
+IMPORTANT:
+
+Provider/source information may remain internally available for debugging, logging and provenance.
+
+Do NOT delete internal provenance.
+
+Only hide provider identity from the USER INTERFACE.
+
+---
+
+# 3. EXECUTIVE SUMMARY UPGRADE
+
+Keep the existing Executive Summary.
+
+Add a concise:
+
+## RISK PROFILE
+
+Show six dimensions:
+
+* Contract Control
+* Trading
+* Holder Concentration
+* Liquidity
+* Deployer
+* Market / Project
+
+Each should display:
+
+LEVEL
++
+one-line explanation
+
+Example:
+
+Contract Control
+HIGH
+Privileged control over token supply was detected.
+
+Trading
+LOW
+No major trading restriction was detected in available evidence.
+
+Holder Concentration
+MODERATE
+Top holders control a significant share of supply.
+
+Do not invent data.
+
+If insufficient evidence:
+
+UNKNOWN
+Insufficient evidence available.
+
+---
+
+# 4. NEW FEATURE — "WHAT CAN THIS CONTRACT DO?"
+
+Add a prominent section after Executive Summary:
+
+# WHAT CAN THIS CONTRACT DO?
+
+This is a core CA X-RAY feature.
+
+Translate technical contract capabilities into understandable user language.
+
+Examples:
+
+MINT
+Detected
+
+Meaning:
+A privileged address may be able to create additional tokens.
+
+Potential impact:
+Additional supply could dilute existing holders and create selling pressure.
+
+Owner:
+[shortened address]
+
+Control:
+ACTIVE / RENOUNCED / UNKNOWN
+
+Evidence:
+Blockchain Evidence
+
+Repeat for available capabilities:
+
+* Mint new tokens
+* Pause transfers
+* Blacklist addresses
+* Whitelist addresses
+* Modify taxes
+* Modify anti-whale limits
+* Modify balances
+* Upgrade/proxy
+* Ownership control
+
+Only display capabilities supported by existing data.
+
+If a capability is unknown, explicitly show:
+
+UNKNOWN
+Not enough evidence to determine this capability.
+
+---
+
+# 5. CONTRACT POWER MAP
+
+Add a compact visual/textual map:
+
+# CONTRACT POWER MAP
+
+Show:
+
+OWNER / ADMIN
+↓
+CAPABILITIES
+↓
+POTENTIAL USER IMPACT
+
+Example:
+
+OWNER
+0x3B2a...89Cd
+
+CAN CONTROL
+
+MINT
+HIGH IMPACT
+
+TAX
+NOT DETECTED
+
+PAUSE
+NOT DETECTED
+
+BLACKLIST
+NOT DETECTED
+
+UPGRADE
+UNKNOWN
+
+Do not create complex graphics.
+
+Use existing layout primitives.
+
+Keep it clean and lightweight.
+
+The purpose is instant comprehension.
+
+---
+
+# 6. NEW FEATURE — USER IMPACT ENGINE
+
+For every meaningful detected risk, generate deterministic explanatory text.
+
+Structure:
+
+## USER IMPACT
+
+WHAT:
+What was detected?
+
+WHY:
+Why does it matter?
+
+POTENTIAL IMPACT:
+What could happen to holders/users?
+
+CONTROL:
+Who can trigger/change it?
+
+CONFIDENCE:
+How strong is the evidence?
+
+Example:
+
+WHAT
+Mint capability detected.
+
+WHY
+A privileged address may create additional token supply.
+
+POTENTIAL IMPACT
+Additional supply could reduce the relative ownership of existing holders and increase selling pressure.
+
+CONTROL
+Privileged owner/admin.
+
+CONFIDENCE
+HIGH
+
+Important:
+
+Never write:
+
+"Unlimited minting"
+
+unless the evidence explicitly establishes unlimited minting.
+
+Use:
+
+"Mint capability detected."
+
+This distinction is mandatory.
+
+---
+
+# 7. NEW FEATURE — EXITABILITY
+
+Add:
+
+# CAN I EXIT?
+
+This is NOT investment advice.
+
+It is a technical trading-exit assessment.
+
+Evaluate only from available evidence:
+
+* honeypot signal
+* sell restriction
+* sell tax
+* transfer restriction
+* liquidity
+* liquidity depth
+* trading availability
+* max transaction
+* max wallet
+* other detected trading controls
+
+Show:
+
+EXITABILITY
+LOW RISK / MODERATE / HIGH / UNKNOWN
+
+Then show supporting signals.
+
+Example:
+
+SELL SIMULATION
+PASS
+
+SELL TAX
+5%
+
+SELL RESTRICTION
+NOT DETECTED
+
+LIQUIDITY
+$62K
+
+EXIT RISK
+MODERATE
+
+Explanation:
+
+"The available evidence indicates that selling is possible, but liquidity and concentration conditions may affect practical exit conditions."
+
+Do not say:
+
+"Guaranteed sellable."
+
+Do not say:
+
+"Safe to trade."
+
+Do not provide buy/sell recommendations.
+
+---
+
+# 8. NEW FEATURE — SCORE EXPLANATION
+
+The existing overall score MUST remain.
+
+Add:
+
+# WHY THIS SCORE?
+
+Show exact contribution from each category.
+
+Example:
+
+Contract
+30 × 30%
+= 9.0
+
+Trading
+10 × 20%
+= 2.0
+
+Holder
+50 × 15%
+= 7.5
+
+Liquidity
+20 × 15%
+= 3.0
+
+Deployer
+0 × 10%
+= 0
+
+Market
+0 × 10%
+= 0
+
+TOTAL
+21.5
+
+FINAL
+22 / 100
+
+Also identify:
+
+## MAIN SCORE DRIVER
+
+Example:
+
+Holder concentration contributed the largest share of the current risk score.
+
+This must be calculated dynamically.
+
+Never hardcode the explanation.
+
+---
+
+# 9. NEW FEATURE — COMPOUND RISK
+
+Create a lightweight deterministic rule engine.
+
+No AI.
+
+No machine learning.
+
+No external API.
+
+Detect combinations of existing signals.
+
+Examples:
+
+IF:
+mint capability detected
+AND
+high holder concentration
+AND
+low liquidity
+
+THEN:
+
+COMPOUND RISK
+HIGH
+
+Explanation:
+
+"Multiple independent risk signals reinforce each other: privileged supply control, concentrated ownership and limited liquidity."
+
+Other possible combinations:
+
+mint + high owner holding
+
+high concentration + low liquidity
+
+high sell tax + low liquidity
+
+pause capability + active owner
+
+proxy + privileged control
+
+high tax + trading restrictions
+
+Only trigger when actual evidence exists.
+
+Do not invent thresholds arbitrarily.
+
+Use existing risk thresholds already implemented by the application wherever possible.
+
+If a threshold is not already defined, use conservative deterministic thresholds and document them internally.
+
+---
+
+# 10. RED FLAG VS FALSE ALARM
+
+Add:
+
+# SIGNAL CONTEXT
+
+The system must distinguish:
+
+SIGNAL DETECTED
+
+from:
+
+PROVEN MALICIOUS BEHAVIOR
+
+Example:
+
+MINTABLE
+
+Risk Signal
+
+But:
+
+"No evidence currently establishes unauthorized minting."
+
+Another example:
+
+HIGH HOLDER CONCENTRATION
+
+Risk Signal
+
+Not automatically:
+
+"Whale manipulation."
+
+Another:
+
+HONEYPOT SIGNAL NOT DETECTED
+
+Display:
+
+"No honeypot signal detected in the available analysis."
+
+Never display:
+
+"Not a honeypot."
+
+Never display:
+
+"Safe."
+
+Never treat absence of evidence as proof of safety.
+
+---
+
+# 11. DATA COVERAGE
+
+Fix the current misleading wording:
+
+DO NOT say:
+
+"All six categories had sufficient data"
+
+when individual fields contain UNKNOWN.
+
+Instead calculate:
+
+DATA COVERAGE
+
+Example:
+
+Overall Evidence Coverage
+82%
+
+Then category coverage:
+
+Contract
+95%
+
+Trading
+80%
+
+Holder
+90%
+
+Liquidity
+100%
+
+Deployer
+70%
+
+Market
+60%
+
+If exact coverage cannot be reliably calculated from existing data, use:
+
+FULL
+PARTIAL
+LIMITED
+UNKNOWN
+
+Never claim full coverage incorrectly.
+
+---
+
+# 12. UNKNOWN HANDLING
+
+UNKNOWN is a first-class state.
+
+Never replace UNKNOWN with:
+
+SAFE
+LOW RISK
+NOT DETECTED
+
+unless evidence actually supports that conclusion.
+
+Example:
+
+Burned Supply
+UNKNOWN
+
+Do not write:
+
+Burned Supply
+0%
+
+Example:
+
+Transfer Tax
+UNKNOWN
+
+Do not write:
+
+Transfer Tax
+0%
+
+Example:
+
+Audit
+UNKNOWN
+
+Do not write:
+
+No Audit
+
+---
+
+# 13. LANGUAGE PRECISION RULES
+
+Replace technically overstated statements.
+
+BAD:
+
+"Unlimited minting can dilute holders."
+
+GOOD:
+
+"Mint capability is available to a privileged address. The available evidence does not establish whether minting is unlimited."
+
+BAD:
+
+"No honeypot."
+
+GOOD:
+
+"No honeypot signal detected in the available analysis."
+
+BAD:
+
+"Token is safe."
+
+GOOD:
+
+"No major risk signal was detected in this category based on available evidence."
+
+BAD:
+
+"Owner controls the token."
+
+GOOD:
+
+"An active privileged address with detected control capabilities was identified."
+
+All report statements must match the evidence.
+
+---
+
+# 14. TOKEN HEALTH / RISK PROFILE
+
+Keep the existing score.
+
+Add:
+
+# RISK PROFILE
+
+Display:
+
+CONTRACT CONTROL
+TRADING
+HOLDER
+LIQUIDITY
+DEPLOYER
+MARKET
+
+Each has:
+
+Score
+Risk level
+One-line reason
+
+Do not create a second conflicting scoring system.
+
+The existing score remains the canonical overall score.
+
+Risk Profile is explanatory only.
+
+---
+
+# 15. INVESTIGATION MODE
+
+Do not create a separate application.
+
+Add a simple progressive-disclosure mechanism.
+
+Default:
+
+## QUICK X-RAY
+
+Shows:
+
+* Executive Summary
+* Overall Risk
+* Risk Profile
+* Top Risks
+* Top Positive Signals
+* Exitability
+* Contract Power summary
+
+Then:
+
+## DEEP INVESTIGATION
+
+Expands existing report sections:
+
+* Contract Forensics
+* Trading
+* Holders
+* Liquidity
+* Deployer
+* Market
+* Evidence
+* Score Calculation
+* Compound Risk
+
+Use existing expandable/collapsible components if available.
+
+No heavy animation.
+
+---
+
+# 16. EVIDENCE LANGUAGE
+
+Every important finding should have:
+
+WHAT
+WHY
+EVIDENCE
+CONFIDENCE
+
+Example:
+
+Finding:
+Owner can mint additional tokens.
+
+WHY:
+Additional token supply may dilute existing holders.
+
+EVIDENCE:
+Contract Analysis
+
+CONFIDENCE:
+HIGH
+
+Never show provider brand names.
+
+---
+
+# 17. HISTORICAL CHANGE FOUNDATION
+
+Do NOT implement realtime monitoring.
+
+Do NOT implement notifications.
+
+Do NOT implement background workers.
+
+If the application already stores scan results locally, prepare a lightweight comparison capability.
+
+If historical data is already available:
+
+Add:
+
+# WHAT CHANGED?
+
+Compare current scan against previous scan.
+
+Show only meaningful changes.
+
+Example:
+
+Risk Score
+22 → 41
+
+Holder Concentration
+46% → 58%
+
+Liquidity
+$62K → $41K
+
+Sell Tax
+5% → 15%
+
+If no previous scan exists:
+
+Show:
+
+NO PREVIOUS SCAN
+
+Do not fabricate history.
+
+If implementing historical persistence would require major architecture changes, SKIP it.
+
+Do not spend credits on infrastructure.
+
+---
+
+# 18. TOKEN TIMELINE — LIGHTWEIGHT VERSION
+
+Only implement if deployment/blockchain data already exists.
+
+Show:
+
+DEPLOYED
+↓
+OWNERSHIP
+↓
+LIQUIDITY
+↓
+MAJOR OBSERVATIONS
+↓
+CURRENT
+
+Do not create expensive event indexing.
+
+Do not scan the entire blockchain.
+
+Use only existing evidence.
+
+If insufficient data:
+
+TIMELINE
+LIMITED EVIDENCE
+
+---
+
+# 19. ADDRESS RELATIONSHIP — LIGHTWEIGHT VERSION
+
+If existing data already provides:
+
+* owner
+* creator/deployer
+* holders
+* liquidity addresses
+* related contract addresses
+
+show:
+
+# ADDRESS RELATIONSHIPS
+
+Example:
+
+DEPLOYER
+↓
+TOKEN CONTRACT
+↓
+OWNER
+↓
+TOP HOLDER
+
+Only display verified relationships.
+
+Never infer relationships merely because addresses look similar.
+
+If no evidence:
+
+NO VERIFIED RELATIONSHIP FOUND
+
+---
+
+# 20. TRUST GAP
+
+Only implement when reliable project metadata already exists.
+
+Compare:
+
+PROJECT CLAIM / METADATA
+
+versus
+
+CONTRACT EVIDENCE
+
+Example:
+
+PROJECT POSITIONING
+"Decentralized"
+
+CONTRACT EVIDENCE
+Active privileged owner detected.
+
+Then:
+
+TRUST GAP
+REVIEW REQUIRED
+
+Do not accuse the project of deception.
+
+Use:
+
+"Potential discrepancy requiring independent verification."
+
+If no reliable project claim exists:
+
+Do not show Trust Gap.
+
+---
+
+# 21. REPORT STRUCTURE
+
+Keep the existing professional report.
+
+Recommended order:
+
+01 Executive Summary
+
+02 Overall Risk
+
+03 Risk Profile
+
+04 What Can This Contract Do?
+
+05 Contract Power Map
+
+06 Can I Exit?
+
+07 Risk Breakdown
+
+08 Why This Score?
+
+09 Contract & Trading Forensics
+
+10 Holder & Liquidity Analysis
+
+11 Market & Deployer Signals
+
+12 Compound Risk
+
+13 Key Findings
+
+14 Evidence Register
+
+15 Data Coverage & Limitations
+
+16 Final Assessment
+
+Do not duplicate the same information unnecessarily.
+
+---
+
+# 22. UI / VISUAL DIRECTION
+
+KEEP:
+
+White background.
+Black typography.
+Luxury/minimal professional appearance.
+Very limited imagery.
+Clean spacing.
+One primary font family.
+Strong hierarchy.
+High readability.
+
+Do not introduce colorful dashboards.
+
+Use restrained semantic status styling only:
+
+Risk
+Warning
+Positive
+Unknown
+
+Tables must remain readable.
+
+Prevent:
+
+* broken columns
+* excessive horizontal scrolling
+* text overflow
+* giant cards
+* duplicated information
+* unnecessary icons
+
+Long addresses must be shortened visually:
+
+0x3B2a...89Cd
+
+but retain full address for copy action.
+
+---
+
+# 23. REPORT MUST FEEL LIKE FORENSIC INTELLIGENCE
+
+Avoid generic SaaS language.
+
+Avoid:
+
+"Great!"
+"Awesome!"
+"Congratulations!"
+"Your token is safe!"
+
+Use professional language:
+
+"Detected"
+"Not detected"
+"Unknown"
+"Insufficient evidence"
+"Requires verification"
+"Potential impact"
+"Evidence indicates"
+
+---
+
+# 24. DO NOT CHANGE CORE SCORING WITHOUT NECESSITY
+
+The current scoring engine is working.
+
+Do not rewrite it unless required to fix a demonstrable bug.
+
+The new features should consume the existing normalized data and score.
+
+Do not create conflicting scoring formulas.
+
+If a new derived score is necessary, clearly label it as a secondary diagnostic and do not let it silently alter the canonical overall score.
+
+---
+
+# 25. PERFORMANCE / CREDIT DISCIPLINE
+
+ABSOLUTE PRIORITY:
+
+Reuse existing data.
+
+Do not call the same external API multiple times for the same scan.
+
+Cache the normalized scan response during the scan session.
+
+Compute all derived insights locally.
+
+Do not add AI.
+
+Do not add LLM calls.
+
+Do not add vector database.
+
+Do not add websocket.
+
+Do not add background jobs.
+
+Do not add new external services.
+
+Do not add analytics services.
+
+Do not add unnecessary packages.
+
+Do not rewrite existing pages.
+
+Do not regenerate demo data unless necessary.
+
+Do not rebuild working authentication.
+
+Do not modify working API credentials.
+
+Do not modify deployment configuration unless required.
+
+---
+
+# 26. ERROR SAFETY
+
+The application must NEVER crash because one field is unavailable.
+
+Every external-data field must safely support:
+
+VALUE
+UNKNOWN
+UNAVAILABLE
+ERROR
+
+If one provider/data adapter fails:
+
+The report must still render using available evidence.
+
+Display:
+
+"Some evidence was unavailable for this scan."
+
+Never display provider technical errors to the user.
+
+---
+
+# 27. DEMO MODE
+
+Preserve Demo Mode.
+
+Demo Mode must demonstrate the new intelligence features.
+
+The demo must contain enough deterministic data to show:
+
+* mint capability
+* owner
+* holder concentration
+* liquidity
+* trading tax
+* positive signals
+* at least one compound-risk condition
+* score calculation
+* exitability
+* evidence
+* confidence
+* data coverage
+
+Clearly mark:
+
+DEMO DATA — NOT LIVE BLOCKCHAIN DATA
+
+Do not let demo evidence appear to be real blockchain evidence.
+
+---
+
+# 28. SECURITY / PRIVACY
+
+Never expose:
+
+API keys
+API secrets
+access tokens
+provider credentials
+backend environment variables
+
+in frontend source.
+
+Never put credentials into report content.
+
+Never expose internal provider identifiers in the UI.
+
+---
+
+# 29. ACCEPTANCE TEST
+
+Before finishing, verify:
+
+1. Existing scan still works.
+2. Existing Demo Mode still works.
+3. Existing risk score still works.
+4. Existing report still renders.
+5. "What Can This Contract Do?" renders.
+6. Contract Power Map renders.
+7. User Impact explanations render.
+8. Exitability renders.
+9. Risk Profile renders.
+10. Why This Score? renders.
+11. Compound Risk works deterministically.
+12. UNKNOWN values remain UNKNOWN.
+13. Provider names are absent from user-facing UI.
+14. Internal provenance is preserved.
+15. No provider name appears in report tables.
+16. No provider name appears in demo report.
+17. No fabricated blockchain data is introduced.
+18. No unsupported "safe" or "scam" verdict is generated.
+19. Long addresses do not break tables.
+20. Existing pages remain functional.
+21. Application builds successfully.
+22. No new unnecessary dependency was introduced.
+23. No new external API was introduced.
+24. No AI/LLM call was introduced.
+25. No realtime/background system was introduced.
+
+---
+
+# 30. FINAL STOP RULE
+
+STOP when:
+
+* all existing functionality remains working
+* the new intelligence features work
+* the report is professionally readable
+* provider branding is hidden
+* evidence/confidence semantics are correct
+* UNKNOWN handling is correct
+* build succeeds
+
+Do NOT continue adding features.
+
+Do NOT redesign unrelated pages.
+
+Do NOT improve unrelated components.
+
+Do NOT consume additional credits on cosmetic refinements.
+
+---
+
+# FINAL PRODUCT PRINCIPLE
+
+CA X-RAY must answer four questions better than a generic token scanner:
+
+1. WHAT CAN THIS CONTRACT DO?
+2. WHAT COULD THAT MEAN FOR ME?
+3. CAN HOLDERS REALISTICALLY EXIT?
+4. WHY DOES CA X-RAY BELIEVE THIS?
+
+The product is not a "SCAM button".
+
+It is an:
+
+EVIDENCE-BASED CONTRACT INVESTIGATION SYSTEM.
+
+Accuracy > number of features.
+Evidence > assumptions.
+Clarity > decoration.
+Existing infrastructure > new infrastructure.
+Deterministic intelligence > expensive AI.
+
+Execute this patch with minimal code changes and maximum reuse of the existing working system.

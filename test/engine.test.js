@@ -82,3 +82,27 @@ test("no engine output contains NaN or Infinity", () => {
   assert.equal(output.includes("NaN"), false);
   assert.equal(output.includes("Infinity"), false);
 });
+
+test("intelligence layer derives evidence-backed investigation features", () => {
+  const scan = createDemoScan("high");
+  assert.equal(scan.intelligence.capabilities.find((item) => item.key === "canMint").status, "DETECTED");
+  assert.equal(scan.intelligence.powerMap.control, "ACTIVE");
+  assert.equal(scan.intelligence.exitability.level, "HIGH");
+  assert.ok(scan.intelligence.compoundRisks.some((item) => item.id === "mint-concentration-liquidity"));
+  assert.equal(scan.intelligence.dataCoverage.overall, 100);
+  assert.ok(scan.intelligence.scoreExplanation.items.length > 0);
+});
+
+test("boolean findings respect detected and positive states", () => {
+  const high = createDemoScan("high");
+  const highIds = high.findings.map((finding) => finding.id);
+  assert.ok(highIds.includes("contract-mint"));
+  assert.ok(!highIds.includes("positive-no-mint"));
+  assert.ok(!highIds.includes("positive-source"));
+
+  const low = createDemoScan("low");
+  const lowIds = low.findings.map((finding) => finding.id);
+  assert.ok(!lowIds.includes("contract-mint"));
+  assert.ok(lowIds.includes("positive-no-mint"));
+  assert.ok(lowIds.includes("positive-source"));
+});
