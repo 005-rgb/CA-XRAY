@@ -132,12 +132,19 @@
                 <article class="admin-summary-card"><span class="card-kicker">QUEUE DEPTH</span><strong id="admin-queue-depth">—</strong><span id="admin-queue-note">Awaiting verification</span></article>
                 <article class="admin-summary-card"><span class="card-kicker">WORKSPACES</span><strong id="admin-workspace-count">—</strong><span id="admin-workspace-summary">Platform inventory</span></article>
                 <article class="admin-summary-card"><span class="card-kicker">USERS</span><strong id="admin-user-count">—</strong><span id="admin-user-summary">Platform inventory</span></article>
+                <article class="admin-summary-card"><span class="card-kicker">APPROVALS</span><strong id="admin-approval-count">—</strong><span>Pending four-eyes reviews</span></article>
+                <article class="admin-summary-card"><span class="card-kicker">AUDIT EVENTS</span><strong id="admin-audit-count">—</strong><span>Platform events retained</span></article>
               </div>
               <div class="admin-grid">
                 <section class="admin-card admin-card-wide">
                   <div class="admin-card-heading"><div><span class="card-kicker">PROVIDER CONTROL</span><h2>Provider and network posture</h2></div><span class="admin-snapshot-time" id="admin-snapshot-time">—</span></div>
                   <p class="admin-note">Runtime health is process telemetry. Configuration is staged as a draft, validated by the API, and published separately. Kill switches and disabled states require independent approval.</p>
                   <div id="admin-providers" class="admin-table-wrap"><div class="unknown-message">Verify your session to load provider health.</div></div>
+                </section>
+                <section class="admin-card">
+                  <div class="admin-card-heading"><div><span class="card-kicker">NETWORK POSTURE</span><h2>Supported networks</h2></div><span class="admin-card-meta">Read-only catalog</span></div>
+                  <p class="admin-note">Network routing is fixed server-side. Provider identifiers and credentials are never exposed to the browser.</p>
+                  <div id="admin-networks" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
                 <section class="admin-card">
                   <div class="admin-card-heading"><div><span class="card-kicker">PLATFORM HEALTH</span><h2>Runtime boundary</h2></div></div>

@@ -568,14 +568,14 @@ function renderAdminPlans(plans) {
 
 function renderAdminApprovals(approvals) {
   const pending = approvals.filter((approval) => approval.status === "PENDING");
-  adminApprovalCount.textContent = pending.length;
+  if (adminApprovalCount) adminApprovalCount.textContent = pending.length;
   adminApprovals.innerHTML = approvals.length
     ? approvals.slice(0, 20).map((approval) => `<div class="admin-approval-row"><div class="admin-list-row"><div><strong>${escapeHtml(approval.action)}</strong><span>${escapeHtml(approval.targetId)} · requested by ${escapeHtml(approval.requestedBy)} · ${formatDate(approval.createdAt)}</span></div><div class="admin-approval-action">${statusPill({ status: approval.status }, approval.status)}</div></div>${approval.status === "PENDING" ? `<form class="admin-approval-form" data-approval-id="${escapeHtml(approval.id)}"><input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="REVIEW_REASON" aria-label="Approval reason" required /><button class="secondary-button" type="submit">Grant approval</button></form>` : ""}</div>`).join("")
     : `<div class="unknown-message">No approvals have been requested.</div>`;
 }
 
 function renderAdminAudit(audit) {
-  adminAuditCount.textContent = audit.length;
+  if (adminAuditCount) adminAuditCount.textContent = audit.length;
   adminAudit.innerHTML = audit.length
     ? audit.slice(0, 40).map((entry) => `<div class="admin-audit-row"><time>${formatDate(entry.createdAt)}</time><strong>${escapeHtml(entry.action)}</strong><span>${escapeHtml(entry.actorId)}${entry.workspaceId ? ` · ${escapeHtml(entry.workspaceId)}` : ""}</span></div>`).join("")
     : `<div class="unknown-message">No platform events recorded.</div>`;
@@ -767,28 +767,78 @@ adminProviders?.addEventListener("submit", async (event) => {
   }
 });
 
-adminProviders?.addEventListener("click", async (event) => {
-  const button = event.target.closest(".provider-test-button");
-  if (!button) return;
-  const address = window.prompt("Enter a contract address for the connection test.");
-  if (!address) return;
-  const networkId = window.prompt("Enter a supported network id (ethereum, bsc, base, arbitrum, polygon).", "ethereum");
-  if (!networkId) return;
-  button.disabled = true;
+adminProviders?.addEventListener("submit", async (event) => {
+  const testForm = event.target.closest(".admin-provider-test-form");
+  const publishForm = event.target.closest(".admin-provider-publish-form");
+  const rollbackForm = event.target.closest(".admin-provider-rollback-form");
+  const form = testForm || publishForm || rollbackForm;
+  if (!form) return;
+  event.preventDefault();
+  const formData = new FormData(form);
+  const providerId = form.dataset.providerTest || form.dataset.providerPublish || form.dataset.providerRollback;
+  const submit = form.querySelector("button[type=submit]");
+  if (submit) submit.disabled = true;
   try {
-    const result = await apiJson(`/api/admin/providers/${encodeURIComponent(button.dataset.providerTest)}/test`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, networkId }),
-    });
-    adminMessage(result.test.ok
-      ? `Connection reachable in ${result.test.latencyMs} ms. Raw provider payload was not returned.`
-      : `Connection test failed: ${result.test.errorCode}.`, result.test.ok ? "success" : "error");
+    if (testForm) {
+      const result = await apiJson(`/api/admin/providers/${encodeURIComponent(providerId)}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: String(formData.get("address") || "").trim(),
+          networkId: formData.get("networkId"),
+        }),
+      });
+      adminMessage(result.test.ok
+        ? `Connection reachable in ${result.test.latencyMs} ms. Raw provider payload was not returned.`
+        : `Connection test failed: ${result.test.errorCode}.`, result.test.ok ? "success" : "error");
+    } else {
+      const endpoint = publishForm ? "publish" : "rollback";
+      await apiJson(`/api/admin/providers/${encodeURIComponent(providerId)}/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reasonCode: String(formData.get("reasonCode") || "").trim(),
+          approvalId: String(formData.get("approvalId") || "").trim() || null,
+        }),
+      });
+      adminMessage(`Provider ${endpoint} completed and recorded in the audit trail.`, "success");
+    }
     await loadAdminData();
   } catch (error) {
     adminErrorMessage(error);
   } finally {
-    button.disabled = false;
+    if (submit) submit.disabled = false;
+  }
+});
+
+adminFlags?.addEventListener("submit", async (event) => {
+  const draftForm = event.target.closest(".admin-flag-form");
+  const publishForm = event.target.closest(".admin-flag-publish-form");
+  const form = draftForm || publishForm;
+  if (!form) return;
+  event.preventDefault();
+  const formData = new FormData(form);
+  const flagKey = form.dataset.flagKey || form.dataset.flagPublish;
+  const submit = form.querySelector("button[type=submit]");
+  if (submit) submit.disabled = true;
+  try {
+    const endpoint = publishForm ? "publish" : "draft";
+    const body = {
+      reasonCode: String(formData.get("reasonCode") || "").trim(),
+    };
+    if (draftForm) body.enabled = formData.get("enabled") === "on";
+    if (publishForm) body.approvalId = String(formData.get("approvalId") || "").trim() || null;
+    await apiJson(`/api/admin/feature-flags/${encodeURIComponent(flagKey)}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    adminMessage(`Feature flag ${endpoint} completed and recorded in the audit trail.`, "success");
+    await loadAdminData();
+  } catch (error) {
+    adminErrorMessage(error);
+  } finally {
+    if (submit) submit.disabled = false;
   }
 });
 

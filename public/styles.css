@@ -787,7 +787,7 @@ body { background: var(--dashboard-bg); color: #17191c; }
 .admin-status { min-height: 16px; margin: 0 0 9px; color: #6e747b; font-size: 10px; }
 .admin-status.success { color: var(--green); }
 .admin-status.error, .admin-stepup .field-error { color: var(--red); }
-.admin-summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; margin-bottom: 16px; }
+.admin-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 9px; margin-bottom: 16px; }
 .admin-summary-card {
   min-width: 0;
   padding: 14px;
