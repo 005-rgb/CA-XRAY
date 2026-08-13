@@ -45,6 +45,21 @@ const alertList = document.querySelector("#alert-list");
 const alertCount = document.querySelector("#alert-count");
 const watchlistForm = document.querySelector("#watchlist-form");
 const watchlistStatus = document.querySelector("#watchlist-status");
+const adminPanel = document.querySelector("#admin-panel");
+const adminNav = document.querySelector("#admin-nav");
+const adminStepupForm = document.querySelector("#admin-stepup-form");
+const adminStepupCode = document.querySelector("#admin-stepup-code");
+const adminStepupStatus = document.querySelector("#admin-stepup-status");
+const adminStatus = document.querySelector("#admin-status");
+const adminProviders = document.querySelector("#admin-providers");
+const adminFlags = document.querySelector("#admin-flags");
+const adminPlans = document.querySelector("#admin-plans");
+const adminApprovals = document.querySelector("#admin-approvals");
+const adminAudit = document.querySelector("#admin-audit");
+const adminProviderCount = document.querySelector("#admin-provider-count");
+const adminProviderSummary = document.querySelector("#admin-provider-summary");
+const adminApprovalCount = document.querySelector("#admin-approval-count");
+const adminAuditCount = document.querySelector("#admin-audit-count");
 let authState = null;
 let currentScan = null;
 let currentJob = null;
@@ -52,10 +67,11 @@ let activeScanJobId = null;
 let historyCursor = null;
 const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
+const isAdminRoute = () => pathName() === "/admin";
 const reportRouteMatch = () => pathName().match(/^\/dashboard\/scans\/([^/]+)$/);
 const isPrivateRoute = () => pathName() === "/dashboard" || pathName().startsWith("/dashboard/");
 const pendingScanStorageKey = "ca_xray_pending_scan";
-let authRequested = isAuthRoute();
+let authRequested = isAuthRoute() || isAdminRoute();
 
 async function apiJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -169,6 +185,16 @@ async function refreshAuth() {
       const destination = safeReturnPath();
       authRequested = false;
       window.history.replaceState({}, "", destination);
+    }
+    if (isAdminRoute()) {
+      if (authState.user?.platformRole !== "Superadmin") {
+        setShell({ privateView: false });
+        showLanding({ privateView: false });
+        authMessage("Platform operations are restricted to verified superadmins.");
+        return;
+      }
+      await loadAdminRoute();
+      return;
     }
     if (isPrivateRoute()) {
       await loadPrivateRoute();
@@ -370,6 +396,8 @@ function evidenceLabel(dataPoint) {
 
 function showLanding({ privateView = false } = {}) {
   setShell({ privateView });
+  if (adminPanel) adminPanel.hidden = true;
+  if (adminNav) adminNav.hidden = !authState?.user?.platformRole;
   landing.hidden = false;
   loading.hidden = true;
   report.hidden = true;
@@ -392,6 +420,216 @@ function showLanding({ privateView = false } = {}) {
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
+
+function showAdminShell() {
+  setShell({ privateView: true });
+  landing.hidden = true;
+  loading.hidden = true;
+  report.hidden = true;
+  workspaceBar.hidden = true;
+  adminPanel.hidden = false;
+  adminNav.hidden = false;
+  document.querySelector("#dashboard-report").hidden = true;
+  document.querySelector("#dashboard-report").innerHTML = "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function adminMessage(message, tone = "") {
+  adminStatus.textContent = message || "";
+  adminStatus.className = `admin-status ${tone}`.trim();
+}
+
+function adminErrorMessage(error) {
+  const message = error.message || "The admin request could not be completed.";
+  if (message === "PLATFORM_STEP_UP_REQUIRED") {
+    adminStepupStatus.textContent = "Fresh MFA verification is required before platform data can be viewed.";
+    return;
+  }
+  adminMessage(message, "error");
+}
+
+function adminProviderMarkup(provider) {
+  const runtime = provider.runtime || {};
+  const errorRate = Number.isFinite(Number(runtime.errorRate)) ? `${(Number(runtime.errorRate) * 100).toFixed(1)}%` : "—";
+  const health = provider.killSwitch || provider.state === "DISABLED" ? "DISABLED" : runtime.lastError ? "DEGRADED" : "ACTIVE";
+  return `<article class="admin-provider-row">
+    <div class="admin-provider-main">
+      <div><strong>${escapeHtml(provider.source || provider.providerId)}</strong><span>${escapeHtml(provider.providerId)} · adapter ${escapeHtml(provider.adapterVersion || "UNKNOWN")}</span></div>
+      ${statusPill({ status: health }, health)}
+    </div>
+    <div class="admin-provider-metrics">
+      <span><b>CAPABILITY</b>${escapeHtml((provider.capabilities || []).join(", ") || "UNKNOWN")}</span>
+      <span><b>LATENCY</b>${runtime.averageLatencyMs === null || runtime.averageLatencyMs === undefined ? "—" : `${runtime.averageLatencyMs} ms avg`}</span>
+      <span><b>ERROR RATE</b>${errorRate}</span>
+      <span><b>QUOTA</b>${escapeHtml(String(provider.quotaPerMinute))}/min</span>
+      <span><b>PRIORITY</b>${escapeHtml(String(provider.priority ?? 100))}</span>
+      <span><b>LAST SUCCESS</b>${formatDate(runtime.lastSuccessfulAt)}</span>
+    </div>
+    <form class="admin-provider-form" data-provider-id="${escapeHtml(provider.providerId)}">
+      <input name="timeoutMs" type="number" min="100" max="120000" value="${escapeHtml(provider.timeoutMs)}" aria-label="Timeout milliseconds" />
+      <input name="retries" type="number" min="0" max="2" value="${escapeHtml(provider.retries)}" aria-label="Retry count" />
+      <input name="quotaPerMinute" type="number" min="1" max="100000" value="${escapeHtml(provider.quotaPerMinute)}" aria-label="Quota per minute" />
+      <select name="state" aria-label="Provider state"><option value="ACTIVE" ${provider.state === "ACTIVE" ? "selected" : ""}>ACTIVE</option><option value="DISABLED" ${provider.state === "DISABLED" ? "selected" : ""}>DISABLED</option></select>
+      <input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="REASON_CODE" aria-label="Reason code" required />
+      <button class="secondary-button" type="submit">Save draft</button>
+      <button class="secondary-button provider-test-button" type="button" data-provider-test="${escapeHtml(provider.providerId)}">Test connection</button>
+    </form>
+  </article>`;
+}
+
+function renderAdminProviders(providers) {
+  adminProviderCount.textContent = providers.length;
+  const active = providers.filter((provider) => !provider.killSwitch && provider.state === "ACTIVE").length;
+  adminProviderSummary.textContent = `${active} active · ${providers.length - active} needs attention`;
+  adminProviders.innerHTML = providers.length
+    ? providers.map(adminProviderMarkup).join("")
+    : `<div class="unknown-message">No provider adapters are registered.</div>`;
+}
+
+function renderAdminFlags(flags) {
+  adminFlags.innerHTML = flags.length
+    ? flags.map((flag) => `<div class="admin-list-row"><div><strong>${escapeHtml(flag.key)}</strong><span>version ${escapeHtml(flag.version)}</span></div>${statusPill({ status: flag.enabled ? "ACTIVE" : "DISABLED" }, flag.enabled ? "ON" : "OFF")}</div>`).join("")
+    : `<div class="unknown-message">No feature flag drafts or published values.</div>`;
+}
+
+function renderAdminPlans(plans) {
+  adminPlans.innerHTML = plans.map((plan) => `<div class="admin-list-row"><div><strong>${escapeHtml(plan.name)}</strong><span>${escapeHtml(plan.workspace)} · ${plan.scanLimitPerMonth === null ? "unlimited" : escapeHtml(plan.scanLimitPerMonth)} scans/month</span></div><span class="admin-list-value">${plan.priceConfigured ? "PRICE READY" : "CONFIG ONLY"}</span></div>`).join("");
+}
+
+function renderAdminApprovals(approvals) {
+  const pending = approvals.filter((approval) => approval.status === "PENDING");
+  adminApprovalCount.textContent = pending.length;
+  adminApprovals.innerHTML = approvals.length
+    ? approvals.slice(0, 20).map((approval) => `<div class="admin-list-row"><div><strong>${escapeHtml(approval.action)}</strong><span>${escapeHtml(approval.targetId)} · requested by ${escapeHtml(approval.requestedBy)}</span></div><div class="admin-approval-action">${statusPill({ status: approval.status }, approval.status)}${approval.status === "PENDING" ? `<button class="text-button admin-approve-button" data-approval-id="${escapeHtml(approval.id)}">Approve</button>` : ""}</div></div>`).join("")
+    : `<div class="unknown-message">No approvals have been requested.</div>`;
+}
+
+function renderAdminAudit(audit) {
+  adminAuditCount.textContent = audit.length;
+  adminAudit.innerHTML = audit.length
+    ? audit.slice(0, 40).map((entry) => `<div class="admin-audit-row"><time>${formatDate(entry.createdAt)}</time><strong>${escapeHtml(entry.action)}</strong><span>${escapeHtml(entry.actorId)}${entry.workspaceId ? ` · ${escapeHtml(entry.workspaceId)}` : ""}</span></div>`).join("")
+    : `<div class="unknown-message">No platform events recorded.</div>`;
+}
+
+async function loadAdminData() {
+  try {
+    adminMessage("Refreshing platform telemetry…");
+    const [providerData, flagData, planData, approvalData, auditData] = await Promise.all([
+      apiJson("/api/admin/providers"),
+      apiJson("/api/admin/feature-flags"),
+      apiJson("/api/admin/plans"),
+      apiJson("/api/admin/approvals"),
+      apiJson("/api/admin/audit?limit=200"),
+    ]);
+    renderAdminProviders(providerData.providers || []);
+    renderAdminFlags(flagData.flags || []);
+    renderAdminPlans(planData.plans || []);
+    renderAdminApprovals(approvalData.approvals || []);
+    renderAdminAudit(auditData.audit || []);
+    adminMessage(`Last refreshed ${new Date().toLocaleTimeString()}.`, "success");
+  } catch (error) {
+    adminErrorMessage(error);
+  }
+}
+
+async function loadAdminRoute() {
+  showAdminShell();
+  adminNav.hidden = false;
+  await loadAdminData();
+}
+
+adminStepupForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  adminStepupStatus.textContent = "";
+  try {
+    await apiJson("/api/auth/mfa/step-up", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: adminStepupCode.value.trim() }),
+    });
+    adminStepupCode.value = "";
+    adminStepupStatus.textContent = "Operator session verified for five minutes.";
+    await loadAdminData();
+  } catch (error) {
+    adminStepupStatus.textContent = error.message;
+  }
+});
+
+document.querySelector("#admin-refresh")?.addEventListener("click", loadAdminData);
+
+adminProviders?.addEventListener("submit", async (event) => {
+  const providerForm = event.target.closest(".admin-provider-form");
+  if (!providerForm) return;
+  event.preventDefault();
+  const providerId = providerForm.dataset.providerId;
+  const formData = new FormData(providerForm);
+  const reasonCode = String(formData.get("reasonCode") || "").trim();
+  try {
+    const result = await apiJson(`/api/admin/providers/${encodeURIComponent(providerId)}/draft`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        config: {
+          timeoutMs: Number(formData.get("timeoutMs")),
+          retries: Number(formData.get("retries")),
+          quotaPerMinute: Number(formData.get("quotaPerMinute")),
+          state: formData.get("state"),
+        },
+        reasonCode,
+      }),
+    });
+    adminMessage(result.approval
+      ? `Draft saved. Independent approval required: ${result.approval.id}`
+      : "Provider draft saved. Publish it after review.", "success");
+    providerForm.reset();
+    await loadAdminData();
+  } catch (error) {
+    adminErrorMessage(error);
+  }
+});
+
+adminProviders?.addEventListener("click", async (event) => {
+  const button = event.target.closest(".provider-test-button");
+  if (!button) return;
+  const address = window.prompt("Enter a contract address for the connection test.");
+  if (!address) return;
+  const networkId = window.prompt("Enter a supported network id (ethereum, bsc, base, arbitrum, polygon).", "ethereum");
+  if (!networkId) return;
+  button.disabled = true;
+  try {
+    const result = await apiJson(`/api/admin/providers/${encodeURIComponent(button.dataset.providerTest)}/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, networkId }),
+    });
+    adminMessage(result.test.ok
+      ? `Connection reachable in ${result.test.latencyMs} ms. Raw provider payload was not returned.`
+      : `Connection test failed: ${result.test.errorCode}.`, result.test.ok ? "success" : "error");
+    await loadAdminData();
+  } catch (error) {
+    adminErrorMessage(error);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+adminApprovals?.addEventListener("click", async (event) => {
+  const button = event.target.closest(".admin-approve-button");
+  if (!button) return;
+  const reasonCode = window.prompt("Approval reason code (for example REVIEW).", "REVIEW");
+  if (!reasonCode) return;
+  try {
+    await apiJson(`/api/admin/approvals/${encodeURIComponent(button.dataset.approvalId)}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reasonCode }),
+    });
+    adminMessage("Approval granted and recorded.", "success");
+    await loadAdminData();
+  } catch (error) {
+    adminErrorMessage(error);
+  }
+});
 
 function showLoading(stages = []) {
   setShell({ privateView: true });

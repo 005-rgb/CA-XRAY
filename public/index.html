@@ -23,6 +23,7 @@
           <a class="nav-item" href="/dashboard#watchtower"><span class="nav-icon">◉</span><span>Watchtower</span></a>
           <a class="nav-item" href="#api-access"><span class="nav-icon">⌘</span><span>API Access</span><span class="soon">Soon</span></a>
           <a class="nav-item" href="#settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
+           <a class="nav-item admin-nav" id="admin-nav" href="/admin" hidden><span class="nav-icon">▣</span><span>Platform Ops</span></a>
         </nav>
         <div class="sidebar-spacer"></div>
         <div class="plan-card">
@@ -99,6 +100,57 @@
             <select id="workspace-selector" aria-label="Select workspace"></select>
             <button type="button" class="secondary-button" id="logout-action">Sign out</button>
           </section>
+           <section id="admin-panel" class="admin-page" hidden>
+             <div class="admin-heading">
+               <div>
+                 <p class="eyebrow">PHASE 7 / PLATFORM OPERATIONS</p>
+                 <h1>Superadmin control plane</h1>
+                 <p>Manage provider posture and platform controls with MFA step-up, four-eyes approval, and an immutable audit trail.</p>
+               </div>
+               <span class="admin-security-badge">MFA + RBAC ENFORCED</span>
+             </div>
+             <section class="admin-stepup" id="admin-stepup">
+               <div>
+                 <span class="card-kicker">PRIVILEGED SESSION</span>
+                 <h2>Verify operator session</h2>
+                 <p>Platform data and configuration changes require a fresh six-digit authenticator code. No provider secret is sent to this browser.</p>
+               </div>
+               <form id="admin-stepup-form" class="inline-form">
+                 <input id="admin-stepup-code" inputmode="numeric" maxlength="6" placeholder="000000" aria-label="Authenticator code" required />
+                 <button class="primary-button" type="submit"><span>Verify</span><span>→</span></button>
+               </form>
+               <p id="admin-stepup-status" class="field-error" role="alert"></p>
+             </section>
+             <div id="admin-status" class="admin-status" role="status"></div>
+             <div class="admin-summary-grid">
+               <article class="admin-summary-card"><span class="card-kicker">PROVIDERS</span><strong id="admin-provider-count">—</strong><span id="admin-provider-summary">Awaiting verification</span></article>
+               <article class="admin-summary-card"><span class="card-kicker">APPROVALS</span><strong id="admin-approval-count">—</strong><span>Pending independent review</span></article>
+               <article class="admin-summary-card"><span class="card-kicker">AUDIT EVENTS</span><strong id="admin-audit-count">—</strong><span>Most recent platform events</span></article>
+             </div>
+             <div class="admin-grid">
+               <section class="admin-card admin-card-wide">
+                 <div class="admin-card-heading"><div><span class="card-kicker">PROVIDER CONTROL</span><h2>Provider and network posture</h2></div><button class="secondary-button" type="button" id="admin-refresh">Refresh</button></div>
+                 <p class="admin-note">Runtime health is process telemetry. Published configuration is versioned separately and kill switches require four-eyes approval.</p>
+                 <div id="admin-providers" class="admin-table-wrap"><div class="unknown-message">Verify your session to load provider health.</div></div>
+               </section>
+               <section class="admin-card">
+                 <div class="admin-card-heading"><div><span class="card-kicker">FEATURE FLAGS</span><h2>Controlled rollout</h2></div></div>
+                 <div id="admin-flags" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+               </section>
+               <section class="admin-card">
+                 <div class="admin-card-heading"><div><span class="card-kicker">PLAN CATALOG</span><h2>Effective capabilities</h2></div></div>
+                 <div id="admin-plans" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+               </section>
+               <section class="admin-card admin-card-wide">
+                 <div class="admin-card-heading"><div><span class="card-kicker">FOUR-EYES QUEUE</span><h2>Pending approvals</h2></div></div>
+                 <div id="admin-approvals" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+               </section>
+               <section class="admin-card admin-card-wide">
+                 <div class="admin-card-heading"><div><span class="card-kicker">AUDIT TRAIL</span><h2>Platform changes</h2></div></div>
+                 <div id="admin-audit" class="admin-audit-list"><div class="unknown-message">Awaiting verification.</div></div>
+               </section>
+             </div>
+           </section>
           <section id="landing" class="dashboard-page public-home">
             <div class="dashboard-heading" id="dashboard">
               <div>

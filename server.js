@@ -555,6 +555,32 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  const providerTestMatch = url.pathname.match(/^\/api\/admin\/providers\/([^/]+)\/test$/);
+  if (req.method === "POST" && providerTestMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const network = NETWORKS[body.networkId || body.network];
+    if (!network) throw Object.assign(new Error("NETWORK_NOT_SUPPORTED"), { code: "NETWORK_NOT_SUPPORTED" });
+    const address = String(body.address || "").trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+      throw Object.assign(new Error("CONTRACT_ADDRESS_INVALID"), { code: "CONTRACT_ADDRESS_INVALID" });
+    }
+    const result = await controlPlane.testProvider({
+      providerId: providerTestMatch[1],
+      providerRegistry,
+      network,
+      address,
+    });
+    await authService.audit("PLATFORM_PROVIDER_TESTED", admin.user.id, null, {
+      providerId: providerTestMatch[1],
+      networkId: body.networkId || body.network,
+      ok: result.ok,
+      errorCode: result.ok ? null : result.errorCode,
+    });
+    sendJson(res, 200, { test: result }, { context });
+    return true;
+  }
+
   const providerDraftMatch = url.pathname.match(/^\/api\/admin\/providers\/([^/]+)\/draft$/);
   if (req.method === "POST" && providerDraftMatch) {
     const admin = requirePlatformAdmin(context);
@@ -600,6 +626,24 @@ async function handleApiUnsafe(req, res, url, context) {
   if (req.method === "GET" && url.pathname === "/api/admin/feature-flags") {
     requirePlatformAdmin(context);
     sendJson(res, 200, { flags: await controlPlane.listFeatureFlags() }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/plans") {
+    requirePlatformAdmin(context);
+    sendJson(res, 200, {
+      plans: publicPlanCatalog(),
+      source: "platform-config",
+      mutable: false,
+    }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/audit") {
+    requirePlatformAdmin(context);
+    const limit = Number(url.searchParams.get("limit") || 200);
+    const audit = await authService.store.listPlatformAudit({ limit });
+    sendJson(res, 200, { audit }, { context });
     return true;
   }
 

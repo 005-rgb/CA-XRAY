@@ -451,6 +451,14 @@ class MemoryAuthStore {
   async listAudit(workspaceId) {
     return this.audit.filter((entry) => entry.workspaceId === workspaceId).map(clone);
   }
+
+  async listPlatformAudit({ limit = 200 } = {}) {
+    return this.audit
+      .slice()
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, Math.max(1, Math.min(500, Number(limit) || 200)))
+      .map(clone);
+  }
 }
 
 class PostgresAuthStore {
@@ -913,6 +921,18 @@ class PostgresAuthStore {
     const result = await this.pool.query(
       "SELECT id, action, actor_id, workspace_id, metadata, created_at FROM audit_logs WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 200",
       [workspaceId],
+    );
+    return result.rows.map(rowAudit);
+  }
+
+  async listPlatformAudit({ limit = 200 } = {}) {
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 200));
+    const result = await this.pool.query(
+      `SELECT id, action, actor_id, workspace_id, metadata, created_at
+         FROM audit_logs
+        ORDER BY created_at DESC
+        LIMIT $1`,
+      [safeLimit],
     );
     return result.rows.map(rowAudit);
   }

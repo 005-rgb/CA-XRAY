@@ -26,6 +26,10 @@ class ProviderRuntime {
     this.successes = 0;
     this.failures = 0;
     this.lastError = null;
+    this.lastSuccessfulAt = null;
+    this.lastCallAt = null;
+    this.totalLatencyMs = 0;
+    this.lastLatencyMs = null;
   }
 
   checkQuota(now = Date.now()) {
@@ -46,13 +50,20 @@ class ProviderRuntime {
     }
     this.checkQuota();
     this.active += 1;
+    const startedAt = Date.now();
+    this.lastCallAt = new Date(startedAt).toISOString();
     try {
       const result = await operation();
       this.successes += 1;
+      this.lastLatencyMs = Date.now() - startedAt;
+      this.totalLatencyMs += this.lastLatencyMs;
+      this.lastSuccessfulAt = new Date().toISOString();
       return result;
     } catch (error) {
       this.failures += 1;
       this.lastError = error.code || "PROVIDER_ERROR";
+      this.lastLatencyMs = Date.now() - startedAt;
+      this.totalLatencyMs += this.lastLatencyMs;
       throw error;
     } finally {
       this.active -= 1;
@@ -66,6 +77,15 @@ class ProviderRuntime {
       quotaLimit: this.quotaLimit,
       successes: this.successes,
       failures: this.failures,
+      errorRate: this.successes + this.failures
+        ? this.failures / (this.successes + this.failures)
+        : 0,
+      averageLatencyMs: this.successes + this.failures
+        ? Math.round(this.totalLatencyMs / (this.successes + this.failures))
+        : null,
+      lastLatencyMs: this.lastLatencyMs,
+      lastSuccessfulAt: this.lastSuccessfulAt,
+      lastCallAt: this.lastCallAt,
       lastError: this.lastError,
     });
   }

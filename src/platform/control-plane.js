@@ -66,6 +66,7 @@ class MemoryControlPlaneStore {
         retries: 1,
         quotaPerMinute: 120,
         concurrencyLimit: 2,
+        priority: 100,
         killSwitch: false,
         version: 0,
         draft: null,
@@ -174,17 +175,45 @@ class PlatformControlPlane {
       return {
         providerId,
         source: registered.find((item) => item.id === providerId)?.source || null,
+        adapterVersion: registered.find((item) => item.id === providerId)?.version || null,
+        capabilities: registered.find((item) => item.id === providerId)?.capabilities || [],
         state: config.state,
         killSwitch: Boolean(config.killSwitch),
         timeoutMs: config.timeoutMs,
         retries: config.retries,
         quotaPerMinute: config.quotaPerMinute,
         concurrencyLimit: config.concurrencyLimit,
+        priority: config.priority ?? 100,
         version: config.version,
         runtime: health[providerId] || null,
         updatedAt: config.updatedAt || null,
       };
     });
+  }
+
+  async testProvider({ providerId, providerRegistry, network, address }) {
+    const provider = providerRegistry?.get?.(providerId);
+    if (!provider) throw error("PROVIDER_NOT_FOUND");
+    if (!network || !address) throw error("PROVIDER_TEST_INPUT_REQUIRED");
+    const startedAt = Date.now();
+    try {
+      const result = await providerRegistry.fetch(providerId, { network, address });
+      return {
+        providerId,
+        ok: true,
+        status: "reachable",
+        retrievedAt: typeof result?.retrievedAt === "string" ? result.retrievedAt : null,
+        latencyMs: Date.now() - startedAt,
+      };
+    } catch (failure) {
+      return {
+        providerId,
+        ok: false,
+        status: "error",
+        errorCode: failure.code || "PROVIDER_ERROR",
+        latencyMs: Date.now() - startedAt,
+      };
+    }
   }
 
   async requestProviderDraft({ providerId, patch = {}, actorId, reason }) {
@@ -196,6 +225,7 @@ class PlatformControlPlane {
       retries: boundedInteger(patch.retries, 1, 0, 2),
       quotaPerMinute: boundedInteger(patch.quotaPerMinute, 120, 1, 100_000),
       concurrencyLimit: boundedInteger(patch.concurrencyLimit, 2, 1, 1_000),
+      priority: boundedInteger(patch.priority, 100, 1, 10_000),
       killSwitch: Boolean(patch.killSwitch),
     };
     if (!PROVIDER_STATES.includes(safePatch.state)) throw error("PROVIDER_STATE_INVALID");
