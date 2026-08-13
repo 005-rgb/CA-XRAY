@@ -76,11 +76,18 @@ const adminUsers = document.querySelector("#admin-users");
 const adminWorkspaces = document.querySelector("#admin-workspaces");
 const adminSubscriptions = document.querySelector("#admin-subscriptions");
 const adminWebhooks = document.querySelector("#admin-webhooks");
+const adminInventoryDrawer = document.querySelector("#admin-inventory-drawer");
+const adminInventoryTitle = document.querySelector("#admin-inventory-title");
+const adminInventorySearch = document.querySelector("#admin-inventory-search");
+const adminInventoryQuery = document.querySelector("#admin-inventory-query");
+const adminInventoryResults = document.querySelector("#admin-inventory-results");
+const adminInventoryClose = document.querySelector("#admin-inventory-close");
 let authState = null;
 let currentScan = null;
 let currentJob = null;
 let activeScanJobId = null;
 let historyCursor = null;
+let adminInventoryType = null;
 const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
 const isAdminRoute = () => pathName() === "/admin";
@@ -566,6 +573,43 @@ function renderAdminAudit(audit) {
     : `<div class="unknown-message">No platform events recorded.</div>`;
 }
 
+function renderAdminInventoryResults(type, records) {
+  if (!records.length) {
+    adminInventoryResults.innerHTML = `<div class="unknown-message">No ${type} matched this search.</div>`;
+    return;
+  }
+  adminInventoryResults.innerHTML = records.map((record) => {
+    if (type === "users") {
+      return `<div class="admin-inventory-row">
+        <div><strong>${escapeHtml(record.displayName || record.email || record.id)}</strong><span>${escapeHtml(record.email || "Email unavailable")} · joined ${escapeHtml(formatDate(record.createdAt))}</span></div>
+        <div class="admin-inventory-meta">${statusPill({ status: record.mfaEnabled ? "VERIFIED" : "UNKNOWN" }, record.mfaEnabled ? "MFA ON" : "MFA OFF")}<span>${escapeHtml(record.workspaceCount)} workspace${record.workspaceCount === 1 ? "" : "s"} · ${escapeHtml(record.activeSessionCount)} active session${record.activeSessionCount === 1 ? "" : "s"}</span></div>
+      </div>`;
+    }
+    return `<div class="admin-inventory-row">
+      <div><strong>${escapeHtml(record.name || record.id)}</strong><span>${escapeHtml(record.workspaceType || "UNKNOWN")} · ${escapeHtml(record.planId || "UNKNOWN PLAN")} · created ${escapeHtml(formatDate(record.createdAt))}</span></div>
+      <div class="admin-inventory-meta"><span>${escapeHtml(record.memberCount)} member${record.memberCount === 1 ? "" : "s"}</span><code>${escapeHtml(truncateAddress(record.id))}</code></div>
+    </div>`;
+  }).join("");
+}
+
+async function loadAdminInventory(type) {
+  if (!["users", "workspaces"].includes(type)) return;
+  adminInventoryType = type;
+  adminInventoryDrawer.hidden = false;
+  adminInventoryTitle.textContent = type === "users" ? "User inventory" : "Workspace inventory";
+  adminInventoryResults.innerHTML = `<div class="unknown-message">Loading ${type}…</div>`;
+  const query = adminInventoryQuery.value.trim();
+  try {
+    const params = new URLSearchParams({ limit: "100" });
+    if (query) params.set("q", query);
+    const data = await apiJson(`/api/admin/${type}?${params.toString()}`);
+    renderAdminInventoryResults(type, data[type] || []);
+  } catch (error) {
+    adminInventoryResults.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
+    adminErrorMessage(error);
+  }
+}
+
 function renderAdminHealth(data) {
   const platform = data.platform || {};
   const storage = platform.storage || {};
@@ -686,7 +730,9 @@ adminProviders?.addEventListener("submit", async (event) => {
           timeoutMs: Number(formData.get("timeoutMs")),
           retries: Number(formData.get("retries")),
           quotaPerMinute: Number(formData.get("quotaPerMinute")),
+          priority: Number(formData.get("priority")),
           state: formData.get("state"),
+          killSwitch: formData.get("killSwitch") === "on",
         },
         reasonCode,
       }),
@@ -726,13 +772,16 @@ adminProviders?.addEventListener("click", async (event) => {
   }
 });
 
-adminApprovals?.addEventListener("click", async (event) => {
-  const button = event.target.closest(".admin-approve-button");
-  if (!button) return;
-  const reasonCode = window.prompt("Approval reason code (for example REVIEW).", "REVIEW");
+adminApprovals?.addEventListener("submit", async (event) => {
+  const form = event.target.closest(".admin-approval-form");
+  if (!form) return;
+  event.preventDefault();
+  const reasonCode = String(new FormData(form).get("reasonCode") || "").trim();
+  const submit = form.querySelector("button[type=submit]");
   if (!reasonCode) return;
+  submit.disabled = true;
   try {
-    await apiJson(`/api/admin/approvals/${encodeURIComponent(button.dataset.approvalId)}/approve`, {
+    await apiJson(`/api/admin/approvals/${encodeURIComponent(form.dataset.approvalId)}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reasonCode }),
@@ -741,7 +790,20 @@ adminApprovals?.addEventListener("click", async (event) => {
     await loadAdminData();
   } catch (error) {
     adminErrorMessage(error);
+  } finally {
+    submit.disabled = false;
   }
+});
+
+document.querySelector("#admin-users-link")?.addEventListener("click", () => loadAdminInventory("users"));
+document.querySelector("#admin-workspaces-link")?.addEventListener("click", () => loadAdminInventory("workspaces"));
+adminInventorySearch?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  loadAdminInventory(adminInventoryType);
+});
+adminInventoryClose?.addEventListener("click", () => {
+  adminInventoryDrawer.hidden = true;
+  adminInventoryType = null;
 });
 
 function showLoading(stages = []) {

@@ -178,6 +178,25 @@
                   <div id="admin-audit" class="admin-audit-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
               </div>
+              <section class="admin-inventory-drawer" id="admin-inventory-drawer" hidden aria-live="polite">
+                <div class="admin-card-heading">
+                  <div>
+                    <span class="card-kicker">PLATFORM INVENTORY</span>
+                    <h2 id="admin-inventory-title">Inventory</h2>
+                  </div>
+                  <button class="text-button" type="button" id="admin-inventory-close">Close</button>
+                </div>
+                <form class="admin-inventory-search" id="admin-inventory-search">
+                  <label for="admin-inventory-query">Search by identifier, email, name, plan, or type</label>
+                  <div class="inline-form">
+                    <input id="admin-inventory-query" type="search" autocomplete="off" placeholder="Search platform inventory…" />
+                    <button class="secondary-button" type="submit">Search</button>
+                  </div>
+                </form>
+                <div id="admin-inventory-results" class="admin-inventory-results">
+                  <div class="unknown-message">Select an inventory to inspect.</div>
+                </div>
+              </section>
             </section>
           <section id="landing" class="dashboard-page public-home">
             <div class="dashboard-heading" id="dashboard">
