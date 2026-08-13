@@ -12,6 +12,12 @@ const {
   const policy = require("../src/security/policy");
   return { ...auth, ROLES: policy.ROLES };
 })();
+const { ExponentialBackoffGuard } = require("../src/security/controls");
+const {
+  CAPABILITIES,
+  hasEntitlement,
+  resolveEffectiveEntitlements,
+} = require("../src/platform/entitlements");
 
 function makeService({ superadminEmail = "" } = {}) {
   const clock = () => new Date("2026-08-13T12:00:00.000Z");
@@ -151,4 +157,93 @@ test("superadmin sessions require TOTP and never gain workspace scope", async ()
   assert.equal(authenticated.actor.role, ROLES.SUPERADMIN);
   assert.equal(authenticated.workspaceId, null);
   await assert.rejects(() => service.requireWorkspace(authenticated, "workspace_any"), (error) => error.code === "FORBIDDEN");
+});
+
+test("production registration requires email verification before a session is issued", async () => {
+  const clock = () => new Date("2026-08-13T12:00:00.000Z");
+  const store = new MemoryAuthStore({ clock });
+  const service = new AuthService({
+    store,
+    sessionSecret: crypto.randomBytes(32).toString("hex"),
+    clock,
+    environment: "production",
+  });
+  const registered = await service.register({
+    email: "verify@example.com",
+    password: "correct horse battery staple",
+  });
+  assert.equal(registered.emailVerificationRequired, true);
+  assert.equal(registered.setCookie, undefined);
+  assert.equal((await store.listSessions(registered.user.id)).length, 0);
+  assert.ok(registered.verificationToken === undefined);
+  const verification = await store.createEmailVerificationToken({ userId: registered.user.id });
+  const verified = await service.verifyEmail(verification.token, { ip: "127.0.0.1" });
+  assert.equal(verified.user.emailVerified, true);
+  assert.ok(verified.setCookie.includes("ca_xray_session="));
+  await assert.rejects(
+    () => service.verifyEmail(verification.token),
+    (error) => error.code === "EMAIL_VERIFICATION_INVALID",
+  );
+});
+
+test("recovery codes are returned once and consumed atomically", async () => {
+  const { service } = makeService({ superadminEmail: "root@example.com" });
+  const registered = await service.register({
+    email: "root@example.com",
+    password: "correct horse battery staple",
+  });
+  const context = await service.authenticateRequest({
+    headers: { cookie: `ca_xray_session=${registered.setCookie.match(/ca_xray_session=([^;]+)/)[1]}` },
+  });
+  const enrollment = await service.enrollMfa(context);
+  const confirmation = await service.confirmMfa(context, totpCode(enrollment.secret, Date.parse("2026-08-13T12:00:00.000Z")));
+  assert.equal(confirmation.recoveryCodes.length, 10);
+  const login = await service.login({ email: "root@example.com", password: "correct horse battery staple" });
+  const pending = await service.authenticateRequest({
+    headers: { cookie: `ca_xray_session=${login.setCookie.match(/ca_xray_session=([^;]+)/)[1]}` },
+  });
+  await service.verifyPendingMfa(pending, confirmation.recoveryCodes[0]);
+  const secondLogin = await service.login({ email: "root@example.com", password: "correct horse battery staple" });
+  const secondPending = await service.authenticateRequest({
+    headers: { cookie: `ca_xray_session=${secondLogin.setCookie.match(/ca_xray_session=([^;]+)/)[1]}` },
+  });
+  await assert.rejects(
+    () => service.verifyPendingMfa(secondPending, confirmation.recoveryCodes[0]),
+    (error) => error.code === "INVALID_MFA_CODE",
+  );
+});
+
+test("backoff guard blocks after repeated failures and resets on success", () => {
+  let now = 0;
+  const guard = new ExponentialBackoffGuard({
+    clock: () => now,
+    maxFailures: 2,
+    baseLockMs: 100,
+    maxLockMs: 1_000,
+  });
+  guard.failure("ip:one");
+  guard.failure("ip:one");
+  assert.equal(guard.check("ip:one").allowed, false);
+  now = 101;
+  assert.equal(guard.check("ip:one").allowed, true);
+  guard.success("ip:one");
+  assert.equal(guard.snapshot("ip:one"), null);
+});
+
+test("entitlement grants override plan defaults with explicit lifecycle metadata", () => {
+  const now = new Date("2026-08-13T12:00:00.000Z");
+  const entitlements = resolveEffectiveEntitlements({
+    plan: { id: "free", name: "Free", capabilities: [CAPABILITIES.SCAN_CREATE, CAPABILITIES.SCAN_READ] },
+    now,
+    grants: [{
+      capability: CAPABILITIES.SCAN_CREATE,
+      status: "revoked",
+      source: "manual",
+      effectiveAt: now.toISOString(),
+      reason: "Abuse protection",
+    }],
+  });
+  assert.equal(hasEntitlement(entitlements, CAPABILITIES.SCAN_CREATE, now), false);
+  assert.equal(hasEntitlement(entitlements, CAPABILITIES.SCAN_READ, now), true);
+  assert.equal(entitlements.find((item) => item.capability === CAPABILITIES.SCAN_CREATE).reason, "Abuse protection");
 });

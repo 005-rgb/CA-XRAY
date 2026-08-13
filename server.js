@@ -29,6 +29,11 @@ const {
 const { PLAN_CATALOG } = require("./src/platform/config");
 const { createPersistence } = require("./src/persistence");
 const { createAuthService } = require("./src/auth/service");
+const {
+  CAPABILITIES,
+  requireEntitlement,
+  resolveEffectiveEntitlements,
+} = require("./src/platform/entitlements");
 
 const PORT = Number(process.env.PORT || 5000);
 const HOST = "0.0.0.0";
@@ -62,6 +67,7 @@ function sendJson(res, status, body, { context = null, headers = {} } = {}) {
     "Content-Length": Buffer.byteLength(payload),
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
+    ...(context?.requestId ? { "X-Correlation-Id": context.requestId } : {}),
     ...(context?.setCookie ? { "Set-Cookie": context.setCookie } : {}),
     ...headers,
   });
@@ -129,13 +135,14 @@ function signVisitorId(visitorId) {
 
 async function requestContext(req) {
   const authenticated = await authService.authenticateRequest(req);
-  if (authenticated.kind === "authenticated" || authenticated.kind === "mfa_pending") {
+  if (["authenticated", "mfa_pending", "email_pending"].includes(authenticated.kind)) {
     return {
       ...authenticated,
       ip: req.socket.remoteAddress || "unknown",
       apiClient: typeof req.headers["x-api-client"] === "string"
         ? req.headers["x-api-client"].slice(0, 80)
         : "web",
+      requestId: correlationId(req),
     };
   }
   const cookies = parseCookies(req.headers.cookie);
@@ -156,6 +163,7 @@ async function requestContext(req) {
     apiClient: typeof req.headers["x-api-client"] === "string"
       ? req.headers["x-api-client"].slice(0, 80)
       : "web",
+    requestId: correlationId(req),
     setCookie: validCookie
       ? null
       : `ca_xray_visitor=${context.actor.id.slice("visitor_".length)}.${signVisitorId(context.actor.id.slice("visitor_".length))}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${runtimeConfig.environment === "production" ? "; Secure" : ""}`,
@@ -166,7 +174,15 @@ function requestMeta(req) {
   return {
     userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null,
     ip: req.socket.remoteAddress || "unknown",
+    correlationId: correlationId(req),
   };
+}
+
+function correlationId(req) {
+  const incoming = typeof req.headers["x-correlation-id"] === "string"
+    ? req.headers["x-correlation-id"].trim()
+    : "";
+  return /^[a-zA-Z0-9._:-]{1,96}$/.test(incoming) ? incoming : crypto.randomUUID();
 }
 
 function requireAuthenticated(context) {
@@ -198,15 +214,17 @@ async function readBody(req) {
   return body ? JSON.parse(body) : {};
 }
 
-function enforceScanProtection(req, context, networkId) {
+async function enforceScanProtection(req, context, networkId) {
   authorize({ actor: context.actor, workspaceId: context.workspaceId, action: ACTIONS.SCAN_CREATE });
+  const plan = PLAN_CATALOG[context.planId];
+  if (!plan) throw new Error("UNKNOWN_PLAN");
+  const entitlements = await persistence.listEntitlements(context.workspaceId, plan);
+  requireEntitlement(entitlements, CAPABILITIES.SCAN_CREATE);
   const limits = runtimeConfig.security;
   requestRateLimiter.enforce("ip", context.ip, limits.ipRequestsPerMinute, 60_000);
   requestRateLimiter.enforce("user", context.actor.id, limits.userRequestsPerMinute, 60_000);
   requestRateLimiter.enforce("workspace", context.workspaceId, limits.workspaceRequestsPerMinute, 60_000);
   requestRateLimiter.enforce("api-client", context.apiClient, limits.apiClientRequestsPerMinute, 60_000);
-  const plan = PLAN_CATALOG[context.planId];
-  if (!plan) throw new Error("UNKNOWN_PLAN");
   if (scanQueue.activeForWorkspace(context.workspaceId) >= plan.maxConcurrentScans) {
     throw Object.assign(new Error("CONCURRENT_SCAN_LIMIT"), { code: "CONCURRENT_SCAN_LIMIT" });
   }
@@ -225,6 +243,8 @@ async function handleApiUnsafe(req, res, url, context) {
     sendJson(res, 201, {
       user: result.user,
       workspace: result.workspace,
+      ...(result.emailVerificationRequired ? { emailVerificationRequired: true } : {}),
+      ...(result.verificationToken ? { verificationToken: result.verificationToken } : {}),
     }, { context: { ...context, setCookie: result.setCookie } });
     return true;
   }
@@ -244,12 +264,19 @@ async function handleApiUnsafe(req, res, url, context) {
 
   if (req.method === "POST" && url.pathname === "/api/auth/recovery/request") {
     const body = await readBody(req);
-    const result = await authService.requestRecovery(body.email);
+    const result = await authService.requestRecovery(body.email, requestMeta(req));
     sendJson(res, 202, {
       accepted: true,
       message: "If the account exists, recovery instructions have been issued.",
       ...(result.recoveryToken ? { recoveryToken: result.recoveryToken } : {}),
     }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/verify-email") {
+    const body = await readBody(req);
+    const result = await authService.verifyEmail(body.token, requestMeta(req));
+    sendJson(res, 200, { user: result.user }, { context: { ...context, setCookie: result.setCookie } });
     return true;
   }
 
@@ -272,7 +299,8 @@ async function handleApiUnsafe(req, res, url, context) {
       authenticated: context.kind === "authenticated",
       ...(context.kind === "authenticated"
         ? { user: context.user, workspace: context.workspace || null, membership: context.membership || null }
-        : context.kind === "mfa_pending" ? { mfaPending: true, user: context.user } : {}),
+        : context.kind === "mfa_pending" ? { mfaPending: true, user: context.user }
+          : context.kind === "email_pending" ? { emailVerificationPending: true, user: context.user } : {}),
     }, { context });
     return true;
   }
@@ -364,8 +392,12 @@ async function handleApiUnsafe(req, res, url, context) {
 
   const inviteMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/invites$/);
   if (req.method === "POST" && inviteMatch) {
+    const inviteContext = requireAuthenticated(context);
+    requestRateLimiter.enforce("invite-ip", context.ip, 10, 60_000);
+    requestRateLimiter.enforce("invite-user", context.actor.id, 10, 60_000);
+    requestRateLimiter.enforce("invite-workspace", inviteMatch[1], 20, 60_000);
     const body = await readBody(req);
-    const result = await authService.createInvite(requireAuthenticated(context), {
+    const result = await authService.createInvite(inviteContext, {
       workspaceId: inviteMatch[1], email: body.email, role: body.role,
     });
     sendJson(res, 201, result, { context });
@@ -416,6 +448,15 @@ async function handleApiUnsafe(req, res, url, context) {
 
   if (req.method === "GET" && url.pathname === "/api/plans") {
     sendJson(res, 200, { plans: publicPlanCatalog() }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/entitlements") {
+    const authenticated = requireAuthenticated(context);
+    const plan = PLAN_CATALOG[authenticated.planId];
+    if (!plan) throw new Error("UNKNOWN_PLAN");
+    const entitlements = await persistence.listEntitlements(authenticated.workspaceId, plan);
+    sendJson(res, 200, { entitlements }, { context });
     return true;
   }
 
@@ -471,7 +512,7 @@ async function handleApiUnsafe(req, res, url, context) {
         return true;
       }
       const authenticated = requireAuthenticated(context);
-      enforceScanProtection(req, authenticated, networkId);
+      await enforceScanProtection(req, authenticated, networkId);
       const headerKey = req.headers["idempotency-key"];
       if (headerKey !== undefined && (typeof headerKey !== "string" || !/^[\x21-\x7e]{1,128}$/.test(headerKey))) {
         sendJson(res, 400, {
@@ -621,6 +662,11 @@ async function handleApi(req, res, url, context) {
       RECOVERY_TOKEN_INVALID: 400,
       SESSION_REVOKED: 401,
       WORKSPACE_SCOPE_MISMATCH: 404,
+      EMAIL_VERIFICATION_REQUIRED: 403,
+      EMAIL_VERIFICATION_INVALID: 400,
+      AUTH_TEMPORARILY_BLOCKED: 429,
+      RATE_LIMITED: 429,
+      ENTITLEMENT_REQUIRED: 403,
     }[error.code] || (error.message === "REQUEST_TOO_LARGE" ? 413 : 500);
     sendJson(res, status, {
       error: error.code || "INTERNAL_ERROR",

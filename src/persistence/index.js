@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { Pool } = require("pg");
+const { resolveEffectiveEntitlements } = require("./../platform/entitlements");
 
 const DEFAULT_IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -52,6 +53,7 @@ class MemoryPersistence {
     this.audit = [];
     this.outbox = new Map();
     this.webhooks = new Map();
+    this.entitlements = new Map();
   }
 
   async init() {}
@@ -220,6 +222,25 @@ class MemoryPersistence {
     };
     this.webhooks.set(key, event);
     return { duplicate: false, event: clone(event) };
+  }
+
+  async listEntitlements(workspaceId, plan) {
+    const grants = [...this.entitlements.values()]
+      .filter((item) => item.workspaceId === workspaceId)
+      .map(({ workspaceId: ignored, ...item }) => item);
+    return resolveEffectiveEntitlements({ plan, grants, now: this.clock() });
+  }
+
+  async setEntitlement({ workspaceId, capability, status = "active", source = "manual", effectiveAt = this.clock(), expiresAt = null, reason = "" }) {
+    const id = `${workspaceId}:${capability}`;
+    const record = {
+      workspaceId, capability, status, source,
+      effectiveAt: new Date(effectiveAt).toISOString(),
+      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      reason: String(reason || "").slice(0, 500) || "Explicit entitlement change",
+    };
+    this.entitlements.set(id, record);
+    return clone(record);
   }
 
   async listOutbox({ status = "PENDING", limit = 100 } = {}) {
@@ -490,6 +511,45 @@ class PostgresPersistence {
       return { duplicate: true, event: existing.rows[0] || null };
     }
     return { duplicate: false, event: result.rows[0] };
+  }
+
+  async listEntitlements(workspaceId, plan) {
+    const result = await this.pool.query(
+      `SELECT capability, status, source, effective_at, expires_at, audit_reference
+         FROM entitlements
+        WHERE workspace_id = $1
+        ORDER BY capability, effective_at DESC`,
+      [workspaceId],
+    );
+    return resolveEffectiveEntitlements({
+      plan,
+      grants: result.rows.map((row) => ({
+        capability: row.capability,
+        status: row.status,
+        source: row.source,
+        effectiveAt: row.effective_at,
+        expiresAt: row.expires_at,
+        auditReference: row.audit_reference,
+      })),
+      now: this.clock(),
+    });
+  }
+
+  async setEntitlement({ workspaceId, capability, status = "active", source = "manual", effectiveAt = this.clock(), expiresAt = null, reason = "" }) {
+    const id = `entitlement_${crypto.randomUUID()}`;
+    const result = await this.pool.query(
+      `INSERT INTO entitlements
+        (id, workspace_id, capability, status, source, effective_at, expires_at, audit_reference)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, workspace_id, capability, status, source, effective_at, expires_at, audit_reference`,
+      [id, workspaceId, capability, status, source, new Date(effectiveAt).toISOString(),
+        expiresAt ? new Date(expiresAt).toISOString() : null, String(reason || "").slice(0, 500) || "Explicit entitlement change"],
+    );
+    const row = result.rows[0];
+    return {
+      id: row.id, workspaceId: row.workspace_id, capability: row.capability, status: row.status,
+      source: row.source, effectiveAt: row.effective_at, expiresAt: row.expires_at, reason: row.audit_reference,
+    };
   }
 
   async listOutbox({ status = "PENDING", limit = 100 } = {}) {

@@ -50,6 +50,71 @@ class KeyedRateLimiter {
   }
 }
 
+class ExponentialBackoffGuard {
+  constructor({
+    clock = () => Date.now(),
+    maxFailures = 5,
+    windowMs = 15 * 60 * 1000,
+    baseLockMs = 1_000,
+    maxLockMs = 15 * 60 * 1000,
+  } = {}) {
+    this.clock = clock;
+    this.maxFailures = maxFailures;
+    this.windowMs = windowMs;
+    this.baseLockMs = baseLockMs;
+    this.maxLockMs = maxLockMs;
+    this.records = new Map();
+  }
+
+  #record(key) {
+    const now = this.clock();
+    const current = this.records.get(key);
+    if (!current || current.windowStartedAt + this.windowMs <= now) {
+      const fresh = { failures: 0, windowStartedAt: now, lockedUntil: 0 };
+      this.records.set(key, fresh);
+      return fresh;
+    }
+    return current;
+  }
+
+  check(key) {
+    const record = this.#record(key);
+    if (record.lockedUntil > this.clock()) {
+      return { allowed: false, retryAfterMs: record.lockedUntil - this.clock(), failures: record.failures };
+    }
+    return { allowed: true, retryAfterMs: 0, failures: record.failures };
+  }
+
+  enforce(key) {
+    const result = this.check(key);
+    if (!result.allowed) {
+      const error = new RateLimitError("auth", result.retryAfterMs);
+      error.code = "AUTH_TEMPORARILY_BLOCKED";
+      throw error;
+    }
+    return result;
+  }
+
+  failure(key) {
+    const record = this.#record(key);
+    record.failures += 1;
+    if (record.failures >= this.maxFailures) {
+      const multiplier = 2 ** Math.min(record.failures - this.maxFailures, 8);
+      record.lockedUntil = this.clock() + Math.min(this.maxLockMs, this.baseLockMs * multiplier);
+    }
+    return this.check(key);
+  }
+
+  success(key) {
+    this.records.delete(key);
+  }
+
+  snapshot(key) {
+    const record = this.records.get(key);
+    return record ? { ...record, retryAfterMs: Math.max(0, record.lockedUntil - this.clock()) } : null;
+  }
+}
+
 class QuotaLedger {
   constructor({ clock = () => new Date() } = {}) {
     this.clock = clock;
@@ -219,6 +284,7 @@ function sha256(value) {
 module.exports = {
   AppendOnlyAuditLog,
   CircuitBreaker,
+  ExponentialBackoffGuard,
   IdempotencyStore,
   KeyedRateLimiter,
   QuotaLedger,

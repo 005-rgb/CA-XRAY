@@ -22,6 +22,8 @@ const recoveryForm = document.querySelector("#recovery-form");
 const recoveryStatus = document.querySelector("#recovery-status");
 const mfaForm = document.querySelector("#mfa-form");
 const mfaStatus = document.querySelector("#mfa-status");
+const emailVerificationForm = document.querySelector("#email-verification-form");
+const emailVerificationStatus = document.querySelector("#email-verification-status");
 const workspaceBar = document.querySelector("#workspace-bar");
 const workspaceSelector = document.querySelector("#workspace-selector");
 const userName = document.querySelector("#user-name");
@@ -98,6 +100,7 @@ async function refreshAuth() {
     authState = await apiJson("/api/auth/me");
     const authenticated = authState.authenticated;
     const pending = authState.mfaPending;
+    const emailPending = authState.emailVerificationPending;
     userName.textContent = authenticated ? (authState.user?.displayName || authState.user?.email || "User") : pending ? "Verification required" : "Visitor";
     if (pending) {
       setShell({ authView: true });
@@ -109,8 +112,20 @@ async function refreshAuth() {
       workspaceBar.hidden = true;
       return;
     }
+    if (emailPending) {
+      setShell({ authView: true });
+      authForm.hidden = true;
+      recoveryForm.hidden = true;
+      mfaForm.hidden = true;
+      emailVerificationForm.hidden = false;
+      authTitle.textContent = "Verify your email";
+      authMessage("Use the verification link sent to your email.", emailVerificationStatus);
+      workspaceBar.hidden = true;
+      return;
+    }
     workspaceBar.hidden = !authenticated;
     mfaForm.hidden = true;
+    emailVerificationForm.hidden = true;
     authForm.hidden = false;
     if (!authenticated) {
       authEntry.textContent = "Sign in →";
@@ -167,6 +182,12 @@ authForm?.addEventListener("submit", async (event) => {
       authMessage("A second factor is required for this platform account.", mfaStatus);
       return;
     }
+    if (result.emailVerificationRequired) {
+      authMessage(result.verificationToken
+        ? `Development verification token: ${result.verificationToken}`
+        : "Check your email to verify this account.");
+      return;
+    }
     authPassword.value = "";
     await refreshAuth();
   } catch (error) {
@@ -215,6 +236,20 @@ mfaForm?.addEventListener("submit", async (event) => {
     await refreshAuth();
   } catch (error) {
     mfaStatus.textContent = error.message;
+  }
+});
+
+emailVerificationForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await apiJson("/api/auth/verify-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: document.querySelector("#email-verification-token").value.trim() }),
+    });
+    await refreshAuth();
+  } catch (error) {
+    emailVerificationStatus.textContent = error.message;
   }
 });
 

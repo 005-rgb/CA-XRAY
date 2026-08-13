@@ -26,6 +26,7 @@ const PLAN_CATALOG = Object.freeze({
     billing: "free",
     scanLimitPerMonth: 25,
     maxConcurrentScans: 2,
+    capabilities: ["workspace.read", "scan.create", "scan.read"],
     features: ["Personal workspace", "Evidence-backed scan reports"],
     stripePriceEnv: null,
   },
@@ -36,6 +37,7 @@ const PLAN_CATALOG = Object.freeze({
     billing: "paid",
     scanLimitPerMonth: 1_000,
     maxConcurrentScans: 8,
+    capabilities: ["workspace.read", "scan.create", "scan.read", "scan.export"],
     features: ["Personal workspace", "Higher scan limits", "Saved report history"],
     stripePriceEnv: "STRIPE_PRICE_PRO",
   },
@@ -46,6 +48,7 @@ const PLAN_CATALOG = Object.freeze({
     billing: "paid",
     scanLimitPerMonth: 10_000,
     maxConcurrentScans: 32,
+    capabilities: ["workspace.read", "scan.create", "scan.read", "scan.export", "membership.manage", "billing.manage"],
     features: ["Shared team workspace", "Member roles", "Shared report history"],
     stripePriceEnv: "STRIPE_PRICE_TEAM",
   },
@@ -56,6 +59,7 @@ const PLAN_CATALOG = Object.freeze({
     billing: "contact",
     scanLimitPerMonth: null,
     maxConcurrentScans: 64,
+    capabilities: ["workspace.read", "scan.create", "scan.read", "scan.export", "membership.manage", "billing.manage"],
     features: ["Dedicated limits", "Enterprise authorization", "RPO/RTO support plan"],
     stripePriceEnv: "STRIPE_PRICE_ENTERPRISE",
   },
@@ -82,6 +86,10 @@ function getRuntimeConfig(env = process.env) {
   const queueDriver = env.SCAN_QUEUE_DRIVER || "memory";
   return Object.freeze({
     environment: isProduction ? "production" : "development",
+    auth: Object.freeze({
+      provider: env.AUTH_PROVIDER || "local",
+      emailProvider: env.EMAIL_PROVIDER || (isProduction ? "" : "development-outbox"),
+    }),
     queue: Object.freeze({
       driver: queueDriver,
       workerConcurrency: positiveInteger(
@@ -100,6 +108,16 @@ function getRuntimeConfig(env = process.env) {
 }
 
 function assertProductionRuntime(config) {
+  if (!["local", "clerk"].includes(config.auth.provider)) {
+    throw new Error("AUTH_PROVIDER must be either local or clerk.");
+  }
+  if (config.environment === "production" && config.auth.provider === "clerk"
+      && !(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY)) {
+    throw new Error("Clerk is selected as the production identity authority but its keys are not configured.");
+  }
+  if (config.environment === "production" && !config.auth.emailProvider) {
+    throw new Error("EMAIL_PROVIDER must be configured in production.");
+  }
   if (config.environment === "production" && config.queue.driver === "memory") {
     throw new Error(
       "SCAN_QUEUE_DRIVER must be configured with a shared durable queue in production; the in-memory driver is development-only.",
@@ -127,8 +145,10 @@ function publicPlatformConfig(config = getRuntimeConfig()) {
       configured: config.dataStore.driver !== "memory",
     },
     auth: {
-      provider: "clerk",
-      configured: Boolean(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY),
+      provider: config.auth.provider,
+      configured: config.auth.provider === "local"
+        || Boolean(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY),
+      emailProvider: config.auth.emailProvider,
     },
     billing: {
       provider: "stripe",

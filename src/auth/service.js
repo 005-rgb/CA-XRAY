@@ -5,6 +5,8 @@ const { resolveWorkspacePolicy } = require("../platform/config");
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const RECOVERY_TTL_MS = 60 * 60 * 1000;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+const RECOVERY_CODE_COUNT = 10;
 const ACTIVE = "active";
 const DISABLED = "disabled";
 
@@ -118,6 +120,9 @@ class MemoryAuthStore {
     this.sessions = new Map();
     this.invites = new Map();
     this.recovery = new Map();
+    this.emailVerification = new Map();
+    this.recoveryCodes = new Map();
+    this.emailJobs = [];
     this.audit = [];
   }
 
@@ -143,6 +148,8 @@ class MemoryAuthStore {
       platformRole: isSuperadmin ? ROLES.SUPERADMIN : null,
       mfaEnabled: false,
       mfaSecret: null,
+      emailVerified: false,
+      emailVerifiedAt: null,
       createdAt: this.now(),
       deletedAt: null,
     };
@@ -222,6 +229,13 @@ class MemoryAuthStore {
     };
     this.sessions.set(id, session);
     return clone(session);
+  }
+
+  async rotateSession(sessionId, { userId, workspaceId, mfaVerified = true, userAgent = null, ip = null } = {}) {
+    const current = this.sessions.get(sessionId);
+    if (!current || current.userId !== userId) throw Object.assign(new Error("SESSION_REVOKED"), { code: "SESSION_REVOKED" });
+    current.revokedAt = this.now();
+    return this.createSession({ userId, workspaceId, mfaVerified, userAgent, ip });
   }
 
   async getSession(id) {
@@ -323,6 +337,73 @@ class MemoryAuthStore {
     return { record: clone(record), token };
   }
 
+  async createEmailVerificationToken({ userId }) {
+    const token = randomToken();
+    const record = {
+      tokenHash: digest(token), userId, createdAt: this.now(),
+      expiresAt: new Date(this.clock().getTime() + EMAIL_VERIFICATION_TTL_MS).toISOString(),
+      usedAt: null,
+    };
+    this.emailVerification.set(record.tokenHash, record);
+    return { record: clone(record), token };
+  }
+
+  async consumeEmailVerificationToken({ tokenHash }) {
+    const record = this.emailVerification.get(tokenHash);
+    if (!record || record.usedAt || new Date(record.expiresAt) <= this.clock()) {
+      throw Object.assign(new Error("EMAIL_VERIFICATION_INVALID"), { code: "EMAIL_VERIFICATION_INVALID" });
+    }
+    const user = this.users.get(record.userId);
+    if (!user || user.deletedAt) throw Object.assign(new Error("EMAIL_VERIFICATION_INVALID"), { code: "EMAIL_VERIFICATION_INVALID" });
+    user.emailVerified = true;
+    user.emailVerifiedAt = this.now();
+    record.usedAt = this.now();
+    return clone(user);
+  }
+
+  async setEmailVerified(userId, verified = true) {
+    const user = this.users.get(userId);
+    if (!user) throw Object.assign(new Error("USER_NOT_FOUND"), { code: "USER_NOT_FOUND" });
+    user.emailVerified = verified;
+    user.emailVerifiedAt = verified ? this.now() : null;
+    return clone(user);
+  }
+
+  async createRecoveryCodes({ userId, hashes }) {
+    this.recoveryCodes.set(userId, hashes.map((codeHash) => ({ codeHash, usedAt: null, createdAt: this.now() })));
+    return true;
+  }
+
+  async consumeRecoveryCode({ userId, codeHash }) {
+    const codes = this.recoveryCodes.get(userId) || [];
+    const match = codes.find((item) => !item.usedAt && item.codeHash === codeHash);
+    if (!match) return false;
+    match.usedAt = this.now();
+    return true;
+  }
+
+  async enqueueEmail(job) {
+    const record = {
+      id: `email_${crypto.randomUUID()}`,
+      type: job.type,
+      recipient: normalizeEmail(job.recipient),
+      templateVersion: job.templateVersion || "v1",
+      status: "PENDING",
+      attempts: 0,
+      nextAttemptAt: this.now(),
+      correlationId: job.correlationId || null,
+      metadata: clone(job.metadata || {}),
+      createdAt: this.now(),
+      processedAt: null,
+    };
+    this.emailJobs.push(record);
+    return clone(record);
+  }
+
+  async listEmailJobs({ status = "PENDING", limit = 100 } = {}) {
+    return this.emailJobs.filter((job) => job.status === status).slice(0, limit).map(clone);
+  }
+
   async consumeRecoveryToken({ tokenHash, password }) {
     const record = this.recovery.get(tokenHash);
     if (!record || record.usedAt || new Date(record.expiresAt) <= this.clock()) {
@@ -377,7 +458,8 @@ class PostgresAuthStore {
       const userResult = await client.query(
         `INSERT INTO users (id, email, display_name, password_hash, platform_role)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, email, display_name, password_hash, platform_role, mfa_enabled, mfa_secret_encrypted, created_at, deleted_at`,
+         RETURNING id, email, display_name, password_hash, platform_role, mfa_enabled, mfa_secret_encrypted,
+                   email_verified, email_verified_at, created_at, deleted_at`,
         [id, normalized, String(displayName || "").trim().slice(0, 120) || null, passwordHash(password), platformRole],
       );
       await client.query(
@@ -404,7 +486,8 @@ class PostgresAuthStore {
 
   async getUserByEmail(email) {
     const result = await this.pool.query(
-      `SELECT id, email, display_name, password_hash, platform_role, mfa_enabled, mfa_secret_encrypted, created_at, deleted_at
+      `SELECT id, email, display_name, password_hash, platform_role, mfa_enabled, mfa_secret_encrypted,
+              email_verified, email_verified_at, created_at, deleted_at
          FROM users WHERE lower(email) = lower($1) LIMIT 1`, [normalizeEmail(email)],
     );
     return result.rows[0] ? rowUser(result.rows[0], true) : null;
@@ -412,7 +495,8 @@ class PostgresAuthStore {
 
   async getUser(userId) {
     const result = await this.pool.query(
-      `SELECT id, email, display_name, password_hash, platform_role, mfa_enabled, mfa_secret_encrypted, created_at, deleted_at
+      `SELECT id, email, display_name, password_hash, platform_role, mfa_enabled, mfa_secret_encrypted,
+              email_verified, email_verified_at, created_at, deleted_at
          FROM users WHERE id = $1`, [userId],
     );
     return result.rows[0] ? rowUser(result.rows[0], true) : null;
@@ -491,6 +575,29 @@ class PostgresAuthStore {
       [id, userId, workspaceId, mfaVerified, String(userAgent || "").slice(0, 200) || null, String(ip || "").slice(0, 64) || null],
     );
     return rowSession(result.rows[0]);
+  }
+
+  async rotateSession(sessionId, { userId, workspaceId, mfaVerified = true, userAgent = null, ip = null } = {}) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const revoked = await client.query(
+        "UPDATE auth_sessions SET revoked_at = NOW() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL RETURNING id",
+        [sessionId, userId],
+      );
+      if (!revoked.rowCount) throw Object.assign(new Error("SESSION_REVOKED"), { code: "SESSION_REVOKED" });
+      const created = await client.query(
+        `INSERT INTO auth_sessions (id, user_id, workspace_id, mfa_verified, user_agent, ip_address, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '30 days')
+         RETURNING id, user_id, workspace_id, mfa_verified, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at`,
+        [randomToken(), userId, workspaceId, mfaVerified, String(userAgent || "").slice(0, 200) || null, String(ip || "").slice(0, 64) || null],
+      );
+      await client.query("COMMIT");
+      return rowSession(created.rows[0]);
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
   }
 
   async getSession(id) {
@@ -625,6 +732,108 @@ class PostgresAuthStore {
     return { record: rowRecovery(result.rows[0]), token };
   }
 
+  async createEmailVerificationToken({ userId }) {
+    const token = randomToken();
+    const result = await this.pool.query(
+      `INSERT INTO email_verification_tokens (token_hash, user_id, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '24 hours')
+       RETURNING token_hash, user_id, created_at, expires_at, used_at`,
+      [digest(token), userId],
+    );
+    return { record: rowRecovery(result.rows[0]), token };
+  }
+
+  async consumeEmailVerificationToken({ tokenHash }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        "SELECT * FROM email_verification_tokens WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW() FOR UPDATE",
+        [tokenHash],
+      );
+      if (!result.rowCount) throw Object.assign(new Error("EMAIL_VERIFICATION_INVALID"), { code: "EMAIL_VERIFICATION_INVALID" });
+      const updated = await client.query(
+        `UPDATE users SET email_verified = TRUE, email_verified_at = NOW()
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING id, email, display_name, platform_role, mfa_enabled, mfa_secret_encrypted,
+                   email_verified, email_verified_at, created_at, deleted_at`,
+        [result.rows[0].user_id],
+      );
+      if (!updated.rowCount) throw Object.assign(new Error("EMAIL_VERIFICATION_INVALID"), { code: "EMAIL_VERIFICATION_INVALID" });
+      await client.query("UPDATE email_verification_tokens SET used_at = NOW() WHERE token_hash = $1", [tokenHash]);
+      await client.query("COMMIT");
+      return rowUser(updated.rows[0]);
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async setEmailVerified(userId, verified = true) {
+    const result = await this.pool.query(
+      `UPDATE users SET email_verified = $2, email_verified_at = CASE WHEN $2 THEN NOW() ELSE NULL END
+       WHERE id = $1 RETURNING id, email, display_name, platform_role, mfa_enabled, mfa_secret_encrypted,
+       email_verified, email_verified_at, created_at, deleted_at`,
+      [userId, verified],
+    );
+    if (!result.rowCount) throw Object.assign(new Error("USER_NOT_FOUND"), { code: "USER_NOT_FOUND" });
+    return rowUser(result.rows[0]);
+  }
+
+  async createRecoveryCodes({ userId, hashes }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM mfa_recovery_codes WHERE user_id = $1 AND used_at IS NULL", [userId]);
+      for (const codeHash of hashes) {
+        await client.query(
+          "INSERT INTO mfa_recovery_codes (user_id, code_hash) VALUES ($1, $2)",
+          [userId, codeHash],
+        );
+      }
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async consumeRecoveryCode({ userId, codeHash }) {
+    const result = await this.pool.query(
+      `UPDATE mfa_recovery_codes SET used_at = NOW()
+       WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
+       RETURNING code_hash`,
+      [userId, codeHash],
+    );
+    return Boolean(result.rowCount);
+  }
+
+  async enqueueEmail(job) {
+    const result = await this.pool.query(
+      `INSERT INTO email_delivery_jobs
+        (id, job_type, recipient, template_version, metadata, correlation_id, status)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'PENDING')
+       RETURNING id, job_type AS type, recipient, template_version AS "templateVersion",
+                 status, attempts, next_attempt_at AS "nextAttemptAt", correlation_id AS "correlationId",
+                 metadata, created_at AS "createdAt", processed_at AS "processedAt"`,
+      [`email_${crypto.randomUUID()}`, job.type, normalizeEmail(job.recipient), job.templateVersion || "v1",
+        JSON.stringify(job.metadata || {}), job.correlationId || null],
+    );
+    return result.rows[0];
+  }
+
+  async listEmailJobs({ status = "PENDING", limit = 100 } = {}) {
+    const result = await this.pool.query(
+      `SELECT id, job_type AS type, recipient, template_version AS "templateVersion",
+              status, attempts, next_attempt_at AS "nextAttemptAt", correlation_id AS "correlationId",
+              metadata, created_at AS "createdAt", processed_at AS "processedAt"
+         FROM email_delivery_jobs WHERE status = $1 ORDER BY created_at LIMIT $2`,
+      [status, Math.max(1, limit)],
+    );
+    return result.rows;
+  }
+
   async consumeRecoveryToken({ tokenHash, password }) {
     const client = await this.pool.connect();
     try {
@@ -677,7 +886,9 @@ function publicUser(user) {
   if (!user) return null;
   return {
     id: user.id, email: user.email, displayName: user.displayName,
-    platformRole: user.platformRole || null, mfaEnabled: Boolean(user.mfaEnabled), createdAt: user.createdAt,
+    platformRole: user.platformRole || null, mfaEnabled: Boolean(user.mfaEnabled),
+    emailVerified: Boolean(user.emailVerified), emailVerifiedAt: user.emailVerifiedAt || null,
+    createdAt: user.createdAt,
   };
 }
 
@@ -685,6 +896,8 @@ function rowUser(row, includeSensitive = false) {
   const user = {
     id: row.id, email: row.email, displayName: row.display_name,
     platformRole: row.platform_role || null, mfaEnabled: Boolean(row.mfa_enabled),
+    emailVerified: row.email_verified === undefined ? true : Boolean(row.email_verified),
+    emailVerifiedAt: row.email_verified_at ? new Date(row.email_verified_at).toISOString() : null,
     mfaSecret: row.mfa_secret_encrypted || null, createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     deletedAt: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
   };
@@ -752,6 +965,18 @@ class AuthService {
     this.environment = environment;
     this.clock = clock;
     this.superadminEmail = normalizeEmail(superadminEmail);
+    const { ExponentialBackoffGuard } = require("../security/controls");
+    this.loginGuard = new ExponentialBackoffGuard({ clock: () => this.clock().getTime() });
+    this.recoveryGuard = new ExponentialBackoffGuard({
+      clock: () => this.clock().getTime(),
+      maxFailures: 8,
+      baseLockMs: 5_000,
+    });
+    this.mfaGuard = new ExponentialBackoffGuard({
+      clock: () => this.clock().getTime(),
+      maxFailures: 5,
+      baseLockMs: 5_000,
+    });
     if (!sessionSecret || String(sessionSecret).length < 32) throw new Error("SESSION_SECRET must be at least 32 characters.");
   }
 
@@ -779,7 +1004,15 @@ class AuthService {
     const session = await this.store.getSession(sessionId);
     if (!session) return { kind: "visitor", setCookie: this.cookie("", { clear: true }) };
     const user = await this.store.getUser(session.userId);
-    if (!user || user.deletedAt || !session.mfaVerified) {
+    if (!user || user.deletedAt || !user.emailVerified) {
+      return {
+        kind: "email_pending",
+        sessionId,
+        user: user ? publicUser(user) : null,
+        setCookie: null,
+      };
+    }
+    if (!session.mfaVerified) {
       return { kind: "mfa_pending", sessionId, user: user ? publicUser(user) : null, setCookie: null };
     }
     if (user.platformRole === ROLES.SUPERADMIN) {
@@ -802,7 +1035,32 @@ class AuthService {
 
   async register(input, requestMeta = {}) {
     const result = await this.store.createUser(input);
+    if (this.environment !== "production") {
+      await this.store.setEmailVerified(result.user.id, true);
+      result.user = await this.store.getUser(result.user.id);
+    }
     await this.audit("AUTH_REGISTERED", result.user.id, result.workspace.id, {});
+    let verificationToken = null;
+    if (!result.user.emailVerified) {
+      const verification = await this.store.createEmailVerificationToken({ userId: result.user.id });
+      verificationToken = verification.token;
+      await this.queueEmail({
+        type: "EMAIL_VERIFICATION",
+        recipient: result.user.email,
+        correlationId: requestMeta.correlationId,
+        secret: verification.token,
+        metadata: { tokenHash: verification.record.tokenHash },
+      });
+      await this.audit("EMAIL_VERIFICATION_ISSUED", result.user.id, result.workspace.id, {
+        correlationId: requestMeta.correlationId || null,
+      });
+      return {
+        user: publicUser(result.user),
+        workspace: result.workspace,
+        emailVerificationRequired: true,
+        ...(this.environment === "development" ? { verificationToken } : {}),
+      };
+    }
     const session = await this.store.createSession({
       userId: result.user.id, workspaceId: result.workspace.id, userAgent: requestMeta.userAgent, ip: requestMeta.ip,
     });
@@ -811,11 +1069,27 @@ class AuthService {
   }
 
   async login({ email, password }, requestMeta = {}) {
+    const normalizedEmail = normalizeEmail(email);
+    this.loginGuard.enforce(`email:${normalizedEmail}`);
+    this.loginGuard.enforce(`ip:${requestMeta.ip || "unknown"}`);
     const user = await this.store.getUserByEmail(email);
     if (!user || user.deletedAt || !verifyPassword(password, user.passwordHash)) {
-      await this.audit("LOGIN_FAILED", "anonymous", null, { reason: "invalid_credentials" });
+      this.loginGuard.failure(`email:${normalizedEmail}`);
+      this.loginGuard.failure(`ip:${requestMeta.ip || "unknown"}`);
+      await this.audit("LOGIN_FAILED", "anonymous", null, {
+        reason: "invalid_credentials",
+        correlationId: requestMeta.correlationId || null,
+      });
       throw Object.assign(new Error("INVALID_CREDENTIALS"), { code: "INVALID_CREDENTIALS" });
     }
+    if (!user.emailVerified) {
+      await this.audit("LOGIN_BLOCKED_EMAIL_UNVERIFIED", user.id, null, {
+        correlationId: requestMeta.correlationId || null,
+      });
+      throw Object.assign(new Error("EMAIL_VERIFICATION_REQUIRED"), { code: "EMAIL_VERIFICATION_REQUIRED" });
+    }
+    this.loginGuard.success(`email:${normalizedEmail}`);
+    this.loginGuard.success(`ip:${requestMeta.ip || "unknown"}`);
     const workspaces = await this.store.listWorkspaces(user.id);
     const workspaceId = workspaces[0]?.id || null;
     const mfaVerified = user.platformRole !== ROLES.SUPERADMIN || !user.mfaEnabled;
@@ -827,6 +1101,22 @@ class AuthService {
       return { user: publicUser(user), session, mfaRequired: true, setCookie: this.cookie(session.id) };
     }
     await this.audit("LOGIN_SUCCEEDED", user.id, workspaceId, { method: "password" });
+    const knownSession = (await this.store.listSessions(user.id)).some(
+      (candidate) => candidate.id !== session.id
+        && candidate.userAgent === session.userAgent
+        && candidate.ip === session.ip,
+    );
+    if (!knownSession) {
+      await this.queueEmail({
+        type: "NEW_LOGIN",
+        recipient: user.email,
+        correlationId: requestMeta.correlationId,
+        metadata: { userId: user.id, ip: session.ip, userAgent: session.userAgent },
+      });
+      await this.audit("NEW_LOGIN_NOTIFICATION_QUEUED", user.id, workspaceId, {
+        correlationId: requestMeta.correlationId || null,
+      });
+    }
     return { user: publicUser(user), session, setCookie: this.cookie(session.id) };
   }
 
@@ -879,6 +1169,13 @@ class AuthService {
       throw Object.assign(new Error("INVALID_INVITE"), { code: "INVALID_INVITE" });
     }
     const result = await this.store.createInvite({ workspaceId: input.workspaceId, email, role, invitedBy: context.user.id });
+    await this.queueEmail({
+      type: "WORKSPACE_INVITE",
+      recipient: email,
+      correlationId: context.requestId,
+      secret: result.token,
+      metadata: { workspaceId: input.workspaceId, role, inviteId: result.invite.id, tokenHash: result.invite.tokenHash },
+    });
     await this.audit("INVITE_CREATED", context.user.id, input.workspaceId, { email, role });
     return { id: result.invite.id, email, role, expiresAt: result.invite.expiresAt, inviteToken: result.token };
   }
@@ -917,14 +1214,32 @@ class AuthService {
     return result;
   }
 
-  async requestRecovery(email) {
+  async requestRecovery(email, requestMeta = {}) {
+    const normalizedEmail = normalizeEmail(email);
+    this.recoveryGuard.enforce(`email:${normalizedEmail}`);
+    this.recoveryGuard.enforce(`ip:${requestMeta.ip || "unknown"}`);
     const user = await this.store.getUserByEmail(email);
     if (!user || user.deletedAt) {
-      await this.audit("RECOVERY_REQUESTED", "anonymous", null, { result: "accepted" });
+      this.recoveryGuard.failure(`email:${normalizedEmail}`);
+      this.recoveryGuard.failure(`ip:${requestMeta.ip || "unknown"}`);
+      await this.audit("RECOVERY_REQUESTED", "anonymous", null, {
+        result: "accepted", correlationId: requestMeta.correlationId || null,
+      });
       return { accepted: true };
     }
+    this.recoveryGuard.success(`email:${normalizedEmail}`);
+    this.recoveryGuard.success(`ip:${requestMeta.ip || "unknown"}`);
     const result = await this.store.createRecoveryToken({ userId: user.id });
-    await this.audit("RECOVERY_REQUESTED", user.id, null, { result: "accepted" });
+    await this.queueEmail({
+      type: "ACCOUNT_RECOVERY",
+      recipient: user.email,
+      correlationId: requestMeta.correlationId,
+      secret: result.token,
+      metadata: { tokenHash: result.record.tokenHash },
+    });
+    await this.audit("RECOVERY_REQUESTED", user.id, null, {
+      result: "accepted", correlationId: requestMeta.correlationId || null,
+    });
     return {
       accepted: true,
       ...(this.environment === "development" ? { recoveryToken: result.token } : {}),
@@ -938,6 +1253,19 @@ class AuthService {
     const user = await this.store.consumeRecoveryToken({ tokenHash: digest(token), password });
     await this.audit("ACCOUNT_RECOVERED", user.id, null, {});
     return { accepted: true };
+  }
+
+  async verifyEmail(token, requestMeta = {}) {
+    const user = await this.store.consumeEmailVerificationToken({ tokenHash: digest(token) });
+    await this.audit("EMAIL_VERIFIED", user.id, null, { correlationId: requestMeta.correlationId || null });
+    const workspaces = await this.store.listWorkspaces(user.id);
+    const session = await this.store.createSession({
+      userId: user.id,
+      workspaceId: workspaces[0]?.id || null,
+      userAgent: requestMeta.userAgent,
+      ip: requestMeta.ip,
+    });
+    return { user: publicUser(user), session, setCookie: this.cookie(session.id) };
   }
 
   encryptSecret(secret) {
@@ -978,22 +1306,45 @@ class AuthService {
       throw Object.assign(new Error("INVALID_MFA_CODE"), { code: "INVALID_MFA_CODE" });
     }
     await this.store.setMfa(context.user.id, user.mfaSecret, true);
+    const recoveryCodes = Array.from({ length: RECOVERY_CODE_COUNT }, () => crypto.randomBytes(5).toString("hex").toUpperCase());
+    await this.store.createRecoveryCodes({
+      userId: context.user.id,
+      hashes: recoveryCodes.map((value) => digest(value)),
+    });
     await this.audit("MFA_ENABLED", context.user.id, null, {});
-    return { enabled: true };
+    await this.audit("MFA_RECOVERY_CODES_ISSUED", context.user.id, null, { count: recoveryCodes.length });
+    return { enabled: true, recoveryCodes };
   }
 
   async verifyPendingMfa(context, code) {
     if (context.kind !== "mfa_pending" || !context.sessionId || !context.user) {
       throw Object.assign(new Error("MFA_SESSION_REQUIRED"), { code: "MFA_SESSION_REQUIRED" });
     }
+    this.mfaGuard.enforce(`session:${context.sessionId}`);
     const user = await this.store.getUser(context.user.id);
-    if (user.platformRole !== ROLES.SUPERADMIN || !user.mfaSecret || !verifyTotp(this.decryptSecret(user.mfaSecret), code, this.clock().getTime())) {
+    const validTotp = user.platformRole === ROLES.SUPERADMIN && user.mfaSecret
+      && verifyTotp(this.decryptSecret(user.mfaSecret), code, this.clock().getTime());
+    const validRecovery = !validTotp && await this.store.consumeRecoveryCode({
+      userId: user.id,
+      codeHash: digest(String(code || "").trim().toUpperCase()),
+    });
+    if (!validTotp && !validRecovery) {
+      this.mfaGuard.failure(`session:${context.sessionId}`);
       await this.audit("MFA_FAILED", user.id, null, {});
-      throw Object.assign(new Error("INVALID_MFA_CODE"), { code: "INVALID_MFA_CODE" });
+      const failure = Object.assign(new Error("INVALID_MFA_CODE"), { code: "INVALID_MFA_CODE" });
+      throw failure;
     }
+    this.mfaGuard.success(`session:${context.sessionId}`);
     await this.store.confirmMfa(context.sessionId);
     await this.audit("LOGIN_SUCCEEDED", user.id, null, { method: "password+mfa" });
     return { user: publicUser(user), setCookie: this.cookie(context.sessionId) };
+  }
+
+  async queueEmail(job) {
+    if (typeof this.store.enqueueEmail !== "function") return null;
+    const metadata = { ...(job.metadata || {}) };
+    if (job.secret) metadata.tokenCiphertext = this.encryptSecret(job.secret);
+    return this.store.enqueueEmail({ ...job, metadata });
   }
 
   async audit(action, actorId, workspaceId, metadata) {

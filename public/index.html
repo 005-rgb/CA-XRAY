@@ -88,6 +88,11 @@
               <div class="inline-form"><input id="mfa-code" inputmode="numeric" maxlength="6" required /><button class="secondary-button" type="submit">Verify</button></div>
               <p id="mfa-status" class="field-error" role="alert"></p>
             </form>
+            <form id="email-verification-form" class="recovery-form" hidden>
+              <label for="email-verification-token">Email verification token</label>
+              <div class="inline-form"><input id="email-verification-token" autocomplete="one-time-code" required /><button class="secondary-button" type="submit">Verify email</button></div>
+              <p id="email-verification-status" class="field-error" role="alert"></p>
+            </form>
           </section>
           <section id="workspace-bar" class="workspace-bar" hidden>
             <span class="data-label">ACTIVE WORKSPACE</span>
