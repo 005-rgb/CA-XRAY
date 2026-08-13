@@ -345,6 +345,12 @@ class MemoryPersistence {
     return resolveEffectiveEntitlements({ plan, grants, now: this.clock() });
   }
 
+  async loadIntelligenceState() {
+    return null;
+  }
+
+  async saveIntelligenceState() {}
+
   async setEntitlement({ workspaceId, capability, status = "active", source = "manual", effectiveAt = this.clock(), expiresAt = null, reason = "" }) {
     const id = `${workspaceId}:${capability}`;
     const record = {
@@ -699,6 +705,23 @@ class PostgresPersistence {
       })),
       now: this.clock(),
     });
+  }
+
+  async loadIntelligenceState() {
+    const result = await this.pool.query(
+      "SELECT state_json FROM intelligence_state WHERE id = 'global'",
+    );
+    return result.rows[0]?.state_json || null;
+  }
+
+  async saveIntelligenceState(state) {
+    await this.pool.query(
+      `INSERT INTO intelligence_state (id, state_json, updated_at)
+       VALUES ('global', $1::jsonb, NOW())
+       ON CONFLICT (id) DO UPDATE
+       SET state_json = EXCLUDED.state_json, updated_at = EXCLUDED.updated_at`,
+      [JSON.stringify(state)],
+    );
   }
 
   async setEntitlement({ workspaceId, capability, status = "active", source = "manual", effectiveAt = this.clock(), expiresAt = null, reason = "" }) {

@@ -526,6 +526,33 @@ body { background: var(--dashboard-bg); color: #17191c; }
 .dashboard-deep .report-section { box-shadow: none; }
 .dashboard-deep[hidden] { display: none; }
 .loading-page { min-height: calc(100vh - 62px); background: var(--dashboard-bg); }
+.intelligence-dashboard { margin-top: 18px; }
+.intelligence-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 25px 0 12px; }
+.intelligence-heading h2 { margin: 5px 0; font-size: 16px; letter-spacing: -.03em; }
+.intelligence-heading p { margin: 0; color: #7c8287; font-size: 10px; }
+.intelligence-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.intelligence-card { min-width: 0; padding: 16px; border: 1px solid var(--dashboard-border); border-radius: 5px; background: #fff; }
+.intelligence-card h3 { margin: 4px 0 0; font-size: 13px; letter-spacing: -.02em; }
+.intelligence-card .card-heading { margin-bottom: 14px; }
+.intelligence-list { border-top: 1px solid #f0f1f2; }
+.intelligence-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; padding: 12px 0; border-bottom: 1px solid #f0f1f2; }
+.intelligence-row > div:first-child { min-width: 0; }
+.intelligence-row strong { display: block; overflow: hidden; color: #4d5358; font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.intelligence-row span { display: block; margin-top: 4px; color: #858b90; font-size: 8px; }
+.intelligence-row-value, .intelligence-row-action { flex: 0 0 auto; text-align: right; }
+.intelligence-row-value b { display: block; font-size: 13px; }
+.intelligence-row-value b.risk-high { color: var(--dashboard-red); }
+.intelligence-row-value b.risk-medium { color: var(--dashboard-orange); }
+.intelligence-row-value b.risk-low { color: var(--dashboard-green); }
+.intelligence-row-action { display: flex; align-items: center; gap: 8px; }
+.intelligence-row-action .text-button { padding: 0; font-size: 8px; }
+.watch-status { display: inline-block !important; padding: 3px 6px; border-radius: 3px; color: #3e9562 !important; background: #e9f6ee; font-size: 7px !important; font-weight: 700; text-transform: uppercase; }
+.watch-status.paused, .watch-status.acknowledged { color: #8a9094 !important; background: #f1f2f3; }
+.danger-text { color: #b04b43 !important; }
+.watchlist-form { display: grid; grid-template-columns: 100px minmax(0, 1fr) 104px auto; gap: 8px; align-items: start; margin-bottom: 12px; }
+.watchlist-form .primary-button { height: 34px; align-self: 22px; margin-top: 22px; padding: 0 10px; border-radius: 4px; font-size: 8px; }
+.alert-card { margin-top: 14px; }
+.alert-card .unknown-message { border: 0; }
 
 @media (max-width: 1024px) {
   .dashboard-page { padding: 24px 22px 45px; }
@@ -533,6 +560,8 @@ body { background: var(--dashboard-bg); color: #17191c; }
   .report-contract-row > div:nth-child(4) { grid-column: 1 / 2; }
   .dashboard-report-grid, .dashboard-lower-grid { grid-template-columns: minmax(0, 1fr) 200px; }
   .overview-card { grid-template-columns: 190px minmax(0, 1fr); }
+  .watchlist-form { grid-template-columns: 1fr 1.5fr 1fr; }
+  .watchlist-form .primary-button { grid-column: 1 / -1; margin-top: 0; }
 }
 
 @media (max-width: 760px) {
@@ -558,6 +587,14 @@ body { background: var(--dashboard-bg); color: #17191c; }
   .overview-risk { border-right: 0; border-bottom: 1px solid var(--dashboard-border); }
   .report-side-column { grid-template-columns: 1fr 1fr; }
   .lower-side { grid-template-columns: 1fr; }
+  .intelligence-grid { grid-template-columns: 1fr; }
+  .intelligence-heading { align-items: flex-start; flex-direction: column; }
+  .watchlist-form { grid-template-columns: 1fr; }
+  .watchlist-form .primary-button { grid-column: auto; }
+  .watchlist-form .primary-button { margin-top: 0; }
+  .intelligence-row { align-items: flex-start; flex-direction: column; }
+  .intelligence-row-value, .intelligence-row-action { text-align: left; }
+  .intelligence-row-action { flex-wrap: wrap; }
 }
 
 @media (max-width: 430px) {

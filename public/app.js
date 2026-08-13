@@ -36,6 +36,15 @@ const scanHistoryList = document.querySelector("#scan-history-list");
 const historyStatus = document.querySelector("#history-status");
 const historyLoadMore = document.querySelector("#history-load-more");
 const cancelScanButton = document.querySelector("#cancel-scan");
+const intelligenceDashboard = document.querySelector("#intelligence-dashboard");
+const passportList = document.querySelector("#passport-list");
+const passportCount = document.querySelector("#passport-count");
+const watchlistList = document.querySelector("#watchlist-list");
+const watchlistCount = document.querySelector("#watchlist-count");
+const alertList = document.querySelector("#alert-list");
+const alertCount = document.querySelector("#alert-count");
+const watchlistForm = document.querySelector("#watchlist-form");
+const watchlistStatus = document.querySelector("#watchlist-status");
 let authState = null;
 let currentScan = null;
 let currentJob = null;
@@ -377,7 +386,10 @@ function showLanding({ privateView = false } = {}) {
   document.querySelector("#new-scan").classList.toggle("public-scan-workbench", !privateView);
   document.querySelector("#new-scan").classList.remove("report-route");
   scanHistory.hidden = !privateView;
-  if (privateView) loadScanHistory();
+  if (privateView) {
+    loadScanHistory();
+    loadIntelligenceDashboard();
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -468,6 +480,107 @@ async function loadScanHistory({ reset = true } = {}) {
     if (reset) scanHistoryList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
   }
 }
+
+function renderPassportList(passports) {
+  passportCount.textContent = `${passports.length} PASSPORT${passports.length === 1 ? "" : "S"}`;
+  passportList.innerHTML = passports.length ? passports.map((passport) => {
+    const current = passport.current || {};
+    const score = current.risk?.score;
+    return `<div class="intelligence-row">
+      <div><strong>${escapeHtml(truncateAddress(passport.address))}</strong><span>${escapeHtml(passport.networkId)} · ${escapeHtml(formatDate(current.capturedAt))}</span></div>
+      <div class="intelligence-row-value"><b class="${scoreTone(score)}">${escapeHtml(score ?? "UNKNOWN")}</b><span>${escapeHtml(current.risk?.level || "UNKNOWN")} · ${passport.snapshotCount} snapshot${passport.snapshotCount === 1 ? "" : "s"}</span></div>
+    </div>`;
+  }).join("") : `<div class="unknown-message">NO RISK PASSPORTS YET. A completed live scan will create one.</div>`;
+}
+
+function renderWatchlistList(watchlists) {
+  const active = watchlists.filter((item) => item.status === "active").length;
+  watchlistCount.textContent = `${active} ACTIVE`;
+  watchlistList.innerHTML = watchlists.length ? watchlists.map((item) => `
+    <div class="intelligence-row">
+      <div><strong>${escapeHtml(item.label || truncateAddress(item.address))}</strong><span>${escapeHtml(item.networkId)} · every ${escapeHtml(item.intervalHours)}h</span></div>
+      <div class="intelligence-row-action"><span class="watch-status ${statusClass(item.status)}">${escapeHtml(item.status)}</span><span>Next ${escapeHtml(formatDate(item.nextCheckAt))}</span>
+        <button type="button" class="text-button" data-watch-toggle="${escapeHtml(item.id)}" data-watch-next="${item.status === "active" ? "paused" : "active"}">${item.status === "active" ? "Pause" : "Resume"}</button>
+        <button type="button" class="text-button danger-text" data-watch-delete="${escapeHtml(item.id)}">Remove</button>
+      </div>
+    </div>`).join("") : `<div class="unknown-message">WATCHTOWER IS EMPTY. Add a contract to begin scheduled checks.</div>`;
+  watchlistList.querySelectorAll("[data-watch-toggle]").forEach((button) => button.addEventListener("click", async () => {
+    await apiJson(`/api/watchlists/${encodeURIComponent(button.dataset.watchToggle)}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: button.dataset.watchNext }),
+    });
+    await loadIntelligenceDashboard();
+  }));
+  watchlistList.querySelectorAll("[data-watch-delete]").forEach((button) => button.addEventListener("click", async () => {
+    await apiJson(`/api/watchlists/${encodeURIComponent(button.dataset.watchDelete)}`, { method: "DELETE" });
+    await loadIntelligenceDashboard();
+  }));
+}
+
+function renderAlertList(events) {
+  const open = events.filter((event) => event.status !== "ACKNOWLEDGED").length;
+  alertCount.textContent = `${open} OPEN`;
+  alertList.innerHTML = events.length ? events.map((event) => `
+    <div class="intelligence-row">
+      <div><strong>${escapeHtml(event.message)}</strong><span>${escapeHtml(event.networkId)} · ${escapeHtml(formatDate(event.createdAt))}</span></div>
+      <div class="intelligence-row-action"><span class="watch-status ${statusClass(event.status)}">${escapeHtml(event.status)}</span>
+        ${event.status !== "ACKNOWLEDGED" ? `<button type="button" class="text-button" data-alert-ack="${escapeHtml(event.id)}">Acknowledge</button>` : `<span>${escapeHtml(formatDate(event.acknowledgedAt))}</span>`}
+      </div>
+    </div>`).join("") : `<div class="unknown-message">NO ALERTS. Watchtower changes will appear here for review.</div>`;
+  alertList.querySelectorAll("[data-alert-ack]").forEach((button) => button.addEventListener("click", async () => {
+    await apiJson(`/api/alerts/${encodeURIComponent(button.dataset.alertAck)}/acknowledge`, { method: "POST" });
+    await loadIntelligenceDashboard();
+  }));
+}
+
+async function loadIntelligenceDashboard() {
+  if (!authState?.authenticated || !intelligenceDashboard) return;
+  intelligenceDashboard.hidden = false;
+  try {
+    const [passports, watchlists, alerts] = await Promise.all([
+      apiJson("/api/risk-passports"),
+      apiJson("/api/watchlists"),
+      apiJson("/api/alerts"),
+    ]);
+    renderPassportList(passports.passports || []);
+    renderWatchlistList(watchlists.watchlists || []);
+    renderAlertList(alerts.events || []);
+  } catch (error) {
+    passportList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+watchlistForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  watchlistStatus.textContent = "";
+  try {
+    await apiJson("/api/watchlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        network: document.querySelector("#watch-network").value,
+        address: document.querySelector("#watch-address").value.trim(),
+        intervalHours: Number(document.querySelector("#watch-interval").value),
+      }),
+    });
+    document.querySelector("#watch-address").value = "";
+    await loadIntelligenceDashboard();
+  } catch (error) {
+    watchlistStatus.textContent = error.message;
+  }
+});
+
+document.querySelector("#watchtower-tick")?.addEventListener("click", async (event) => {
+  event.currentTarget.disabled = true;
+  try {
+    await apiJson("/api/watchtower/tick", { method: "POST" });
+    await loadIntelligenceDashboard();
+  } catch (error) {
+    watchlistStatus.textContent = error.message;
+  } finally {
+    event.currentTarget.disabled = false;
+  }
+});
 
 async function scanLive() {
   if (!validateForm()) return;

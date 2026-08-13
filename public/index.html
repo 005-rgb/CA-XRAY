@@ -19,8 +19,8 @@
           <a class="nav-item active" href="/dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
           <a class="nav-item" href="/dashboard#new-scan"><span class="nav-icon">⌁</span><span>New Scan</span></a>
           <a class="nav-item" href="/dashboard#history"><span class="nav-icon">◷</span><span>Scan History</span></a>
-          <a class="nav-item" href="#risk-passport"><span class="nav-icon">♢</span><span>Risk Passport</span><span class="soon">Soon</span></a>
-          <a class="nav-item" href="#watchtower"><span class="nav-icon">◉</span><span>Watchtower</span><span class="soon">Soon</span></a>
+          <a class="nav-item" href="/dashboard#risk-passport"><span class="nav-icon">♢</span><span>Risk Passport</span></a>
+          <a class="nav-item" href="/dashboard#watchtower"><span class="nav-icon">◉</span><span>Watchtower</span></a>
           <a class="nav-item" href="#api-access"><span class="nav-icon">⌘</span><span>API Access</span><span class="soon">Soon</span></a>
           <a class="nav-item" href="#settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
         </nav>
@@ -165,6 +165,37 @@
               </div>
               <div id="scan-history-list" class="scan-history-list"></div>
               <button type="button" id="history-load-more" class="view-all history-load-more" hidden>LOAD MORE SCANS</button>
+            </section>
+            <section id="intelligence-dashboard" class="intelligence-dashboard" hidden>
+              <div class="intelligence-heading">
+                <div>
+                  <span class="card-kicker">PHASE 6 / CONTINUOUS INTELLIGENCE</span>
+                  <h2>Risk Passport &amp; Watchtower</h2>
+                  <p>Track evidence-backed change over time. Monitoring never changes the current risk score silently.</p>
+                </div>
+                <button type="button" class="secondary-button" id="watchtower-tick">Run due checks</button>
+              </div>
+              <div class="intelligence-grid">
+                <section class="intelligence-card" id="risk-passport">
+                  <div class="card-heading"><div><span class="card-kicker">RISK PASSPORT</span><h3>Tracked contracts</h3></div><span class="data-label" id="passport-count">0 PASSPORTS</span></div>
+                  <div id="passport-list" class="intelligence-list"><div class="unknown-message">Loading passports…</div></div>
+                </section>
+                <section class="intelligence-card" id="watchtower">
+                  <div class="card-heading"><div><span class="card-kicker">WATCHTOWER</span><h3>Scheduled monitoring</h3></div><span class="data-label" id="watchlist-count">0 ACTIVE</span></div>
+                  <form id="watchlist-form" class="watchlist-form">
+                    <div class="form-field"><label for="watch-network">Network</label><select id="watch-network"><option value="ethereum">Ethereum</option><option value="bsc">BNB Chain</option><option value="base">Base</option><option value="arbitrum">Arbitrum</option><option value="polygon">Polygon</option></select></div>
+                    <div class="form-field"><label for="watch-address">Contract address</label><input id="watch-address" placeholder="0x..." required /></div>
+                    <div class="form-field"><label for="watch-interval">Check every</label><select id="watch-interval"><option value="1">1 hour</option><option value="6">6 hours</option><option value="12">12 hours</option><option value="24" selected>24 hours</option><option value="168">7 days</option></select></div>
+                    <button type="submit" class="primary-button"><span>Add to Watchtower</span><span>→</span></button>
+                    <p id="watchlist-status" class="field-error" role="alert"></p>
+                  </form>
+                  <div id="watchlist-list" class="intelligence-list"></div>
+                </section>
+              </div>
+              <section class="intelligence-card alert-card" id="watchtower-alerts">
+                <div class="card-heading"><div><span class="card-kicker">ALERTS</span><h3>Review queue</h3></div><span class="data-label" id="alert-count">0 OPEN</span></div>
+                <div id="alert-list" class="intelligence-list"><div class="unknown-message">Loading alerts…</div></div>
+              </section>
             </section>
             <div id="dashboard-report" hidden></div>
           </section>

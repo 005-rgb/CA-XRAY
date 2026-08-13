@@ -58,15 +58,20 @@ const controlPlane = new PlatformControlPlane({
   audit: (entry) => authService.audit(entry.action, entry.actorId, entry.workspaceId, entry.metadata),
 });
 const providerRegistry = createDefaultProviderRegistry();
-const intelligenceStore = new IntelligenceStore();
+const intelligenceStore = new IntelligenceStore({ persistence });
+const intelligenceReady = persistenceReady.then(() => intelligenceStore.init());
 const scanQueue = createScanJobQueue({
   processor: scanLive,
   runtimeConfig,
   maxAttempts: runtimeConfig.queue.maxAttempts,
   timeoutMs: runtimeConfig.queue.timeoutMs,
   onStatusChange: (job) => {
-    if (job.status === "RUNNING") return persistence.markJobRunning(job);
+    if (job.status === "RUNNING") {
+      intelligenceStore.recordMonitoringJobStatus(job.id, "RUNNING");
+      return persistence.markJobRunning(job);
+    }
     if (job.status === "SUCCEEDED") {
+      intelligenceStore.recordMonitoringJobStatus(job.id, "SUCCEEDED");
       return Promise.resolve(persistence.markJobSucceeded(job)).then(() => {
         if (job.scan?.mode === "LIVE" && job.workspaceId) {
           intelligenceStore.recordSnapshot({
@@ -78,11 +83,27 @@ const scanQueue = createScanJobQueue({
         }
       });
     }
-    if (job.status === "FAILED") return persistence.markJobFailed(job);
+    if (job.status === "FAILED") {
+      intelligenceStore.recordMonitoringJobStatus(job.id, "FAILED", job.error);
+      return persistence.markJobFailed(job);
+    }
     if (job.status === "CANCELLED") return persistence.markJobCancelled(job);
     return undefined;
   },
 });
+
+function runWatchtowerTick() {
+  try {
+    intelligenceStore.runMonitoringTick({
+      enqueue: (payload) => scanQueue.enqueue(payload),
+    });
+  } catch (error) {
+    console.error(`Watchtower tick failed: ${error.message}`);
+  }
+}
+
+const watchtowerTimer = setInterval(runWatchtowerTick, 60_000);
+watchtowerTimer.unref?.();
 const requestRateLimiter = new KeyedRateLimiter();
 const visitorSigningKey = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 
@@ -758,6 +779,18 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "POST" && ["/api/watchlists/tick", "/api/watchtower/tick"].includes(url.pathname)) {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, {
+      tick: intelligenceStore.runMonitoringTick({
+        limit: 25,
+        workspaceId: authenticated.workspaceId,
+        enqueue: (payload) => scanQueue.enqueue(payload),
+      }),
+    }, { context });
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/watchlists") {
     const authenticated = requireAuthenticated(context);
     const body = await readBody(req);
@@ -828,6 +861,22 @@ async function handleApiUnsafe(req, res, url, context) {
       return true;
     }
     sendJson(res, 200, { rule }, { context });
+    return true;
+  }
+
+  const alertAcknowledgeMatch = url.pathname.match(/^\/api\/alerts\/([^/]+)\/acknowledge$/);
+  if (req.method === "POST" && alertAcknowledgeMatch) {
+    const authenticated = requireAuthenticated(context);
+    const event = intelligenceStore.acknowledgeAlert(
+      authenticated.workspaceId,
+      alertAcknowledgeMatch[1],
+      authenticated.actor.id,
+    );
+    if (!event) {
+      sendJson(res, 404, { error: "ALERT_NOT_FOUND", message: "Alert not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { alert: event }, { context });
     return true;
   }
 
@@ -1316,6 +1365,7 @@ async function handleApi(req, res, url, context) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   await persistenceReady;
+  await intelligenceReady;
   const context = await requestContext(req);
   if (req.method === "GET" && url.pathname === "/healthz") {
     sendJson(res, 200, { status: "ok" }, { context });

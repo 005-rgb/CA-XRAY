@@ -142,8 +142,11 @@ function invalid(code, message) {
 }
 
 class IntelligenceStore {
-  constructor({ clock = () => new Date() } = {}) {
+  constructor({ clock = () => new Date(), persistence = null } = {}) {
     this.clock = clock;
+    this.persistence = persistence;
+    this.persistChain = Promise.resolve();
+    this.inFlightWatchChecks = new Set();
     this.passports = new Map();
     this.watchlists = new Map();
     this.alertRules = new Map();
@@ -151,6 +154,35 @@ class IntelligenceStore {
     this.reports = new Map();
     this.comments = new Map();
     this.approvals = new Map();
+  }
+
+  async init() {
+    if (!this.persistence?.loadIntelligenceState) return;
+    const state = await this.persistence.loadIntelligenceState();
+    if (!state) return;
+    for (const [key, value] of state.passports || []) this.passports.set(key, value);
+    for (const [key, value] of state.watchlists || []) this.watchlists.set(key, value);
+    for (const [key, value] of state.alertRules || []) this.alertRules.set(key, value);
+    for (const [key, value] of state.alertEvents || []) this.alertEvents.set(key, value);
+    for (const [key, value] of state.reports || []) this.reports.set(key, value);
+    for (const [key, value] of state.comments || []) this.comments.set(key, value);
+    for (const [key, value] of state.approvals || []) this.approvals.set(key, value);
+  }
+
+  #persist() {
+    if (!this.persistence?.saveIntelligenceState) return;
+    const state = {
+      passports: [...this.passports.entries()],
+      watchlists: [...this.watchlists.entries()],
+      alertRules: [...this.alertRules.entries()],
+      alertEvents: [...this.alertEvents.entries()],
+      reports: [...this.reports.entries()],
+      comments: [...this.comments.entries()],
+      approvals: [...this.approvals.entries()],
+    };
+    this.persistChain = this.persistChain
+      .then(() => this.persistence.saveIntelligenceState(state))
+      .catch((error) => console.error(`Intelligence persistence update failed: ${error.message}`));
   }
 
   #key(workspaceId, networkId, address) {
@@ -180,6 +212,7 @@ class IntelligenceStore {
     if (previous?.evidenceHash === snapshot.evidenceHash) {
       passport.updatedAt = capturedAt;
       this.passports.set(key, passport);
+      this.#persist();
       return { duplicate: true, passport: clone(passport), snapshot: clone(previous), timeline: null, alerts: [] };
     }
     const changes = changedFields(previous, snapshot);
@@ -204,8 +237,10 @@ class IntelligenceStore {
       : null;
     if (timeline) {
       const alerts = this.#evaluateAlerts({ workspaceId, passport, previous, snapshot, timeline });
+      this.#persist();
       return { duplicate: false, passport: clone(passport), snapshot: clone(snapshot), timeline: clone(timeline), alerts: clone(alerts) };
     }
+    this.#persist();
     return { duplicate: false, passport: clone(passport), snapshot: clone(snapshot), timeline: null, alerts: [] };
   }
 
@@ -228,9 +263,17 @@ class IntelligenceStore {
     const events = [];
     for (const rule of rules) {
       const riskDelta = Number(snapshot.risk.score) - Number(previous.risk.score);
+      const changeField = {
+        owner_change: "owner",
+        privilege_change: "privilegedWallets",
+        proxy_change: "proxy",
+        tax_change: "sellTax",
+        liquidity_change: "liquidityUsd",
+        holder_concentration_change: "holderConcentration",
+      }[rule.type];
       const triggered = rule.type === "risk_increase"
         ? Number.isFinite(riskDelta) && riskDelta >= rule.threshold
-        : timeline.changes.some((change) => change.field === rule.type.replace("_change", "")
+        : timeline.changes.some((change) => change.field === changeField
           || (rule.type === "provider_disagreement" && change.field === "providerConsensus"));
       if (!triggered) continue;
       const dedupeKey = `${rule.id}:${snapshot.evidenceHash}`;
@@ -336,10 +379,11 @@ class IntelligenceStore {
       intervalHours,
       status: "active",
       lastCheckedAt: null,
-      nextCheckAt: null,
+      nextCheckAt: this.clock().toISOString(),
       createdAt: this.clock().toISOString(),
     };
     this.watchlists.set(key, item);
+    this.#persist();
     return clone(item);
   }
 
@@ -358,13 +402,73 @@ class IntelligenceStore {
     if (patch.status !== undefined) {
       if (!["active", "paused"].includes(patch.status)) invalid("INVALID_WATCHLIST_STATUS", "Watchlist status is invalid.");
       item.status = patch.status;
+      if (item.status === "active" && !item.nextCheckAt) item.nextCheckAt = this.clock().toISOString();
     }
+    if (patch.intervalHours !== undefined && item.status === "active") {
+      item.nextCheckAt = new Date(this.clock().getTime() + item.intervalHours * 3600000).toISOString();
+    }
+    item.updatedAt = this.clock().toISOString();
+    this.#persist();
     return clone(item);
   }
 
   deleteWatchlist(workspaceId, watchId) {
     const entry = [...this.watchlists.entries()].find(([, item]) => item.id === watchId && item.workspaceId === workspaceId);
-    return entry ? this.watchlists.delete(entry[0]) : false;
+    const deleted = entry ? this.watchlists.delete(entry[0]) : false;
+    if (deleted) this.#persist();
+    return deleted;
+  }
+
+  runMonitoringTick({ now = this.clock(), limit = 25, workspaceId = null, enqueue } = {}) {
+    if (typeof enqueue !== "function") invalid("MONITOR_ENQUEUE_REQUIRED", "A monitoring enqueue callback is required.");
+    const nowDate = new Date(now);
+    const due = [...this.watchlists.values()]
+      .filter((item) => (!workspaceId || item.workspaceId === workspaceId)
+        && item.status === "active"
+        && item.nextCheckAt
+        && new Date(item.nextCheckAt).getTime() <= nowDate.getTime())
+      .sort((a, b) => String(a.nextCheckAt).localeCompare(String(b.nextCheckAt)))
+      .slice(0, Math.max(1, Number(limit) || 25));
+    const results = [];
+    for (const item of due) {
+      const tickKey = `${item.id}:${item.nextCheckAt}`;
+      if (this.inFlightWatchChecks.has(tickKey)) continue;
+      this.inFlightWatchChecks.add(tickKey);
+      item.lastCheckAt = nowDate.toISOString();
+      item.nextCheckAt = new Date(nowDate.getTime() + item.intervalHours * 3600000).toISOString();
+      item.lastRunKey = tickKey;
+      try {
+        const job = enqueue({
+          workspaceId: item.workspaceId,
+          actorId: item.actorId,
+          networkId: item.networkId,
+          address: item.address,
+          watchlistId: item.id,
+          monitorTickKey: tickKey,
+        });
+        item.lastJobId = job?.id || job?.jobId || null;
+        item.lastRunStatus = "QUEUED";
+        results.push({ watchlistId: item.id, tickKey, job: clone(job) });
+      } catch (error) {
+        item.lastRunStatus = "FAILED";
+        item.lastRunError = error.code || error.message;
+        results.push({ watchlistId: item.id, tickKey, error: { code: error.code || "MONITOR_ENQUEUE_FAILED", message: error.message } });
+      } finally {
+        this.inFlightWatchChecks.delete(tickKey);
+      }
+    }
+    if (due.length) this.#persist();
+    return { checkedAt: nowDate.toISOString(), processed: results.length, results };
+  }
+
+  recordMonitoringJobStatus(jobId, status, error = null) {
+    const item = [...this.watchlists.values()].find((candidate) => candidate.lastJobId === jobId);
+    if (!item) return null;
+    item.lastRunStatus = status;
+    if (error) item.lastRunError = error.code || error.message || "MONITOR_FAILED";
+    item.lastRunCompletedAt = this.clock().toISOString();
+    this.#persist();
+    return clone(item);
   }
 
   createAlertRule({ workspaceId, actorId, networkId, address, type, threshold = 5, delivery = "in_app" }) {
@@ -386,6 +490,7 @@ class IntelligenceStore {
       createdAt: this.clock().toISOString(),
     };
     this.alertRules.set(rule.id, rule);
+    this.#persist();
     return clone(rule);
   }
 
@@ -406,6 +511,7 @@ class IntelligenceStore {
       if (!["in_app", "webhook", "email"].includes(patch.delivery)) invalid("INVALID_ALERT_DELIVERY", "Alert delivery is not supported.");
       rule.delivery = patch.delivery;
     }
+    this.#persist();
     return clone(rule);
   }
 
@@ -414,6 +520,19 @@ class IntelligenceStore {
       .filter((event) => event.workspaceId === workspaceId && (!status || event.status === status))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map(clone);
+  }
+
+  acknowledgeAlert(workspaceId, alertId, actorId) {
+    const event = [...this.alertEvents.values()].find((candidate) =>
+      candidate.id === alertId && candidate.workspaceId === workspaceId);
+    if (!event) return null;
+    if (event.status !== "ACKNOWLEDGED") {
+      event.status = "ACKNOWLEDGED";
+      event.acknowledgedAt = this.clock().toISOString();
+      event.acknowledgedBy = actorId || null;
+      this.#persist();
+    }
+    return clone(event);
   }
 
   getGraph(workspaceId, networkId, address) {
@@ -493,6 +612,7 @@ class IntelligenceStore {
       status: "VERIFIED",
     };
     this.reports.set(report.id, report);
+    this.#persist();
     return clone(report);
   }
 
@@ -515,6 +635,7 @@ class IntelligenceStore {
     if (!report || report.workspaceId !== workspaceId) return null;
     if (!VISIBILITIES.has(visibility)) invalid("INVALID_REPORT_VISIBILITY", "Report visibility is invalid.");
     report.visibility = visibility;
+    this.#persist();
     return clone(report);
   }
 
@@ -522,6 +643,7 @@ class IntelligenceStore {
     if (!String(body || "").trim() || String(body).length > 2000) invalid("INVALID_COMMENT", "Comment must be between 1 and 2000 characters.");
     const comment = { id: id("comment"), workspaceId, actorId, ...publicContract(networkId, address), findingId: findingId || null, body: String(body).trim(), createdAt: this.clock().toISOString() };
     this.comments.set(comment.id, comment);
+    this.#persist();
     return clone(comment);
   }
 
@@ -538,6 +660,7 @@ class IntelligenceStore {
       if (finding) {
         finding.status = status;
         finding.assigneeId = assigneeId;
+        this.#persist();
         return clone(finding);
       }
     }
