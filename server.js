@@ -60,10 +60,13 @@ const providerRegistry = createDefaultProviderRegistry();
 const scanQueue = createScanJobQueue({
   processor: scanLive,
   runtimeConfig,
+  maxAttempts: runtimeConfig.queue.maxAttempts,
+  timeoutMs: runtimeConfig.queue.timeoutMs,
   onStatusChange: (job) => {
     if (job.status === "RUNNING") return persistence.markJobRunning(job);
     if (job.status === "SUCCEEDED") return persistence.markJobSucceeded(job);
     if (job.status === "FAILED") return persistence.markJobFailed(job);
+    if (job.status === "CANCELLED") return persistence.markJobCancelled(job);
     return undefined;
   },
 });
@@ -186,6 +189,34 @@ function requestMeta(req) {
     ip: req.socket.remoteAddress || "unknown",
     correlationId: correlationId(req),
   };
+}
+
+function csvCell(value) {
+  const normalized = value === null || value === undefined ? "" : String(value);
+  return `"${normalized.replaceAll('"', '""').replaceAll("\r", " ").replaceAll("\n", " ")}"`;
+}
+
+function reportCsv(job) {
+  const scan = job.scan || {};
+  const rows = [
+    ["field", "value"],
+    ["scan_id", scan.scanId || job.id],
+    ["report_version", job.reportVersion || 1],
+    ["report_hash", job.reportHash || ""],
+    ["engine_version", job.engineVersion || scan.engineVersion || ""],
+    ["address", scan.contract?.address || job.address || ""],
+    ["network", scan.network?.id || job.networkId || ""],
+    ["mode", scan.mode || ""],
+    ["data_status", scan.dataStatus || ""],
+    ["risk_score", scan.risk?.finalScore ?? ""],
+    ["risk_level", scan.risk?.level || ""],
+    ["reliability_score", scan.reliability?.score ?? ""],
+    ["timestamp", scan.timestamp || job.completedAt || ""],
+  ];
+  for (const finding of scan.findings || []) {
+    rows.push([`finding:${finding.id || finding.title || "unknown"}`, finding.title || finding.finding || ""]);
+  }
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
 }
 
 function correlationId(req) {
@@ -703,10 +734,22 @@ async function handleApiUnsafe(req, res, url, context) {
   if (req.method === "GET" && url.pathname === "/api/scans") {
     const authenticated = requireAuthenticated(context);
     const requestedLimit = Number(url.searchParams.get("limit") || 50);
-    const scans = await persistence.listScanJobs(authenticated.workspaceId, {
-      limit: Number.isInteger(requestedLimit) ? Math.min(100, Math.max(1, requestedLimit)) : 50,
+    const statusFilter = url.searchParams.get("status");
+    if (statusFilter && !["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"].includes(statusFilter.toUpperCase())) {
+      sendJson(res, 400, { error: "INVALID_SCAN_STATUS", message: "Unknown scan status filter." }, { context });
+      return true;
+    }
+    const page = await persistence.listScanJobsPage(authenticated.workspaceId, {
+      limit: Number.isInteger(requestedLimit) ? requestedLimit : 50,
+      cursor: url.searchParams.get("cursor"),
+      status: statusFilter,
+      networkId: url.searchParams.get("network"),
+      address: url.searchParams.get("address"),
     });
-    sendJson(res, 200, { scans }, { context });
+    sendJson(res, 200, {
+      scans: page.items,
+      pagination: { hasMore: page.hasMore, nextCursor: page.nextCursor },
+    }, { context });
     return true;
   }
 
@@ -756,6 +799,7 @@ async function handleApiUnsafe(req, res, url, context) {
         address,
         networkId,
         engineVersion: "2.0.0",
+        correlationId: context.requestId,
       });
       if (created.duplicate) {
         sendJson(res, 202, created.response, { context });
@@ -768,6 +812,7 @@ async function handleApiUnsafe(req, res, url, context) {
           networkId,
           workspaceId: context.workspaceId,
           actorId: context.actor.id,
+          correlationId: context.requestId,
         });
       } catch (queueError) {
         await persistence.markJobFailed({
@@ -829,7 +874,96 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
-  const jobMatch = url.pathname.match(/^\/api\/scan\/([^/]+)$/);
+  const exportMatch = url.pathname.match(/^\/api\/scan\/([^/]+)\/export$/);
+  if (req.method === "GET" && exportMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({
+      actor: authenticated.actor,
+      workspaceId: authenticated.workspaceId,
+      action: ACTIONS.SCAN_EXPORT,
+    });
+    const plan = PLAN_CATALOG[authenticated.planId];
+    const entitlements = await persistence.listEntitlements(authenticated.workspaceId, plan);
+    requireEntitlement(entitlements, CAPABILITIES.SCAN_EXPORT);
+    const job = await persistence.getScanJob(exportMatch[1], authenticated.workspaceId);
+    if (!job) {
+      sendJson(res, 404, { error: "JOB_NOT_FOUND", message: "Scan job not found." }, { context });
+      return true;
+    }
+    if (job.status !== "SUCCEEDED" || !job.scan) {
+      sendJson(res, 409, { error: "REPORT_NOT_READY", message: "A completed report is required before export." }, { context });
+      return true;
+    }
+    const format = (url.searchParams.get("format") || "json").toLowerCase();
+    if (!["json", "csv"].includes(format)) {
+      sendJson(res, 400, { error: "INVALID_EXPORT_FORMAT", message: "Export format must be json or csv." }, { context });
+      return true;
+    }
+    if (format === "csv") {
+      const body = reportCsv(job);
+      res.writeHead(200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="ca-xray-${job.id}.csv"`,
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+        ...(context.requestId ? { "X-Correlation-Id": context.requestId } : {}),
+      });
+      res.end(body);
+      return true;
+    }
+    sendJson(res, 200, {
+      report: toPublicScan(job.scan),
+      metadata: {
+        jobId: job.id,
+        reportVersion: job.reportVersion || 1,
+        reportHash: job.reportHash,
+        engineVersion: job.engineVersion || job.scan.engineVersion || null,
+        evidenceSchemaVersion: job.evidenceSchemaVersion || job.scan.evidenceSchemaVersion || null,
+        immutable: true,
+      },
+    }, {
+      context,
+      headers: {
+        "Content-Disposition": `attachment; filename="ca-xray-${job.id}.json"`,
+      },
+    });
+    return true;
+  }
+
+  const cancelMatch = url.pathname.match(/^\/api\/scan\/([^/]+)\/cancel$/);
+  if (req.method === "POST" && cancelMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({
+      actor: authenticated.actor,
+      workspaceId: authenticated.workspaceId,
+      action: ACTIONS.SCAN_READ,
+    });
+    const job = await persistence.getScanJob(cancelMatch[1], authenticated.workspaceId);
+    if (!job) {
+      sendJson(res, 404, { error: "JOB_NOT_FOUND", message: "Scan job not found." }, { context });
+      return true;
+    }
+    if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(job.status)) {
+      sendJson(res, 409, { error: "SCAN_NOT_CANCELLABLE", message: "This scan is already in a terminal state.", job }, { context });
+      return true;
+    }
+    const cancelled = scanQueue.cancel(cancelMatch[1]);
+    await persistence.markJobCancelled({
+      id: cancelMatch[1],
+      completedAt: new Date().toISOString(),
+      error: { code: "SCAN_CANCELLED", message: "The scan was cancelled by the workspace user." },
+    });
+    await authService.audit("SCAN_CANCELLED", authenticated.user.id, authenticated.workspaceId, {
+      jobId: cancelMatch[1],
+      correlationId: context.requestId,
+    });
+    sendJson(res, 200, {
+      job: cancelled || await persistence.getScanJob(cancelMatch[1], authenticated.workspaceId),
+    }, { context });
+    return true;
+  }
+
+  const jobMatch = url.pathname.match(/^\/api\/scan\/([^/]+)(?:\/report)?$/);
   if (req.method === "GET" && jobMatch) {
     const authenticated = requireAuthenticated(context);
     const scopedJob = await persistence.getScanJob(jobMatch[1], authenticated.workspaceId);
@@ -908,6 +1042,11 @@ async function handleApi(req, res, url, context) {
       WEBHOOK_SIGNATURE_INVALID: 401,
       WEBHOOK_NOT_FOUND: 404,
       WEBHOOK_REPLAY_IN_PROGRESS: 409,
+      INVALID_SCAN_STATUS: 400,
+      INVALID_EXPORT_FORMAT: 400,
+      REPORT_NOT_READY: 409,
+      SCAN_NOT_CANCELLABLE: 409,
+      ENTITLEMENT_REQUIRED: 403,
     }[error.code] || (error.message === "REQUEST_TOO_LARGE" ? 413 : 500);
     sendJson(res, status, {
       error: error.code || "INTERNAL_ERROR",

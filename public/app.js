@@ -33,8 +33,14 @@ const sidebar = document.querySelector("#sidebar");
 const authEntry = document.querySelector("#auth-entry");
 const scanHistory = document.querySelector("#scan-history");
 const scanHistoryList = document.querySelector("#scan-history-list");
+const historyStatus = document.querySelector("#history-status");
+const historyLoadMore = document.querySelector("#history-load-more");
+const cancelScanButton = document.querySelector("#cancel-scan");
 let authState = null;
 let currentScan = null;
+let currentJob = null;
+let activeScanJobId = null;
+let historyCursor = null;
 const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
 const reportRouteMatch = () => pathName().match(/^\/dashboard\/scans\/([^/]+)$/);
@@ -418,6 +424,7 @@ async function waitForScan(jobId) {
     job = jobBody.job;
     if (job.status === "SUCCEEDED") return job;
     if (job.status === "FAILED") throw new Error(job.error?.message || "The scan failed.");
+    if (job.status === "CANCELLED") throw new Error(job.error?.message || "The scan was cancelled.");
     updateLoading({ stages: job.status === "RUNNING"
       ? ["VALIDATING", "FETCHING DATA", "ANALYZING CONTRACT"]
       : ["VALIDATING", "QUEUED"] });
@@ -425,23 +432,40 @@ async function waitForScan(jobId) {
   throw new Error("The scan timed out while waiting for the worker.");
 }
 
-async function loadScanHistory() {
+async function loadScanHistory({ reset = true } = {}) {
   if (!authState?.authenticated || !scanHistoryList) return;
   try {
-    const body = await apiJson("/api/scans?limit=50");
+    if (reset) {
+      historyCursor = null;
+      scanHistoryList.innerHTML = "";
+    }
+    const params = new URLSearchParams({ limit: "25" });
+    if (historyCursor) params.set("cursor", historyCursor);
+    if (historyStatus?.value) params.set("status", historyStatus.value);
+    const body = await apiJson(`/api/scans?${params.toString()}`);
     const scans = body.scans || [];
-    scanHistoryList.innerHTML = scans.length
+    const rows = scans.length
       ? scans.map((scan) => {
         const status = statusClass(scan.status);
         const label = scan.status === "SUCCEEDED" ? "Open report" : scan.status.replaceAll("_", " ");
         const target = scan.status === "SUCCEEDED"
           ? `<a class="history-link" href="/dashboard/scans/${encodeURIComponent(scan.id)}">${label} →</a>`
+          : ["QUEUED", "RUNNING"].includes(scan.status)
+            ? `<button type="button" class="history-cancel" data-cancel-job="${escapeHtml(scan.id)}">Cancel</button>`
           : `<span class="history-state ${status}">${escapeHtml(label)}</span>`;
-        return `<div class="history-row"><div><strong>${escapeHtml(scan.id)}</strong><span>${escapeHtml(formatDate(scan.createdAt))}</span></div>${target}</div>`;
+        const address = scan.address ? truncateAddress(scan.address) : "Address unavailable";
+        return `<div class="history-row"><div><strong>${escapeHtml(address)}</strong><span>${escapeHtml(scan.networkId || "Unknown network")} · ${escapeHtml(formatDate(scan.createdAt))}</span></div><div class="history-row-action"><span class="history-state ${status}">${escapeHtml(label)}</span>${target}</div></div>`;
       }).join("")
-      : `<div class="unknown-message">NO SCANS IN THIS WORKSPACE</div>`;
+      : reset ? `<div class="unknown-message">NO SCANS MATCH THIS FILTER</div>` : "";
+    if (reset) scanHistoryList.innerHTML = rows;
+    else scanHistoryList.insertAdjacentHTML("beforeend", rows);
+    historyCursor = body.pagination?.nextCursor || null;
+    if (historyLoadMore) historyLoadMore.hidden = !body.pagination?.hasMore;
+    scanHistoryList.querySelectorAll("[data-cancel-job]").forEach((button) => {
+      button.addEventListener("click", () => cancelScan(button.dataset.cancelJob));
+    });
   } catch (error) {
-    scanHistoryList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
+    if (reset) scanHistoryList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
   }
 }
 
@@ -475,7 +499,9 @@ async function scanLive() {
     }
     if (!response.ok) throw new Error(body.message || "The scan failed.");
     if (!body.job?.id) throw new Error("The scan job could not be created.");
+    activeScanJobId = body.job.id;
     const job = await waitForScan(body.job.id);
+    currentJob = job;
     currentScan = job.scan;
     updateLoading(currentScan);
     window.history.pushState({}, "", `/dashboard/scans/${encodeURIComponent(body.job.id)}`);
@@ -483,6 +509,9 @@ async function scanLive() {
   } catch (error) {
     showLanding({ privateView: true });
     addressError.textContent = error.message;
+  } finally {
+    activeScanJobId = null;
+    if (cancelScanButton) cancelScanButton.disabled = false;
   }
 }
 
@@ -501,6 +530,7 @@ async function loadPrivateRoute() {
   showLoading(["LOADING REPORT"]);
   try {
     const job = await waitForScan(scanId);
+    currentJob = job;
     currentScan = job.scan;
     updateLoading(currentScan);
     renderReport(currentScan);
@@ -522,6 +552,7 @@ async function scanDemo(scenario) {
     const body = await response.json();
     if (!response.ok) throw new Error(body.message || "The demo could not be loaded.");
     currentScan = body.scan;
+    currentJob = null;
     updateLoading(currentScan);
     window.history.pushState({}, "", `/dashboard/scans/demo-${encodeURIComponent(scenario)}`);
     renderReport(currentScan);

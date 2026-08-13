@@ -37,6 +37,58 @@ function scanJobFromRow(row) {
       ? { code: row.error_code, message: row.error_message || "The scan could not be completed." }
       : null,
     scan: row.report_json || null,
+    address: row.address || null,
+    networkId: row.network_id || null,
+    engineVersion: row.engine_version || null,
+    evidenceSchemaVersion: row.evidence_schema_version || null,
+    reportVersion: row.report_version || null,
+    reportHash: row.report_hash || null,
+    attempts: row.attempts ?? 0,
+    maxAttempts: row.max_attempts ?? null,
+    cancellationReason: row.cancellation_reason || null,
+  };
+}
+
+function encodeCursor(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function decodeCursor(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(String(value), "base64url").toString("utf8"));
+    return parsed && typeof parsed.createdAt === "string" && typeof parsed.id === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizePageOptions({ limit = 50, cursor = null, status = null, networkId = null, address = null } = {}) {
+  const normalizedLimit = Number.isInteger(Number(limit)) ? Math.min(100, Math.max(1, Number(limit))) : 50;
+  const allowedStatuses = new Set(["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"]);
+  return {
+    limit: normalizedLimit,
+    cursor: decodeCursor(cursor),
+    status: allowedStatuses.has(String(status || "").toUpperCase()) ? String(status).toUpperCase() : null,
+    networkId: typeof networkId === "string" && networkId.length <= 32 ? networkId : null,
+    address: typeof address === "string" && address.length <= 42 ? address.toLowerCase() : null,
+  };
+}
+
+function cursorAfter(job, cursor) {
+  if (!cursor) return true;
+  const created = String(job.createdAt).localeCompare(String(cursor.createdAt));
+  return created < 0 || (created === 0 && String(job.id).localeCompare(String(cursor.id)) < 0);
+}
+
+function pageResult(items, limit) {
+  const hasMore = items.length > limit;
+  const visible = hasMore ? items.slice(0, limit) : items;
+  const last = visible[visible.length - 1];
+  return {
+    items: visible,
+    nextCursor: hasMore && last ? encodeCursor({ createdAt: last.createdAt, id: last.id }) : null,
+    hasMore,
   };
 }
 
@@ -81,6 +133,7 @@ class MemoryPersistence {
     idempotencyKey,
     address,
     networkId,
+      correlationId = null,
     engineVersion = null,
   }) {
     const idempotencyId = this.#idempotencyId(workspaceId, idempotencyKey);
@@ -122,8 +175,15 @@ class MemoryPersistence {
       actorId,
       address,
       networkId,
+      correlationId,
       engineVersion,
       reportJson: null,
+      reportHash: null,
+      reportVersion: null,
+      evidenceSchemaVersion: null,
+      attempts: 0,
+      maxAttempts: 2,
+      cancellationReason: null,
       expiresAt: new Date(now.getTime() + this.idempotencyTtlMs).toISOString(),
     });
     this.usage.set(usageKey, used + 1);
@@ -156,25 +216,51 @@ class MemoryPersistence {
   async markJobRunning(job) {
     const current = this.jobs.get(job.id);
     if (!current) return;
+    if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(current.status)) return;
     current.status = "RUNNING";
     current.startedAt = job.startedAt;
+    current.attempts = job.attempts || current.attempts + 1;
+    current.maxAttempts = job.maxAttempts || current.maxAttempts;
   }
 
   async markJobSucceeded(job) {
     const current = this.jobs.get(job.id);
     if (!current) return;
+    if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(current.status)) return;
+    const serialized = JSON.stringify(job.scan);
     current.status = "SUCCEEDED";
     current.completedAt = job.completedAt;
     current.scan = clone(job.scan);
     current.reportJson = clone(job.scan);
+    current.reportHash = crypto.createHash("sha256").update(serialized).digest("hex");
+    current.reportVersion = 1;
+    current.engineVersion = job.scan?.engineVersion || current.engineVersion;
+    current.evidenceSchemaVersion = job.scan?.evidenceSchemaVersion || "1.0.0";
+    current.attempts = job.attempts || current.attempts;
+    current.maxAttempts = job.maxAttempts || current.maxAttempts;
   }
 
   async markJobFailed(job) {
     const current = this.jobs.get(job.id);
     if (!current) return;
+    if (["SUCCEEDED", "FAILED", "CANCELLED"].includes(current.status)) return;
     current.status = "FAILED";
     current.completedAt = job.completedAt;
     current.error = clone(job.error);
+    current.attempts = job.attempts || current.attempts;
+    current.maxAttempts = job.maxAttempts || current.maxAttempts;
+  }
+
+  async markJobCancelled(job) {
+    const current = this.jobs.get(job.id);
+    if (!current || current.status === "SUCCEEDED") return;
+    current.status = "CANCELLED";
+    current.completedAt = job.completedAt || this.clock().toISOString();
+    current.error = clone(job.error) || {
+      code: "SCAN_CANCELLED",
+      message: "The scan was cancelled.",
+    };
+    current.cancellationReason = current.error.message;
   }
 
   async getScanJob(jobId, workspaceId) {
@@ -189,14 +275,32 @@ class MemoryPersistence {
       completedAt: job.completedAt,
       error: job.error,
       scan: job.scan,
+      address: job.address,
+      networkId: job.networkId,
+      engineVersion: job.engineVersion,
+      evidenceSchemaVersion: job.evidenceSchemaVersion,
+      reportVersion: job.reportVersion,
+      reportHash: job.reportHash,
+      attempts: job.attempts,
+      maxAttempts: job.maxAttempts,
+      cancellationReason: job.cancellationReason,
     });
   }
 
   async listScanJobs(workspaceId, { limit = 50 } = {}) {
-    return [...this.jobs.values()]
+    const page = await this.listScanJobsPage(workspaceId, { limit });
+    return page.items;
+  }
+
+  async listScanJobsPage(workspaceId, options = {}) {
+    const pageOptions = normalizePageOptions(options);
+    const jobs = [...this.jobs.values()]
       .filter((job) => job.workspaceId === workspaceId)
+      .filter((job) => !pageOptions.status || job.status === pageOptions.status)
+      .filter((job) => !pageOptions.networkId || job.networkId === pageOptions.networkId)
+      .filter((job) => !pageOptions.address || job.address.toLowerCase() === pageOptions.address)
       .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-      .slice(0, Math.max(1, limit))
+      .filter((job) => cursorAfter(job, pageOptions.cursor))
       .map((job) => clone({
         id: job.id,
         type: job.type,
@@ -205,7 +309,17 @@ class MemoryPersistence {
         startedAt: job.startedAt,
         completedAt: job.completedAt,
         error: job.error,
+        address: job.address,
+        networkId: job.networkId,
+        engineVersion: job.engineVersion,
+        evidenceSchemaVersion: job.evidenceSchemaVersion,
+        reportVersion: job.reportVersion,
+        reportHash: job.reportHash,
+        attempts: job.attempts,
+        maxAttempts: job.maxAttempts,
+        cancellationReason: job.cancellationReason,
       }));
+    return pageResult(jobs, pageOptions.limit);
   }
 
   async recordWebhookEvent({ provider, eventId, payload = {}, receivedAt = this.clock() }) {
@@ -362,9 +476,9 @@ class PostgresPersistence {
       };
       await client.query(
         `INSERT INTO scan_jobs
-          (id, workspace_id, actor_id, type, status, address, network_id, engine_version, created_at, retention_status)
-         VALUES ($1, $2, $3, 'contract-scan', 'QUEUED', $4, $5, $6, $7, 'ACTIVE')`,
-        [id, input.workspaceId, input.actorId, input.address.toLowerCase(), input.networkId, input.engineVersion, createdAt],
+         (id, workspace_id, actor_id, type, status, address, network_id, engine_version, correlation_id, created_at, retention_status)
+          VALUES ($1, $2, $3, 'contract-scan', 'QUEUED', $4, $5, $6, $7, $8, 'ACTIVE')`,
+        [id, input.workspaceId, input.actorId, input.address.toLowerCase(), input.networkId, input.engineVersion, input.correlationId || null, createdAt],
       );
       await client.query(
         `UPDATE idempotency_keys
@@ -405,9 +519,12 @@ class PostgresPersistence {
   async markJobRunning(job) {
     await this.pool.query(
       `UPDATE scan_jobs
-          SET status = 'RUNNING', started_at = COALESCE(started_at, $2)
+          SET status = 'RUNNING',
+              started_at = COALESCE(started_at, $2),
+              attempts = GREATEST(attempts, $3),
+              max_attempts = GREATEST(max_attempts, $4)
         WHERE id = $1 AND status = 'QUEUED'`,
-      [job.id, job.startedAt],
+      [job.id, job.startedAt, job.attempts || 1, job.maxAttempts || 1],
     );
   }
 
@@ -418,14 +535,15 @@ class PostgresPersistence {
       const inserted = await client.query(
         `INSERT INTO scans
           (job_id, workspace_id, address, network_id, mode, data_status, report_json, report_hash,
-           engine_version, created_at, completed_at, retention_status)
+           engine_version, report_version, evidence_schema_version, created_at, completed_at, retention_status)
          SELECT id, workspace_id, address, network_id, 'LIVE', $2, $3::jsonb, $4, engine_version,
+                $6, $7,
                 created_at, $5, 'ACTIVE'
            FROM scan_jobs
-          WHERE id = $1
+           WHERE id = $1 AND status IN ('QUEUED', 'RUNNING')
          ON CONFLICT (job_id) DO NOTHING
          RETURNING id`,
-        [job.id, job.scan?.dataStatus || "unknown", JSON.stringify(job.scan), crypto.createHash("sha256").update(JSON.stringify(job.scan)).digest("hex"), job.completedAt],
+        [job.id, job.scan?.dataStatus || "unknown", JSON.stringify(job.scan), crypto.createHash("sha256").update(JSON.stringify(job.scan)).digest("hex"), job.completedAt, 1, job.scan?.evidenceSchemaVersion || "1.0.0"],
       );
       if (inserted.rowCount) {
         const scanId = inserted.rows[0].id;
@@ -448,9 +566,13 @@ class PostgresPersistence {
       }
       await client.query(
         `UPDATE scan_jobs
-            SET status = 'SUCCEEDED', completed_at = $2, report_json = $3::jsonb
-          WHERE id = $1`,
-        [job.id, job.completedAt, JSON.stringify(job.scan)],
+            SET status = 'SUCCEEDED', completed_at = $2, report_json = $3::jsonb,
+                report_hash = $4, report_version = 1,
+                evidence_schema_version = $5, attempts = GREATEST(attempts, $6)
+          WHERE id = $1 AND status IN ('QUEUED', 'RUNNING')`,
+        [job.id, job.completedAt, JSON.stringify(job.scan),
+          crypto.createHash("sha256").update(JSON.stringify(job.scan)).digest("hex"),
+          job.scan?.evidenceSchemaVersion || "1.0.0", job.attempts || 1],
       );
       await client.query("COMMIT");
     } catch (error) {
@@ -464,15 +586,30 @@ class PostgresPersistence {
   async markJobFailed(job) {
     await this.pool.query(
       `UPDATE scan_jobs
-          SET status = 'FAILED', completed_at = $2, error_code = $3, error_message = $4
-        WHERE id = $1`,
-      [job.id, job.completedAt, job.error?.code || "SCAN_FAILED", job.error?.message || "The scan could not be completed."],
+          SET status = 'FAILED', completed_at = $2, error_code = $3, error_message = $4,
+              attempts = GREATEST(attempts, $5), max_attempts = GREATEST(max_attempts, $6)
+        WHERE id = $1 AND status IN ('QUEUED', 'RUNNING')`,
+      [job.id, job.completedAt, job.error?.code || "SCAN_FAILED", job.error?.message || "The scan could not be completed.",
+        job.attempts || 1, job.maxAttempts || 1],
+    );
+  }
+
+  async markJobCancelled(job) {
+    await this.pool.query(
+      `UPDATE scan_jobs
+          SET status = 'CANCELLED', completed_at = COALESCE($2, NOW()),
+              error_code = 'SCAN_CANCELLED', error_message = $3,
+              cancellation_reason = $3
+        WHERE id = $1 AND status IN ('QUEUED', 'RUNNING')`,
+      [job.id, job.completedAt || null, job.error?.message || "The scan was cancelled."],
     );
   }
 
   async getScanJob(jobId, workspaceId) {
     const result = await this.pool.query(
-      `SELECT id, type, status, created_at, started_at, completed_at, error_code, error_message, report_json
+      `SELECT id, type, status, created_at, started_at, completed_at, error_code, error_message, report_json,
+              address, network_id, engine_version, evidence_schema_version, report_version,
+              report_hash, attempts, max_attempts, cancellation_reason
          FROM scan_jobs
         WHERE id = $1 AND workspace_id = $2`,
       [jobId, workspaceId],
@@ -481,15 +618,44 @@ class PostgresPersistence {
   }
 
   async listScanJobs(workspaceId, { limit = 50 } = {}) {
+    const page = await this.listScanJobsPage(workspaceId, { limit });
+    return page.items;
+  }
+
+  async listScanJobsPage(workspaceId, options = {}) {
+    const pageOptions = normalizePageOptions(options);
+    const values = [workspaceId];
+    const conditions = ["workspace_id = $1"];
+    if (pageOptions.status) {
+      values.push(pageOptions.status);
+      conditions.push(`status = $${values.length}`);
+    }
+    if (pageOptions.networkId) {
+      values.push(pageOptions.networkId);
+      conditions.push(`network_id = $${values.length}`);
+    }
+    if (pageOptions.address) {
+      values.push(pageOptions.address);
+      conditions.push(`lower(address) = $${values.length}`);
+    }
+    if (pageOptions.cursor) {
+      values.push(pageOptions.cursor.createdAt, pageOptions.cursor.createdAt, pageOptions.cursor.id);
+      const createdAtParam = values.length - 2;
+      const cursorIdParam = values.length;
+      conditions.push(`(created_at < $${createdAtParam} OR (created_at = $${createdAtParam + 1} AND id < $${cursorIdParam}))`);
+    }
+    values.push(pageOptions.limit + 1);
     const result = await this.pool.query(
-      `SELECT id, type, status, created_at, started_at, completed_at, error_code, error_message
+      `SELECT id, type, status, created_at, started_at, completed_at, error_code, error_message,
+              address, network_id, engine_version, evidence_schema_version, report_version,
+              report_hash, attempts, max_attempts, cancellation_reason
          FROM scan_jobs
-        WHERE workspace_id = $1
-        ORDER BY created_at DESC
-        LIMIT $2`,
-      [workspaceId, Math.max(1, limit)],
+        WHERE ${conditions.join(" AND ")}
+        ORDER BY created_at DESC, id DESC
+        LIMIT $${values.length}`,
+      values,
     );
-    return result.rows.map(scanJobFromRow);
+    return pageResult(result.rows.map(scanJobFromRow), pageOptions.limit);
   }
 
   async recordWebhookEvent({ provider, eventId, payload = {}, receivedAt = this.clock() }) {

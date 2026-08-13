@@ -151,8 +151,20 @@
                   <h2>Scan History</h2>
                   <p>Previous analyses available to this workspace.</p>
                 </div>
+                <div class="history-controls">
+                  <label for="history-status">Filter status</label>
+                  <select id="history-status">
+                    <option value="">All statuses</option>
+                    <option value="QUEUED">Queued</option>
+                    <option value="RUNNING">Running</option>
+                    <option value="SUCCEEDED">Completed</option>
+                    <option value="FAILED">Failed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                </div>
               </div>
               <div id="scan-history-list" class="scan-history-list"></div>
+              <button type="button" id="history-load-more" class="view-all history-load-more" hidden>LOAD MORE SCANS</button>
             </section>
             <div id="dashboard-report" hidden></div>
           </section>
@@ -163,6 +175,7 @@
             <h2 id="loading-title">Building a forensic snapshot.</h2>
             <div id="loading-stages" class="loading-stages"></div>
             <p class="loading-note">Available evidence is preserved as returned. No fallback values are being substituted.</p>
+            <button type="button" id="cancel-scan" class="secondary-button cancel-scan">Cancel scan</button>
           </section>
 
           <section id="report" hidden></section>

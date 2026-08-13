@@ -97,6 +97,8 @@ function getRuntimeConfig(env = process.env) {
         isProduction ? 64 : 8,
       ),
       maxQueueDepth: positiveInteger(env.SCAN_MAX_QUEUE_DEPTH, 10_000),
+      maxAttempts: positiveInteger(env.SCAN_MAX_ATTEMPTS, 2),
+      timeoutMs: positiveInteger(env.SCAN_TIMEOUT_MS, 30_000),
     }),
     dataStore: Object.freeze({
       driver: env.DATA_STORE_DRIVER || "memory",
@@ -139,6 +141,8 @@ function publicPlatformConfig(config = getRuntimeConfig()) {
     queue: {
       driver: config.queue.driver,
       workerConcurrency: config.queue.workerConcurrency,
+      maxAttempts: config.queue.maxAttempts,
+      timeoutMs: config.queue.timeoutMs,
     },
     storage: {
       primary: config.dataStore.primary,

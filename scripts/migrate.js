@@ -6,6 +6,7 @@ const migrationDir = path.join(__dirname, "..", "migrations");
 const migrations = [
   ["001_phase3_persistence", "2.0.0", "1.0.0"],
   ["002_phase4_auth_tenant", "2.0.0", "1.0.0"],
+  ["003_phase5_scan_jobs", "2.1.0", "1.1.0"],
 ];
 
 async function main() {

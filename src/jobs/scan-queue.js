@@ -5,6 +5,7 @@ const JOB_STATUS = Object.freeze({
   RUNNING: "RUNNING",
   SUCCEEDED: "SUCCEEDED",
   FAILED: "FAILED",
+  CANCELLED: "CANCELLED",
 });
 
 function snapshot(job) {
@@ -17,6 +18,9 @@ function snapshot(job) {
     completedAt: job.completedAt,
     error: job.error,
     scan: job.scan,
+    attempts: job.attempts,
+    maxAttempts: job.maxAttempts,
+    cancelRequested: Boolean(job.cancelRequested),
   };
 }
 
@@ -25,6 +29,8 @@ class InMemoryScanJobQueue {
     processor,
     concurrency = 8,
     maxQueueDepth = 10_000,
+    maxAttempts = 2,
+    timeoutMs = 30_000,
     clock = () => new Date(),
     onStatusChange = null,
   }) {
@@ -32,6 +38,8 @@ class InMemoryScanJobQueue {
     this.processor = processor;
     this.concurrency = Math.max(1, Number(concurrency) || 1);
     this.maxQueueDepth = Math.max(1, Number(maxQueueDepth) || 1);
+    this.maxAttempts = Math.max(1, Number(maxAttempts) || 1);
+    this.timeoutMs = Math.max(1_000, Number(timeoutMs) || 30_000);
     this.clock = clock;
     this.onStatusChange = typeof onStatusChange === "function" ? onStatusChange : null;
     this.jobs = new Map();
@@ -57,6 +65,10 @@ class InMemoryScanJobQueue {
       completedAt: null,
       error: null,
       scan: null,
+      attempts: 0,
+      maxAttempts: this.maxAttempts,
+      cancelRequested: false,
+      controller: null,
     };
     this.jobs.set(job.id, job);
     this.pending.push(job.id);
@@ -81,6 +93,25 @@ class InMemoryScanJobQueue {
     ).length;
   }
 
+  cancel(jobId) {
+    const job = this.jobs.get(jobId);
+    if (!job) return null;
+    if ([JOB_STATUS.SUCCEEDED, JOB_STATUS.FAILED, JOB_STATUS.CANCELLED].includes(job.status)) {
+      return snapshot(job);
+    }
+    job.cancelRequested = true;
+    if (job.status === JOB_STATUS.QUEUED) {
+      job.status = JOB_STATUS.CANCELLED;
+      job.completedAt = this.clock().toISOString();
+      job.error = { code: "SCAN_CANCELLED", message: "The scan was cancelled before processing started." };
+      this.pending = this.pending.filter((pendingId) => pendingId !== job.id);
+      this.#notify(job);
+    } else if (job.controller) {
+      job.controller.abort();
+    }
+    return snapshot(job);
+  }
+
   #drain() {
     while (this.running < this.concurrency && this.pending.length) {
       const jobId = this.pending.shift();
@@ -89,14 +120,41 @@ class InMemoryScanJobQueue {
       this.running += 1;
       job.status = JOB_STATUS.RUNNING;
       job.startedAt = this.clock().toISOString();
+      job.attempts += 1;
+      job.controller = new AbortController();
       this.#notify(job);
-      Promise.resolve()
-        .then(() => this.processor(job.payload))
+      const timeout = new Promise((_, reject) => {
+        const timer = setTimeout(() => {
+          job.controller?.abort();
+          reject(Object.assign(new Error("SCAN_TIMEOUT"), { code: "SCAN_TIMEOUT" }));
+        }, this.timeoutMs);
+        timer.unref?.();
+      });
+      Promise.race([
+        Promise.resolve().then(() => this.processor(job.payload, {
+          signal: job.controller.signal,
+          attempt: job.attempts,
+          jobId: job.id,
+        })),
+        timeout,
+      ])
         .then((scan) => {
+          if (job.cancelRequested || job.status === JOB_STATUS.CANCELLED) return;
           job.status = JOB_STATUS.SUCCEEDED;
           job.scan = scan;
+          job.error = null;
         })
         .catch((error) => {
+          if (job.cancelRequested || job.status === JOB_STATUS.CANCELLED) return;
+          if (job.attempts < job.maxAttempts && error.code !== "SCAN_CANCELLED") {
+            job.status = JOB_STATUS.QUEUED;
+            job.error = {
+              code: error.code || "SCAN_RETRY",
+              message: error.message || "The scan attempt failed and will be retried.",
+            };
+            this.pending.push(job.id);
+            return;
+          }
           job.status = JOB_STATUS.FAILED;
           job.error = {
             code: error.code || "SCAN_FAILED",
@@ -104,8 +162,17 @@ class InMemoryScanJobQueue {
           };
         })
         .finally(() => {
-          job.completedAt = this.clock().toISOString();
-          this.#notify(job);
+          if (job.status !== JOB_STATUS.QUEUED) {
+            if (job.cancelRequested && job.status === JOB_STATUS.RUNNING) {
+              job.status = JOB_STATUS.CANCELLED;
+              job.error = { code: "SCAN_CANCELLED", message: "The scan was cancelled." };
+            }
+            job.completedAt = job.completedAt || this.clock().toISOString();
+            this.#notify(job);
+          } else {
+            this.#notify(job);
+          }
+          job.controller = null;
           this.running -= 1;
           this.#drain();
         });
@@ -120,7 +187,13 @@ class InMemoryScanJobQueue {
   }
 }
 
-function createScanJobQueue({ processor, runtimeConfig, onStatusChange = null }) {
+function createScanJobQueue({
+  processor,
+  runtimeConfig,
+  onStatusChange = null,
+  maxAttempts = runtimeConfig.queue.maxAttempts,
+  timeoutMs = runtimeConfig.queue.timeoutMs,
+} = {}) {
   if (runtimeConfig.environment === "production" && runtimeConfig.queue.driver === "memory") {
     throw new Error("The in-memory scan queue cannot be used in production.");
   }
@@ -133,6 +206,8 @@ function createScanJobQueue({ processor, runtimeConfig, onStatusChange = null })
     processor,
     concurrency: runtimeConfig.queue.workerConcurrency,
     maxQueueDepth: runtimeConfig.queue.maxQueueDepth,
+    maxAttempts,
+    timeoutMs,
     onStatusChange,
   });
 }
