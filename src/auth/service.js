@@ -579,14 +579,15 @@ class PostgresAuthStore {
     const sets = [];
     if (role) { sets.push(`role_id = $${values.length + 1}`); values.push(role === ROLES.WORKSPACE_OWNER ? "workspace_owner" : "workspace_member"); }
     if (status) { sets.push(`status = $${values.length + 1}`); values.push(status); }
+    if (!sets.length) throw Object.assign(new Error("INVALID_MEMBER_UPDATE"), { code: "INVALID_MEMBER_UPDATE" });
     values.push(workspaceId, userId);
     const result = await this.pool.query(
-      `UPDATE memberships SET ${sets.join(", ")}, deleted_at = CASE WHEN $${values.length - 1} = 'disabled' THEN NULL ELSE deleted_at END
+      `UPDATE memberships SET ${sets.join(", ")}
         WHERE workspace_id = $${values.length - 1} AND user_id = $${values.length} AND deleted_at IS NULL
         RETURNING workspace_id, user_id, status, created_at`, values,
     );
     if (!result.rowCount) throw Object.assign(new Error("MEMBER_NOT_FOUND"), { code: "MEMBER_NOT_FOUND" });
-    return this.getMembership(userId, workspaceId);
+    return rowMembership(result.rows[0]);
   }
 
   async transferOwnership({ workspaceId, currentOwnerId, nextOwnerId }) {

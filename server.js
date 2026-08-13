@@ -576,6 +576,7 @@ async function handleApi(req, res, url, context) {
       EMAIL_IN_USE: 409,
       INVALID_INVITE: 400,
       INVALID_MEMBER_STATUS: 400,
+      INVALID_MEMBER_UPDATE: 400,
       LAST_OWNER_PROTECTED: 409,
       CANNOT_DISABLE_SELF: 400,
       OWNER_REQUIRED: 403,
