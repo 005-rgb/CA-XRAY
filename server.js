@@ -29,6 +29,11 @@ const {
 const { PLAN_CATALOG } = require("./src/platform/config");
 const { createPersistence } = require("./src/persistence");
 const { createAuthService } = require("./src/auth/service");
+const { createDefaultProviderRegistry } = require("./src/providers/default-adapters");
+const {
+  MemoryControlPlaneStore,
+  PlatformControlPlane,
+} = require("./src/platform/control-plane");
 const {
   CAPABILITIES,
   requireEntitlement,
@@ -47,6 +52,11 @@ const authService = createAuthService({
   runtimeConfig,
   sessionSecret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
 });
+const controlPlane = new PlatformControlPlane({
+  store: new MemoryControlPlaneStore(),
+  audit: (entry) => authService.audit(entry.action, entry.actorId, entry.workspaceId, entry.metadata),
+});
+const providerRegistry = createDefaultProviderRegistry();
 const scanQueue = createScanJobQueue({
   processor: scanLive,
   runtimeConfig,
@@ -192,6 +202,18 @@ function requireAuthenticated(context) {
   return context;
 }
 
+function requirePlatformStepUp(context) {
+  requireAuthenticated(context);
+  authService.requireRecentPlatformStepUp(context);
+  return context;
+}
+
+function requirePlatformAdmin(context) {
+  const authenticated = requirePlatformStepUp(context);
+  authorize({ actor: authenticated.actor, action: ACTIONS.PLATFORM_MANAGE });
+  return authenticated;
+}
+
 function publicSession(session, currentId) {
   return {
     id: session.id,
@@ -212,6 +234,15 @@ async function readBody(req) {
     if (body.length > runtimeConfig.security.requestBodyBytes) throw new Error("REQUEST_TOO_LARGE");
   }
   return body ? JSON.parse(body) : {};
+}
+
+async function readRawBody(req) {
+  let body = "";
+  for await (const chunk of req) {
+    body += chunk.toString();
+    if (body.length > runtimeConfig.security.requestBodyBytes) throw new Error("REQUEST_TOO_LARGE");
+  }
+  return body;
 }
 
 async function enforceScanProtection(req, context, networkId) {
@@ -291,6 +322,13 @@ async function handleApiUnsafe(req, res, url, context) {
     const body = await readBody(req);
     const result = await authService.verifyPendingMfa(context, body.code);
     sendJson(res, 200, { user: result.user }, { context: { ...context, setCookie: result.setCookie } });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/mfa/step-up") {
+    const body = await readBody(req);
+    const result = await authService.verifyPlatformStepUp(requireAuthenticated(context), body.code);
+    sendJson(res, 200, result, { context });
     return true;
   }
 
@@ -443,6 +481,187 @@ async function handleApiUnsafe(req, res, url, context) {
 
   if (req.method === "GET" && url.pathname === "/api/platform") {
     sendJson(res, 200, publicPlatformConfig(runtimeConfig), { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/providers") {
+    requirePlatformAdmin(context);
+    sendJson(res, 200, { providers: await controlPlane.listProviderHealth(providerRegistry) }, { context });
+    return true;
+  }
+
+  const providerDraftMatch = url.pathname.match(/^\/api\/admin\/providers\/([^/]+)\/draft$/);
+  if (req.method === "POST" && providerDraftMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const result = await controlPlane.requestProviderDraft({
+      providerId: providerDraftMatch[1],
+      patch: body.config || body,
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+    });
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  const providerPublishMatch = url.pathname.match(/^\/api\/admin\/providers\/([^/]+)\/publish$/);
+  if (req.method === "POST" && providerPublishMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const result = await controlPlane.publishProvider({
+      providerId: providerPublishMatch[1],
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+      approvalId: body.approvalId,
+    });
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  const providerRollbackMatch = url.pathname.match(/^\/api\/admin\/providers\/([^/]+)\/rollback$/);
+  if (req.method === "POST" && providerRollbackMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const result = await controlPlane.rollbackProvider({
+      providerId: providerRollbackMatch[1],
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+      approvalId: body.approvalId,
+    });
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/feature-flags") {
+    requirePlatformAdmin(context);
+    sendJson(res, 200, { flags: await controlPlane.listFeatureFlags() }, { context });
+    return true;
+  }
+
+  const flagDraftMatch = url.pathname.match(/^\/api\/admin\/feature-flags\/([^/]+)\/draft$/);
+  if (req.method === "POST" && flagDraftMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const result = await controlPlane.requestFeatureFlag({
+      key: flagDraftMatch[1],
+      enabled: body.enabled,
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+    });
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  const flagPublishMatch = url.pathname.match(/^\/api\/admin\/feature-flags\/([^/]+)\/publish$/);
+  if (req.method === "POST" && flagPublishMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const result = await controlPlane.publishFeatureFlag({
+      key: flagPublishMatch[1],
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+      approvalId: body.approvalId,
+    });
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/approvals") {
+    requirePlatformAdmin(context);
+    sendJson(res, 200, { approvals: await controlPlane.listApprovals() }, { context });
+    return true;
+  }
+
+  const approvalMatch = url.pathname.match(/^\/api\/admin\/approvals\/([^/]+)\/approve$/);
+  if (req.method === "POST" && approvalMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const result = await controlPlane.approve({
+      approvalId: approvalMatch[1],
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+    });
+    sendJson(res, 200, { approval: result }, { context });
+    return true;
+  }
+
+  const entitlementMatch = url.pathname.match(/^\/api\/admin\/workspaces\/([^/]+)\/entitlements$/);
+  if (req.method === "POST" && entitlementMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const result = await controlPlane.changeEntitlement({
+      persistence,
+      workspaceId: entitlementMatch[1],
+      capability: body.capability,
+      status: body.status,
+      expiresAt: body.expiresAt || null,
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+      approvalId: body.approvalId,
+    });
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/subscriptions") {
+    requirePlatformAdmin(context);
+    sendJson(res, 200, { subscriptions: await controlPlane.listSubscriptions() }, { context });
+    return true;
+  }
+
+  const subscriptionMatch = url.pathname.match(/^\/api\/admin\/subscriptions\/([^/]+)$/);
+  if (req.method === "POST" && subscriptionMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const result = await controlPlane.changeSubscription({
+      subscriptionId: subscriptionMatch[1],
+      workspaceId: body.workspaceId,
+      planId: body.planId,
+      status: body.status,
+      currentPeriodEnd: body.currentPeriodEnd || null,
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+      approvalId: body.approvalId,
+    });
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/webhooks") {
+    requirePlatformAdmin(context);
+    sendJson(res, 200, { webhooks: await controlPlane.listWebhooks() }, { context });
+    return true;
+  }
+
+  const webhookReplayMatch = url.pathname.match(/^\/api\/admin\/webhooks\/([^/]+)\/([^/]+)\/replay$/);
+  if (req.method === "POST" && webhookReplayMatch) {
+    const admin = requirePlatformAdmin(context);
+    const body = await readBody(req);
+    const event = await controlPlane.replayWebhook({
+      provider: webhookReplayMatch[1],
+      eventId: webhookReplayMatch[2],
+      actorId: admin.user.id,
+      reason: body.reasonCode,
+    });
+    sendJson(res, 200, { webhook: event }, { context });
+    return true;
+  }
+
+  const webhookMatch = url.pathname.match(/^\/api\/webhooks\/([^/]+)$/);
+  if (req.method === "POST" && webhookMatch) {
+    const rawBody = await readRawBody(req);
+    let payload;
+    try { payload = JSON.parse(rawBody); } catch { throw Object.assign(new Error("WEBHOOK_PAYLOAD_INVALID"), { code: "WEBHOOK_PAYLOAD_INVALID" }); }
+    const eventId = req.headers["x-webhook-event-id"];
+    const result = await controlPlane.recordWebhook({
+      provider: webhookMatch[1],
+      eventId,
+      rawBody,
+      signature: req.headers["x-webhook-signature"],
+      secret: process.env[`${webhookMatch[1].toUpperCase().replace(/-/g, "_")}_WEBHOOK_SECRET`],
+      payload,
+    });
+    sendJson(res, 200, { accepted: true, duplicate: result.duplicate }, { context });
     return true;
   }
 
@@ -659,6 +878,7 @@ async function handleApi(req, res, url, context) {
       INVALID_MFA_CODE: 401,
       MFA_SESSION_REQUIRED: 401,
       MFA_REQUIRED: 401,
+      PLATFORM_STEP_UP_REQUIRED: 401,
       RECOVERY_TOKEN_INVALID: 400,
       SESSION_REVOKED: 401,
       WORKSPACE_SCOPE_MISMATCH: 404,
@@ -667,6 +887,27 @@ async function handleApi(req, res, url, context) {
       AUTH_TEMPORARILY_BLOCKED: 429,
       RATE_LIMITED: 429,
       ENTITLEMENT_REQUIRED: 403,
+      REASON_CODE_REQUIRED: 400,
+      PROVIDER_ID_INVALID: 400,
+      PROVIDER_STATE_INVALID: 400,
+      PROVIDER_DRAFT_REQUIRED: 409,
+      PROVIDER_VERSION_NOT_FOUND: 404,
+      FEATURE_FLAG_KEY_INVALID: 400,
+      FEATURE_FLAG_DRAFT_REQUIRED: 409,
+      APPROVAL_REQUIRED: 409,
+      APPROVAL_INVALID: 409,
+      APPROVAL_NOT_FOUND: 404,
+      APPROVAL_NOT_PENDING: 409,
+      APPROVAL_NOT_APPROVED: 409,
+      FOUR_EYES_REQUIRED: 409,
+      CAPABILITY_INVALID: 400,
+      ENTITLEMENT_STATUS_INVALID: 400,
+      SUBSCRIPTION_STATE_INVALID: 400,
+      WEBHOOK_ID_INVALID: 400,
+      WEBHOOK_PAYLOAD_INVALID: 400,
+      WEBHOOK_SIGNATURE_INVALID: 401,
+      WEBHOOK_NOT_FOUND: 404,
+      WEBHOOK_REPLAY_IN_PROGRESS: 409,
     }[error.code] || (error.message === "REQUEST_TOO_LARGE" ? 413 : 500);
     sendJson(res, status, {
       error: error.code || "INTERNAL_ERROR",

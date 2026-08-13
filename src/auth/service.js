@@ -219,10 +219,18 @@ class MemoryAuthStore {
       .map(clone);
   }
 
-  async createSession({ userId, workspaceId, mfaVerified = true, userAgent = null, ip = null }) {
+  async createSession({
+    userId,
+    workspaceId,
+    mfaVerified = true,
+    platformStepUpAt = null,
+    userAgent = null,
+    ip = null,
+  }) {
     const id = randomToken();
     const session = {
-      id, userId, workspaceId, mfaVerified, userAgent: String(userAgent || "").slice(0, 200) || null,
+      id, userId, workspaceId, mfaVerified, platformStepUpAt,
+      userAgent: String(userAgent || "").slice(0, 200) || null,
       ip: String(ip || "").slice(0, 64) || null, createdAt: this.now(),
       lastSeenAt: this.now(), expiresAt: new Date(this.clock().getTime() + SESSION_TTL_MS).toISOString(),
       revokedAt: null,
@@ -231,11 +239,13 @@ class MemoryAuthStore {
     return clone(session);
   }
 
-  async rotateSession(sessionId, { userId, workspaceId, mfaVerified = true, userAgent = null, ip = null } = {}) {
+  async rotateSession(sessionId, {
+    userId, workspaceId, mfaVerified = true, platformStepUpAt = null, userAgent = null, ip = null,
+  } = {}) {
     const current = this.sessions.get(sessionId);
     if (!current || current.userId !== userId) throw Object.assign(new Error("SESSION_REVOKED"), { code: "SESSION_REVOKED" });
     current.revokedAt = this.now();
-    return this.createSession({ userId, workspaceId, mfaVerified, userAgent, ip });
+    return this.createSession({ userId, workspaceId, mfaVerified, platformStepUpAt, userAgent, ip });
   }
 
   async getSession(id) {
@@ -261,6 +271,13 @@ class MemoryAuthStore {
     const session = this.sessions.get(sessionId);
     if (!session || session.revokedAt) return false;
     session.mfaVerified = true;
+    return true;
+  }
+
+  async confirmPlatformStepUp(sessionId, confirmedAt = this.now()) {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.revokedAt || !session.mfaVerified) return false;
+    session.platformStepUpAt = new Date(confirmedAt).toISOString();
     return true;
   }
 
@@ -566,18 +583,28 @@ class PostgresAuthStore {
     return result.rows.map((row) => ({ ...rowMembership(row), user: { id: row.user_id, email: row.email, displayName: row.display_name } }));
   }
 
-  async createSession({ userId, workspaceId, mfaVerified = true, userAgent = null, ip = null }) {
+  async createSession({
+    userId,
+    workspaceId,
+    mfaVerified = true,
+    platformStepUpAt = null,
+    userAgent = null,
+    ip = null,
+  }) {
     const id = randomToken();
     const result = await this.pool.query(
-      `INSERT INTO auth_sessions (id, user_id, workspace_id, mfa_verified, user_agent, ip_address, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '30 days')
-       RETURNING id, user_id, workspace_id, mfa_verified, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at`,
-      [id, userId, workspaceId, mfaVerified, String(userAgent || "").slice(0, 200) || null, String(ip || "").slice(0, 64) || null],
+      `INSERT INTO auth_sessions (id, user_id, workspace_id, mfa_verified, platform_step_up_at, user_agent, ip_address, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() + INTERVAL '30 days')
+       RETURNING id, user_id, workspace_id, mfa_verified, platform_step_up_at, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at`,
+      [id, userId, workspaceId, mfaVerified, platformStepUpAt,
+        String(userAgent || "").slice(0, 200) || null, String(ip || "").slice(0, 64) || null],
     );
     return rowSession(result.rows[0]);
   }
 
-  async rotateSession(sessionId, { userId, workspaceId, mfaVerified = true, userAgent = null, ip = null } = {}) {
+  async rotateSession(sessionId, {
+    userId, workspaceId, mfaVerified = true, platformStepUpAt = null, userAgent = null, ip = null,
+  } = {}) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -587,10 +614,11 @@ class PostgresAuthStore {
       );
       if (!revoked.rowCount) throw Object.assign(new Error("SESSION_REVOKED"), { code: "SESSION_REVOKED" });
       const created = await client.query(
-        `INSERT INTO auth_sessions (id, user_id, workspace_id, mfa_verified, user_agent, ip_address, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '30 days')
-         RETURNING id, user_id, workspace_id, mfa_verified, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at`,
-        [randomToken(), userId, workspaceId, mfaVerified, String(userAgent || "").slice(0, 200) || null, String(ip || "").slice(0, 64) || null],
+        `INSERT INTO auth_sessions (id, user_id, workspace_id, mfa_verified, platform_step_up_at, user_agent, ip_address, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() + INTERVAL '30 days')
+         RETURNING id, user_id, workspace_id, mfa_verified, platform_step_up_at, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at`,
+        [randomToken(), userId, workspaceId, mfaVerified, platformStepUpAt,
+          String(userAgent || "").slice(0, 200) || null, String(ip || "").slice(0, 64) || null],
       );
       await client.query("COMMIT");
       return rowSession(created.rows[0]);
@@ -604,14 +632,14 @@ class PostgresAuthStore {
     const result = await this.pool.query(
       `UPDATE auth_sessions SET last_seen_at = NOW()
         WHERE id = $1 AND revoked_at IS NULL AND expires_at > NOW()
-        RETURNING id, user_id, workspace_id, mfa_verified, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at`, [id],
+         RETURNING id, user_id, workspace_id, mfa_verified, platform_step_up_at, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at`, [id],
     );
     return result.rows[0] ? rowSession(result.rows[0]) : null;
   }
 
   async listSessions(userId) {
     const result = await this.pool.query(
-      `SELECT id, user_id, workspace_id, mfa_verified, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at
+      `SELECT id, user_id, workspace_id, mfa_verified, platform_step_up_at, user_agent, ip_address, created_at, last_seen_at, expires_at, revoked_at
          FROM auth_sessions WHERE user_id = $1 AND revoked_at IS NULL ORDER BY last_seen_at DESC`, [userId],
     );
     return result.rows.map(rowSession);
@@ -627,6 +655,14 @@ class PostgresAuthStore {
 
   async confirmMfa(sessionId) {
     const result = await this.pool.query("UPDATE auth_sessions SET mfa_verified = TRUE WHERE id = $1 AND revoked_at IS NULL", [sessionId]);
+    return Boolean(result.rowCount);
+  }
+
+  async confirmPlatformStepUp(sessionId, confirmedAt = this.clock()) {
+    const result = await this.pool.query(
+      "UPDATE auth_sessions SET platform_step_up_at = $2 WHERE id = $1 AND mfa_verified = TRUE AND revoked_at IS NULL",
+      [sessionId, new Date(confirmedAt).toISOString()],
+    );
     return Boolean(result.rowCount);
   }
 
@@ -924,6 +960,9 @@ function rowMembership(row) {
 function rowSession(row) {
   return {
     id: row.id, userId: row.user_id, workspaceId: row.workspace_id, mfaVerified: row.mfa_verified,
+    platformStepUpAt: row.platform_step_up_at
+      ? new Date(row.platform_step_up_at).toISOString()
+      : null,
     userAgent: row.user_agent, ip: row.ip_address,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     lastSeenAt: row.last_seen_at instanceof Date ? row.last_seen_at.toISOString() : row.last_seen_at,
@@ -1019,7 +1058,8 @@ class AuthService {
       return {
         kind: "authenticated", sessionId, user: publicUser(user),
         actor: { id: user.id, userId: user.id, role: ROLES.SUPERADMIN, authenticated: true, workspaceId: null },
-        workspaceId: null, workspaceType: null, planId: null, setCookie: null,
+        workspaceId: null, workspaceType: null, planId: null,
+        platformStepUpAt: session.platformStepUpAt || null, setCookie: null,
       };
     }
     const membership = await this.store.getMembership(user.id, session.workspaceId);
@@ -1029,7 +1069,8 @@ class AuthService {
     return {
       kind: "authenticated", sessionId, user: publicUser(user), membership, workspace,
       actor: { id: user.id, userId: user.id, role: membership.role, authenticated: true, workspaceId: workspace.id },
-      workspaceId: workspace.id, workspaceType: workspace.workspaceType, planId: workspace.planId, setCookie: null,
+      workspaceId: workspace.id, workspaceType: workspace.workspaceType, planId: workspace.planId,
+      platformStepUpAt: session.platformStepUpAt || null, setCookie: null,
     };
   }
 
@@ -1338,6 +1379,45 @@ class AuthService {
     await this.store.confirmMfa(context.sessionId);
     await this.audit("LOGIN_SUCCEEDED", user.id, null, { method: "password+mfa" });
     return { user: publicUser(user), setCookie: this.cookie(context.sessionId) };
+  }
+
+  async verifyPlatformStepUp(context, code) {
+    if (context.kind !== "authenticated"
+      || context.user?.platformRole !== ROLES.SUPERADMIN
+      || !context.sessionId) {
+      throw Object.assign(new Error("SUPERADMIN_REQUIRED"), { code: "SUPERADMIN_REQUIRED" });
+    }
+    this.mfaGuard.enforce(`step-up:${context.sessionId}`);
+    const user = await this.store.getUser(context.user.id);
+    const valid = user?.mfaEnabled && user.mfaSecret
+      && verifyTotp(this.decryptSecret(user.mfaSecret), code, this.clock().getTime());
+    if (!valid) {
+      this.mfaGuard.failure(`step-up:${context.sessionId}`);
+      await this.audit("PLATFORM_STEP_UP_FAILED", context.user.id, null, {
+        correlationId: context.requestId || null,
+      });
+      throw Object.assign(new Error("INVALID_MFA_CODE"), { code: "INVALID_MFA_CODE" });
+    }
+    this.mfaGuard.success(`step-up:${context.sessionId}`);
+    await this.store.confirmPlatformStepUp(context.sessionId, this.clock());
+    await this.audit("PLATFORM_STEP_UP_SUCCEEDED", context.user.id, null, {
+      correlationId: context.requestId || null,
+    });
+    return {
+      verified: true,
+      expiresAt: new Date(this.clock().getTime() + 5 * 60_000).toISOString(),
+    };
+  }
+
+  requireRecentPlatformStepUp(context, maxAgeMs = 5 * 60_000) {
+    if (context.kind !== "authenticated" || context.user?.platformRole !== ROLES.SUPERADMIN) {
+      throw Object.assign(new Error("SUPERADMIN_REQUIRED"), { code: "SUPERADMIN_REQUIRED" });
+    }
+    const confirmedAt = Date.parse(context.platformStepUpAt || "");
+    if (!Number.isFinite(confirmedAt) || this.clock().getTime() - confirmedAt > maxAgeMs) {
+      throw Object.assign(new Error("PLATFORM_STEP_UP_REQUIRED"), { code: "PLATFORM_STEP_UP_REQUIRED" });
+    }
+    return true;
   }
 
   async queueEmail(job) {

@@ -34,6 +34,9 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   revoked_at TIMESTAMPTZ
 );
 
+ALTER TABLE auth_sessions
+  ADD COLUMN IF NOT EXISTS platform_step_up_at TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS auth_sessions_user_active_idx
   ON auth_sessions(user_id, last_seen_at DESC)
   WHERE revoked_at IS NULL;
