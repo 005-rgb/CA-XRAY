@@ -25,8 +25,20 @@ const mfaStatus = document.querySelector("#mfa-status");
 const workspaceBar = document.querySelector("#workspace-bar");
 const workspaceSelector = document.querySelector("#workspace-selector");
 const userName = document.querySelector("#user-name");
+const publicHeader = document.querySelector("#public-header");
+const privateTopbar = document.querySelector("#private-topbar");
+const sidebar = document.querySelector("#sidebar");
+const authEntry = document.querySelector("#auth-entry");
+const scanHistory = document.querySelector("#scan-history");
+const scanHistoryList = document.querySelector("#scan-history-list");
 let authState = null;
 let currentScan = null;
+const pathName = () => window.location.pathname;
+const isAuthRoute = () => ["/login", "/register"].includes(pathName());
+const reportRouteMatch = () => pathName().match(/^\/dashboard\/scans\/([^/]+)$/);
+const isPrivateRoute = () => pathName() === "/dashboard" || pathName().startsWith("/dashboard/");
+const pendingScanStorageKey = "ca_xray_pending_scan";
+let authRequested = isAuthRoute();
 
 async function apiJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -39,6 +51,48 @@ function authMessage(message, target = authStatus) {
   if (target) target.textContent = message || "";
 }
 
+function setShell({ privateView = false, authView = false } = {}) {
+  publicHeader.hidden = privateView;
+  privateTopbar.hidden = !privateView;
+  sidebar.hidden = !privateView;
+  authPanel.hidden = !authView;
+  landing.hidden = authView;
+  if (privateView) {
+    landing.classList.remove("public-home");
+  } else {
+    landing.classList.add("public-home");
+  }
+  document.body.classList.toggle("private-view", privateView);
+}
+
+function pendingScan() {
+  try {
+    const value = sessionStorage.getItem(pendingScanStorageKey);
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingScan() {
+  sessionStorage.removeItem(pendingScanStorageKey);
+}
+
+function safeReturnPath() {
+  const value = new URLSearchParams(window.location.search).get("returnTo");
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/";
+}
+
+function configureAuthRoute() {
+  if (!isAuthRoute()) return;
+  const register = pathName() === "/register";
+  authMode.value = register ? "register" : "login";
+  authTitle.textContent = register ? "Create your CA X-RAY account" : "Sign in to CA X-RAY";
+  authSubmitLabel.textContent = register ? "Create account" : "Sign in";
+  authSwitch.textContent = register ? "I already have an account" : "Create an account";
+  authPassword.autocomplete = register ? "new-password" : "current-password";
+}
+
 async function refreshAuth() {
   try {
     authState = await apiJson("/api/auth/me");
@@ -46,7 +100,7 @@ async function refreshAuth() {
     const pending = authState.mfaPending;
     userName.textContent = authenticated ? (authState.user?.displayName || authState.user?.email || "User") : pending ? "Verification required" : "Visitor";
     if (pending) {
-      authPanel.hidden = false;
+      setShell({ authView: true });
       authForm.hidden = true;
       recoveryForm.hidden = true;
       mfaForm.hidden = false;
@@ -55,14 +109,43 @@ async function refreshAuth() {
       workspaceBar.hidden = true;
       return;
     }
-    authPanel.hidden = authenticated;
     workspaceBar.hidden = !authenticated;
     mfaForm.hidden = true;
     authForm.hidden = false;
-    if (!authenticated) return;
+    if (!authenticated) {
+      authEntry.textContent = "Sign in →";
+      authEntry.href = "/login";
+      configureAuthRoute();
+      setShell({ authView: authRequested });
+      return;
+    }
     const workspaces = await apiJson("/api/workspaces");
     workspaceSelector.innerHTML = workspaces.workspaces.map((workspace) =>
       `<option value="${escapeHtml(workspace.id)}" ${workspace.id === authState.workspace?.id ? "selected" : ""}>${escapeHtml(workspace.name || workspace.workspaceType)} · ${escapeHtml(workspace.planId)}</option>`).join("");
+    authEntry.textContent = "Dashboard →";
+    authEntry.href = "/dashboard";
+    const queuedScan = pendingScan();
+    if (queuedScan) {
+      networkInput.value = queuedScan.network;
+      addressInput.value = queuedScan.address;
+      clearAddress.hidden = !addressInput.value;
+      clearPendingScan();
+      authRequested = false;
+      window.history.replaceState({}, "", "/");
+      await scanLive();
+      return;
+    }
+    if (isAuthRoute()) {
+      const destination = safeReturnPath();
+      authRequested = false;
+      window.history.replaceState({}, "", destination);
+    }
+    if (isPrivateRoute()) {
+      await loadPrivateRoute();
+    } else {
+      setShell({ privateView: false });
+      showLanding({ privateView: false });
+    }
   } catch (error) {
     authMessage(error.message);
   }
@@ -235,14 +318,30 @@ function evidenceLabel(dataPoint) {
   return currentScan?.mode === "DEMO" ? "Contract Analysis (Demo)" : "Contract Analysis";
 }
 
-function showLanding() {
+function showLanding({ privateView = false } = {}) {
+  setShell({ privateView });
   landing.hidden = false;
   loading.hidden = true;
   report.hidden = true;
+  document.querySelector("#dashboard-report").hidden = true;
+  document.querySelector("#dashboard-report").innerHTML = "";
+  document.querySelector("#landing-title").textContent = privateView
+    ? "Scan New Contract"
+    : "Analyze a smart contract before you trust it.";
+  document.querySelector("#landing-description").textContent = privateView
+    ? "Evidence-backed forensic assessment for the selected contract."
+    : "Evidence-based contract forensic analysis across supported networks.";
+  document.querySelector("#scan-mode-card").hidden = !privateView;
+  document.querySelector("#dashboard").classList.toggle("private-heading", privateView);
+  document.querySelector("#new-scan").classList.toggle("public-scan-workbench", !privateView);
+  document.querySelector("#new-scan").classList.remove("report-route");
+  scanHistory.hidden = !privateView;
+  if (privateView) loadScanHistory();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function showLoading(stages = []) {
+  setShell({ privateView: true });
   landing.hidden = true;
   report.hidden = true;
   loading.hidden = false;
@@ -274,8 +373,54 @@ function validateForm() {
   return valid;
 }
 
+async function waitForScan(jobId) {
+  let job = null;
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const jobResponse = await fetch(`/api/scan/${encodeURIComponent(jobId)}`);
+    const jobBody = await jobResponse.json().catch(() => ({}));
+    if (!jobResponse.ok) throw new Error(jobBody.message || "The scan job could not be read.");
+    job = jobBody.job;
+    if (job.status === "SUCCEEDED") return job;
+    if (job.status === "FAILED") throw new Error(job.error?.message || "The scan failed.");
+    updateLoading({ stages: job.status === "RUNNING"
+      ? ["VALIDATING", "FETCHING DATA", "ANALYZING CONTRACT"]
+      : ["VALIDATING", "QUEUED"] });
+  }
+  throw new Error("The scan timed out while waiting for the worker.");
+}
+
+async function loadScanHistory() {
+  if (!authState?.authenticated || !scanHistoryList) return;
+  try {
+    const body = await apiJson("/api/scans?limit=50");
+    const scans = body.scans || [];
+    scanHistoryList.innerHTML = scans.length
+      ? scans.map((scan) => {
+        const status = statusClass(scan.status);
+        const label = scan.status === "SUCCEEDED" ? "Open report" : scan.status.replaceAll("_", " ");
+        const target = scan.status === "SUCCEEDED"
+          ? `<a class="history-link" href="/dashboard/scans/${encodeURIComponent(scan.id)}">${label} →</a>`
+          : `<span class="history-state ${status}">${escapeHtml(label)}</span>`;
+        return `<div class="history-row"><div><strong>${escapeHtml(scan.id)}</strong><span>${escapeHtml(formatDate(scan.createdAt))}</span></div>${target}</div>`;
+      }).join("")
+      : `<div class="unknown-message">NO SCANS IN THIS WORKSPACE</div>`;
+  } catch (error) {
+    scanHistoryList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
+  }
+}
+
 async function scanLive() {
   if (!validateForm()) return;
+  if (!authState?.authenticated) {
+    sessionStorage.setItem(pendingScanStorageKey, JSON.stringify({
+      network: networkInput.value,
+      address: addressInput.value.trim(),
+    }));
+    authRequested = true;
+    window.location.assign(`/login?returnTo=${encodeURIComponent("/")}`);
+    return;
+  }
   showLoading(["VALIDATING", "FETCHING DATA"]);
   try {
     const response = await fetch("/api/scan", {
@@ -286,29 +431,47 @@ async function scanLive() {
     const body = await response.json();
     if (!response.ok) throw new Error(body.message || "The scan failed.");
     if (!body.job?.id) throw new Error("The scan job could not be created.");
-    let job = null;
-    for (let attempt = 0; attempt < 240; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      const jobResponse = await fetch(`/api/scan/${encodeURIComponent(body.job.id)}`);
-      const jobBody = await jobResponse.json();
-      if (!jobResponse.ok) throw new Error(jobBody.message || "The scan job could not be read.");
-      job = jobBody.job;
-      if (job.status === "SUCCEEDED") break;
-      if (job.status === "FAILED") throw new Error(job.error?.message || "The scan failed.");
-      updateLoading({ stages: job.status === "RUNNING" ? ["VALIDATING", "FETCHING DATA", "ANALYZING CONTRACT"] : ["VALIDATING", "QUEUED"] });
-    }
-    if (!job || job.status !== "SUCCEEDED") throw new Error("The scan timed out while waiting for the worker.");
+    const job = await waitForScan(body.job.id);
+    currentScan = job.scan;
+    updateLoading(currentScan);
+    window.history.pushState({}, "", `/dashboard/scans/${encodeURIComponent(body.job.id)}`);
+    renderReport(currentScan);
+  } catch (error) {
+    showLanding({ privateView: true });
+    addressError.textContent = error.message;
+  }
+}
+
+async function loadPrivateRoute() {
+  const match = reportRouteMatch();
+  if (!match) {
+    showLanding({ privateView: true });
+    return;
+  }
+  const scanId = decodeURIComponent(match[1]);
+  if (scanId.startsWith("demo-")) {
+    showLanding({ privateView: true });
+    await scanDemo(scanId.slice("demo-".length));
+    return;
+  }
+  showLoading(["LOADING REPORT"]);
+  try {
+    const job = await waitForScan(scanId);
     currentScan = job.scan;
     updateLoading(currentScan);
     renderReport(currentScan);
   } catch (error) {
-    loading.hidden = true;
-    landing.hidden = false;
+    showLanding({ privateView: true });
     addressError.textContent = error.message;
   }
 }
 
 async function scanDemo(scenario) {
+  if (!authState?.authenticated) {
+    authRequested = true;
+    window.location.assign("/login?returnTo=%2Fdashboard");
+    return;
+  }
   showLoading(["BUILDING REPORT"]);
   try {
     const response = await fetch(`/api/demo?scenario=${encodeURIComponent(scenario)}`);
@@ -316,10 +479,10 @@ async function scanDemo(scenario) {
     if (!response.ok) throw new Error(body.message || "The demo could not be loaded.");
     currentScan = body.scan;
     updateLoading(currentScan);
+    window.history.pushState({}, "", `/dashboard/scans/demo-${encodeURIComponent(scenario)}`);
     renderReport(currentScan);
   } catch (error) {
-    loading.hidden = true;
-    landing.hidden = false;
+    showLanding({ privateView: true });
     addressError.textContent = error.message;
   }
 }
@@ -815,11 +978,24 @@ function renderCoverage(scan) {
 
 function renderReport(scan) {
   updateLoading(scan);
+  setShell({ privateView: true });
   landing.hidden = false;
   loading.hidden = true;
   report.hidden = true;
-  document.querySelector("#dashboard-report").innerHTML = renderDashboardReport(scan);
+  const dashboardReport = document.querySelector("#dashboard-report");
+  dashboardReport.hidden = false;
+  dashboardReport.innerHTML = renderDashboardReport(scan);
+  document.querySelector("#landing-title").textContent = "Private Scan Report";
+  document.querySelector("#landing-description").textContent = "Your forensic report is available inside the authenticated workspace.";
+  document.querySelector("#scan-mode-card").hidden = true;
+  scanHistory.hidden = true;
+  document.querySelector("#new-scan").classList.add("report-route");
+  document.querySelector("#dashboard").classList.add("private-heading");
   document.querySelector("#download-report")?.addEventListener("click", () => window.print());
+  document.querySelector("#back-home")?.addEventListener("click", () => {
+    window.history.pushState({}, "", "/dashboard");
+    showLanding({ privateView: true });
+  });
   const deep = document.querySelector("#dashboard-deep");
   const openDeep = () => {
     if (!deep) return;
@@ -861,12 +1037,21 @@ clearAddress.addEventListener("click", () => {
 networkInput.addEventListener("change", () => { networkError.textContent = ""; });
 document.querySelectorAll("[data-demo]").forEach((button) => button.addEventListener("click", () => scanDemo(button.dataset.demo)));
 document.querySelector("#mobile-menu")?.addEventListener("click", (event) => {
-  const sidebar = document.querySelector("#sidebar");
   const open = sidebar.classList.toggle("open");
   event.currentTarget.setAttribute("aria-expanded", String(open));
 });
 
-const demoQuery = new URLSearchParams(window.location.search).get("demo");
-if (["high", "moderate", "low"].includes(demoQuery)) scanDemo(demoQuery);
-else scanDemo("high");
+window.addEventListener("popstate", () => {
+  authRequested = isAuthRoute();
+  if (authState?.authenticated && isPrivateRoute()) loadPrivateRoute();
+  else if (!authState?.authenticated) {
+    configureAuthRoute();
+    setShell({ authView: authRequested });
+  } else {
+    showLanding({ privateView: false });
+  }
+});
+
+configureAuthRoute();
+setShell({ authView: authRequested });
 refreshAuth();

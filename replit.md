@@ -35,6 +35,8 @@ npm test
 - Phase 3 persistence is implemented through `src/persistence/index.js`: memory and PostgreSQL adapters share scan idempotency, usage, tenant-scoped job reads, webhook deduplication, outbox, and lifecycle metadata contracts.
 - PostgreSQL schema and rollback are versioned in `migrations/001_phase3_persistence.sql` and `migrations/001_phase3_persistence.down.sql`; run `npm run db:migrate` with `DATABASE_URL` before using the PostgreSQL adapter.
 - Phase 3 operations and backup/restore drill are documented in `DOC/PHASE-3-OPERATIONS.md`.
+- Public/private route boundary: `/` is the public contract-entry page; `/login` and `/register` are authentication entry points; `/dashboard` and `/dashboard/scans/:scanId` are authenticated, workspace-scoped routes. A visitor's scan intent is held through authentication and is resumed without re-entering the form.
+- Private scan history is available at `/api/scans` and only returns jobs for the authenticated workspace. Scan job reads require the same server-side workspace scope.
 
 ## User preferences
 

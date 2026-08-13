@@ -9,16 +9,16 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="app-frame">
-      <aside class="sidebar" id="sidebar">
+    <div class="app-frame" id="app-frame">
+      <aside class="sidebar" id="sidebar" hidden>
         <a class="brand" href="/" aria-label="CA X-RAY home">
           <span class="brand-mark">◇</span>
           <span class="brand-copy"><strong>CA X-RAY</strong><small>CONTRACT AUDIT INTELLIGENCE</small></span>
         </a>
         <nav class="primary-nav" aria-label="Primary navigation">
-          <a class="nav-item active" href="#dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
-          <a class="nav-item" href="#new-scan"><span class="nav-icon">⌁</span><span>New Scan</span></a>
-          <a class="nav-item" href="#history"><span class="nav-icon">◷</span><span>Scan History</span></a>
+          <a class="nav-item active" href="/dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
+          <a class="nav-item" href="/dashboard#new-scan"><span class="nav-icon">⌁</span><span>New Scan</span></a>
+          <a class="nav-item" href="/dashboard#history"><span class="nav-icon">◷</span><span>Scan History</span></a>
           <a class="nav-item" href="#risk-passport"><span class="nav-icon">♢</span><span>Risk Passport</span><span class="soon">Soon</span></a>
           <a class="nav-item" href="#watchtower"><span class="nav-icon">◉</span><span>Watchtower</span><span class="soon">Soon</span></a>
           <a class="nav-item" href="#api-access"><span class="nav-icon">⌘</span><span>API Access</span><span class="soon">Soon</span></a>
@@ -36,7 +36,14 @@
       </aside>
 
       <div class="app-main">
-        <header class="topbar">
+        <header class="public-header" id="public-header">
+          <a class="brand" href="/" aria-label="CA X-RAY home">
+            <span class="brand-mark">◇</span>
+            <span class="brand-copy"><strong>CA X-RAY</strong><small>CONTRACT AUDIT INTELLIGENCE</small></span>
+          </a>
+          <a class="auth-entry" id="auth-entry" href="/login">Sign in <span>→</span></a>
+        </header>
+        <header class="topbar" id="private-topbar" hidden>
           <button type="button" class="mobile-menu" id="mobile-menu" aria-label="Open navigation" aria-expanded="false">☰</button>
           <div class="topbar-context">Workspace / <strong>Personal</strong></div>
           <div class="topbar-actions">
@@ -52,7 +59,7 @@
             <div class="auth-copy">
               <p class="eyebrow">PRIVATE WORKSPACE ACCESS</p>
               <h1 id="auth-title">Sign in to CA X-RAY</h1>
-              <p>Keep scan history and workspace membership isolated to your account. Demo reports remain available without an account.</p>
+              <p>Sign in to securely save your analysis and keep scan history isolated to your account.</p>
             </div>
             <form id="auth-form" class="auth-form" novalidate>
               <input type="hidden" id="auth-mode" value="login" />
@@ -87,11 +94,12 @@
             <select id="workspace-selector" aria-label="Select workspace"></select>
             <button type="button" class="secondary-button" id="logout-action">Sign out</button>
           </section>
-          <section id="landing" class="dashboard-page">
+          <section id="landing" class="dashboard-page public-home">
             <div class="dashboard-heading" id="dashboard">
               <div>
-                <h1>Scan New Contract</h1>
-                <p>Analyze any token or smart contract across multiple blockchains.</p>
+                <p class="eyebrow">CA X-RAY / CONTRACT INTELLIGENCE</p>
+                <h1 id="landing-title">Analyze a smart contract before you trust it.</h1>
+                <p id="landing-description">Evidence-based contract forensic analysis across supported networks.</p>
               </div>
             </div>
             <div class="scan-workbench" id="new-scan">
@@ -121,7 +129,7 @@
                 </form>
                 <p class="privacy-note"><span>♢</span> We never store your private keys. All scans are read-only.</p>
               </div>
-              <div class="scan-mode-card">
+              <div class="scan-mode-card" id="scan-mode-card">
                 <span class="mode-title">Scan Mode</span>
                 <label class="radio-option"><input type="radio" name="scan-mode" value="live" checked /> <span>Live <small>(Real Blockchain Data)</small></span></label>
                 <label class="radio-option"><input type="radio" name="scan-mode" value="demo" /> <span>Demo <small>(Sample Data)</small></span></label>
@@ -131,7 +139,17 @@
                 </div>
               </div>
             </div>
-            <div id="dashboard-report"></div>
+            <section id="scan-history" class="scan-history" hidden>
+              <div class="history-heading">
+                <div>
+                  <span class="card-kicker">PRIVATE WORKSPACE</span>
+                  <h2>Scan History</h2>
+                  <p>Previous analyses available to this workspace.</p>
+                </div>
+              </div>
+              <div id="scan-history-list" class="scan-history-list"></div>
+            </section>
+            <div id="dashboard-report" hidden></div>
           </section>
 
           <section id="scan-loading" class="loading-page" hidden>

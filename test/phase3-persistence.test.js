@@ -68,6 +68,8 @@ test("persistence status updates preserve tenant isolation and completed reports
   assert.equal(completed.status, "SUCCEEDED");
   assert.equal(completed.scan.risk.finalScore, 12);
   assert.equal(await persistence.getScanJob(created.job.id, "visitor_workspace_b"), null);
+  assert.equal((await persistence.listScanJobs(baseRequest.workspaceId)).length, 1);
+  assert.equal((await persistence.listScanJobs("visitor_workspace_b")).length, 0);
 });
 
 test("webhook event and outbox processing are idempotent", async () => {

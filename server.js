@@ -68,6 +68,14 @@ function sendJson(res, status, body, { context = null, headers = {} } = {}) {
   res.end(payload);
 }
 
+function sendRedirect(res, location) {
+  res.writeHead(302, {
+    Location: location,
+    "Cache-Control": "no-store",
+  });
+  res.end();
+}
+
 function sendFile(res, filePath) {
   const ext = path.extname(filePath);
   const contentTypes = {
@@ -426,6 +434,16 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/scans") {
+    const authenticated = requireAuthenticated(context);
+    const requestedLimit = Number(url.searchParams.get("limit") || 50);
+    const scans = await persistence.listScanJobs(authenticated.workspaceId, {
+      limit: Number.isInteger(requestedLimit) ? Math.min(100, Math.max(1, requestedLimit)) : 50,
+    });
+    sendJson(res, 200, { scans }, { context });
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/scan") {
     try {
       const body = await readBody(req);
@@ -446,7 +464,8 @@ async function handleApiUnsafe(req, res, url, context) {
         }, { context });
         return true;
       }
-      enforceScanProtection(req, context, networkId);
+      const authenticated = requireAuthenticated(context);
+      enforceScanProtection(req, authenticated, networkId);
       const headerKey = req.headers["idempotency-key"];
       if (headerKey !== undefined && (typeof headerKey !== "string" || !/^[\x21-\x7e]{1,128}$/.test(headerKey))) {
         sendJson(res, 400, {
@@ -498,6 +517,13 @@ async function handleApiUnsafe(req, res, url, context) {
       const response = created.response;
       sendJson(res, 202, response, { context });
     } catch (error) {
+      if (error.code === "UNAUTHORIZED") {
+        sendJson(res, 401, {
+          error: error.code,
+          message: "Sign in before starting a private scan.",
+        }, { context });
+        return true;
+      }
       if (error.code === "MONTHLY_SCAN_QUOTA_EXCEEDED") {
         sendJson(res, 429, {
           error: error.code,
@@ -539,7 +565,8 @@ async function handleApiUnsafe(req, res, url, context) {
 
   const jobMatch = url.pathname.match(/^\/api\/scan\/([^/]+)$/);
   if (req.method === "GET" && jobMatch) {
-    const scopedJob = await persistence.getScanJob(jobMatch[1], context.workspaceId);
+    const authenticated = requireAuthenticated(context);
+    const scopedJob = await persistence.getScanJob(jobMatch[1], authenticated.workspaceId);
     if (!scopedJob) {
       sendJson(res, 404, { error: "JOB_NOT_FOUND", message: "Scan job not found." }, { context });
       return true;
@@ -619,7 +646,16 @@ const server = http.createServer(async (req, res) => {
     sendJson(res, 405, { error: "METHOD_NOT_ALLOWED", message: "Method not allowed." }, { context });
     return;
   }
-  const filePath = safePublicPath(url.pathname);
+  const privateUiRoute = url.pathname === "/dashboard" || url.pathname.startsWith("/dashboard/");
+  if (privateUiRoute && context.kind !== "authenticated") {
+    sendRedirect(res, `/login?returnTo=${encodeURIComponent(url.pathname)}`);
+    return;
+  }
+  const filePath = safePublicPath(
+    privateUiRoute || url.pathname === "/login" || url.pathname === "/register"
+      ? "/index.html"
+      : url.pathname,
+  );
   if (!filePath) {
     sendJson(res, 403, { error: "FORBIDDEN", message: "Forbidden." });
     return;

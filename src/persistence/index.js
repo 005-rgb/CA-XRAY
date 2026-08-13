@@ -190,6 +190,22 @@ class MemoryPersistence {
     });
   }
 
+  async listScanJobs(workspaceId, { limit = 50 } = {}) {
+    return [...this.jobs.values()]
+      .filter((job) => job.workspaceId === workspaceId)
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, Math.max(1, limit))
+      .map((job) => clone({
+        id: job.id,
+        type: job.type,
+        status: job.status,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        error: job.error,
+      }));
+  }
+
   async recordWebhookEvent({ provider, eventId, payload = {}, receivedAt = this.clock() }) {
     const key = `${provider}:${eventId}`;
     if (this.webhooks.has(key)) return { duplicate: true, event: clone(this.webhooks.get(key)) };
@@ -441,6 +457,18 @@ class PostgresPersistence {
       [jobId, workspaceId],
     );
     return scanJobFromRow(result.rows[0]);
+  }
+
+  async listScanJobs(workspaceId, { limit = 50 } = {}) {
+    const result = await this.pool.query(
+      `SELECT id, type, status, created_at, started_at, completed_at, error_code, error_message
+         FROM scan_jobs
+        WHERE workspace_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2`,
+      [workspaceId, Math.max(1, limit)],
+    );
+    return result.rows.map(scanJobFromRow);
   }
 
   async recordWebhookEvent({ provider, eventId, payload = {}, receivedAt = this.clock() }) {
