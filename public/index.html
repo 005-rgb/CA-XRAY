@@ -135,52 +135,67 @@
                 <article class="admin-summary-card"><span class="card-kicker">APPROVALS</span><strong id="admin-approval-count">—</strong><span>Pending four-eyes reviews</span></article>
                 <article class="admin-summary-card"><span class="card-kicker">AUDIT EVENTS</span><strong id="admin-audit-count">—</strong><span>Platform events retained</span></article>
               </div>
+              <section class="admin-ops-strip" aria-label="Platform operating status">
+                <div class="admin-ops-status"><span class="ops-pulse" id="admin-ops-pulse"></span><div><span class="card-kicker">CONTROL PLANE</span><strong id="admin-system-state">Awaiting verification</strong><span id="admin-system-note">Live platform telemetry</span></div></div>
+                <div class="admin-ops-stat"><span>Coverage</span><strong id="admin-coverage">—</strong></div>
+                <div class="admin-ops-stat"><span>Review queue</span><strong id="admin-review-queue">—</strong></div>
+                <div class="admin-ops-stat"><span>Last platform event</span><strong id="admin-last-event">—</strong></div>
+              </section>
+              <nav class="admin-section-nav" aria-label="Admin dashboard sections">
+                <button type="button" class="admin-section-tab active" data-admin-target="admin-section-overview">Overview</button>
+                <button type="button" class="admin-section-tab" data-admin-target="admin-section-providers">Providers</button>
+                <button type="button" class="admin-section-tab" data-admin-target="admin-section-access">Access &amp; flags</button>
+                <button type="button" class="admin-section-tab" data-admin-target="admin-section-billing">Billing</button>
+                <button type="button" class="admin-section-tab" data-admin-target="admin-section-audit">Audit trail</button>
+              </nav>
               <div class="admin-grid">
-                <section class="admin-card admin-card-wide">
+                <section class="admin-card admin-card-wide" id="admin-section-overview">
                   <div class="admin-card-heading"><div><span class="card-kicker">PROVIDER CONTROL</span><h2>Provider and network posture</h2></div><span class="admin-snapshot-time" id="admin-snapshot-time">—</span></div>
                   <p class="admin-note">Runtime health is process telemetry. Configuration is staged as a draft, validated by the API, and published separately. Kill switches and disabled states require independent approval.</p>
-                  <div id="admin-providers" class="admin-table-wrap"><div class="unknown-message">Verify your session to load provider health.</div></div>
+                  <div id="admin-section-providers">
+                    <div id="admin-providers" class="admin-table-wrap"><div class="unknown-message">Verify your session to load provider health.</div></div>
+                  </div>
                 </section>
-                <section class="admin-card">
+                <section class="admin-card" id="admin-section-networks">
                   <div class="admin-card-heading"><div><span class="card-kicker">NETWORK POSTURE</span><h2>Supported networks</h2></div><span class="admin-card-meta">Read-only catalog</span></div>
                   <p class="admin-note">Network routing is fixed server-side. Provider identifiers and credentials are never exposed to the browser.</p>
                   <div id="admin-networks" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
-                <section class="admin-card">
+                <section class="admin-card" id="admin-section-health">
                   <div class="admin-card-heading"><div><span class="card-kicker">PLATFORM HEALTH</span><h2>Runtime boundary</h2></div></div>
                   <div id="admin-health" class="admin-health-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
-                <section class="admin-card">
+                <section class="admin-card" id="admin-section-access">
                   <div class="admin-card-heading"><div><span class="card-kicker">FEATURE FLAGS</span><h2>Controlled rollout</h2></div></div>
                   <div id="admin-flags" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
-                <section class="admin-card">
+                <section class="admin-card" id="admin-section-plans">
                   <div class="admin-card-heading"><div><span class="card-kicker">PLAN CATALOG</span><h2>Effective capabilities</h2></div></div>
                   <div id="admin-plans" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
-                <section class="admin-card">
+                <section class="admin-card" id="admin-section-accounts">
                   <div class="admin-card-heading"><div><span class="card-kicker">ACCOUNT INVENTORY</span><h2>Recent users</h2></div></div>
                   <div id="admin-users" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                   <button type="button" class="view-all admin-inventory-link" id="admin-users-link">Open user inventory</button>
                 </section>
-                <section class="admin-card">
+                <section class="admin-card" id="admin-section-workspaces">
                   <div class="admin-card-heading"><div><span class="card-kicker">TENANT INVENTORY</span><h2>Recent workspaces</h2></div></div>
                   <div id="admin-workspaces" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                   <button type="button" class="view-all admin-inventory-link" id="admin-workspaces-link">Open workspace inventory</button>
                 </section>
-                <section class="admin-card admin-card-wide">
+                <section class="admin-card admin-card-wide" id="admin-section-approvals">
                   <div class="admin-card-heading"><div><span class="card-kicker">FOUR-EYES QUEUE</span><h2>Pending approvals</h2></div><span class="admin-card-meta">Independent operator required</span></div>
                   <div id="admin-approvals" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
-                <section class="admin-card">
+                <section class="admin-card" id="admin-section-billing">
                   <div class="admin-card-heading"><div><span class="card-kicker">BILLING SIGNALS</span><h2>Subscriptions</h2></div></div>
                   <div id="admin-subscriptions" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
-                <section class="admin-card">
+                <section class="admin-card" id="admin-section-webhooks">
                   <div class="admin-card-heading"><div><span class="card-kicker">WEBHOOK INBOX</span><h2>Billing events</h2></div></div>
                   <div id="admin-webhooks" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>
-                <section class="admin-card admin-card-wide">
+                <section class="admin-card admin-card-wide" id="admin-section-audit">
                   <div class="admin-card-heading"><div><span class="card-kicker">AUDIT TRAIL</span><h2>Platform changes</h2></div><span class="admin-card-meta">Newest first · provider identity retained server-side</span></div>
                   <div id="admin-audit" class="admin-audit-list"><div class="unknown-message">Awaiting verification.</div></div>
                 </section>

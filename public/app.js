@@ -83,6 +83,13 @@ const adminInventorySearch = document.querySelector("#admin-inventory-search");
 const adminInventoryQuery = document.querySelector("#admin-inventory-query");
 const adminInventoryResults = document.querySelector("#admin-inventory-results");
 const adminInventoryClose = document.querySelector("#admin-inventory-close");
+const adminSectionTabs = document.querySelectorAll("[data-admin-target]");
+const adminOpsPulse = document.querySelector("#admin-ops-pulse");
+const adminSystemState = document.querySelector("#admin-system-state");
+const adminSystemNote = document.querySelector("#admin-system-note");
+const adminCoverage = document.querySelector("#admin-coverage");
+const adminReviewQueue = document.querySelector("#admin-review-queue");
+const adminLastEvent = document.querySelector("#admin-last-event");
 let authState = null;
 let currentScan = null;
 let currentJob = null;
@@ -671,6 +678,10 @@ function renderAdminOverview(data) {
   const stats = data.stats || {};
   const scans = data.scans || {};
   const queue = data.queue || {};
+  const providers = data.providers || [];
+  const networks = data.networks || [];
+  const approvals = data.approvals || [];
+  const audit = data.audit || [];
   const terminal = Number(scans.succeeded || 0) + Number(scans.failed || 0) + Number(scans.cancelled || 0);
   const failureRate = terminal ? `${((Number(scans.failed || 0) / terminal) * 100).toFixed(1)}%` : "—";
   adminScanThroughput.textContent = Number(scans.completed24h || 0).toLocaleString("en-US");
@@ -686,16 +697,28 @@ function renderAdminOverview(data) {
   adminUserCount.textContent = Number(stats.users || 0).toLocaleString("en-US");
   adminUserSummary.textContent = `${Number(stats.verifiedUsers || 0)} verified · ${Number(stats.activeSessions || 0)} active sessions`;
   adminSnapshotTime.textContent = `Snapshot ${formatDate(data.generatedAt)}`;
+  const storageReady = data.platform?.storage?.configured;
+  const identityReady = data.platform?.auth?.configured;
+  const activeProviders = providers.filter((provider) => !provider.killSwitch && provider.state === "ACTIVE").length;
+  const platformReady = storageReady && identityReady && activeProviders > 0;
+  adminSystemState.textContent = platformReady ? "OPERATIONAL" : "ACTION REQUIRED";
+  adminSystemNote.textContent = platformReady
+    ? `${activeProviders} provider${activeProviders === 1 ? "" : "s"} healthy · telemetry live`
+    : "Review runtime boundary below";
+  adminOpsPulse.classList.toggle("warning", !platformReady);
+  adminCoverage.textContent = `${activeProviders}/${providers.length || 0} providers · ${networks.length} networks`;
+  adminReviewQueue.textContent = `${approvals.filter((approval) => approval.status === "PENDING").length} pending`;
+  adminLastEvent.textContent = audit[0]?.createdAt ? formatDate(audit[0].createdAt) : "No events";
   renderAdminHealth(data);
-  renderAdminNetworks(data.networks || []);
+  renderAdminNetworks(networks);
   renderAdminInventory(data);
-  renderAdminProviders(data.providers || [], data.approvals || []);
-  renderAdminFlags(data.flags || [], data.approvals || []);
+  renderAdminProviders(providers, approvals);
+  renderAdminFlags(data.flags || [], approvals);
   renderAdminPlans(data.plans?.items || []);
-  renderAdminApprovals(data.approvals || []);
+  renderAdminApprovals(approvals);
   renderAdminSubscriptions(data.subscriptions || []);
   renderAdminWebhooks(data.webhooks || []);
-  renderAdminAudit(data.audit || []);
+  renderAdminAudit(audit);
 }
 
 async function loadAdminData() {
@@ -733,6 +756,13 @@ adminStepupForm?.addEventListener("submit", async (event) => {
 });
 
 document.querySelector("#admin-refresh")?.addEventListener("click", loadAdminData);
+
+adminSectionTabs.forEach((tab) => tab.addEventListener("click", () => {
+  const target = document.getElementById(tab.dataset.adminTarget);
+  if (!target) return;
+  adminSectionTabs.forEach((item) => item.classList.toggle("active", item === tab));
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+}));
 
 adminProviders?.addEventListener("submit", async (event) => {
   const providerForm = event.target.closest(".admin-provider-form");
