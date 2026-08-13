@@ -209,6 +209,31 @@ Dashboard user menampilkan:
 - anggota/workspace sesuai role;
 - export hanya jika diizinkan entitlement.
 
+#### 5.5A Responsive dashboard dan report experience
+
+UI utama CA X-RAY mengikuti referensi visual yang disetujui pada
+`attached_assets/ChatGPT_Image_13_Agu_2026,_07.07.14_1786579645013.png` dan prompt
+responsive pada `attached_assets/Pasted--29-RESPONSIVE-UI-DESKTOP-MOBILE--1786579572882_1786579572884.txt`.
+
+Acceptance requirement:
+
+- Satu implementasi UI dan design system digunakan untuk desktop, tablet, dan mobile;
+  tidak boleh ada codebase mobile terpisah.
+- Desktop menjadi pengalaman utama: sidebar persisten, content max-width yang nyaman,
+  report-first layout, scan form, summary panel kanan, risk breakdown, data status,
+  evidence sources, tabs, dan findings table.
+- Hierarki report harus mempertahankan token identity, overall risk, confidence/
+  reliability, why this score, top risks, key metrics, detailed findings, dan evidence.
+- Mobile mengubah sidebar menjadi drawer, menyusun form dan panel secara vertikal,
+  mempertahankan risk di bagian atas, membuat tabs dapat di-scroll horizontal, dan
+  menjaga tabel tetap terbaca melalui controlled horizontal scrolling.
+- Semua kontrol penting memiliki touch target yang nyaman; tidak ada ketergantungan
+  pada hover; address panjang tidak boleh merusak layout.
+- State `valid`, `partial`, `unknown`, `unavailable`, `provider error`, demo, loading,
+  dan error harus terlihat jelas tanpa mengubah data menjadi nilai aman palsu.
+- Verifikasi visual minimum dilakukan pada 1440, 1280, 1024, 768, 390, dan 375 px;
+  tidak boleh ada page overflow, overlap, atau informasi kritis yang hilang.
+
 #### 5.6 Continuous intelligence dan retention moat
 
 - Setiap kontrak memiliki **Risk Passport** dengan risk, reliability, findings,

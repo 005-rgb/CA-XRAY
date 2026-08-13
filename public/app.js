@@ -442,6 +442,126 @@ function renderFinalAssessment(scan) {
   </section>`;
 }
 
+function dashboardValue(dataPoint, formatter = formatValue) {
+  if (!dataPoint || dataPoint.value === null || dataPoint.value === undefined || dataPoint.value === "") {
+    return dataPoint?.status === "UNAVAILABLE" ? "Unavailable" : "Unknown";
+  }
+  return formatter(dataPoint.value);
+}
+
+function dashboardStatus(dataPoint, label = null) {
+  const status = dataPoint?.status || "UNKNOWN";
+  const statusLabel = label || (status === "DEMO" ? "Valid" : status.replaceAll("_", " "));
+  return `<span class="dashboard-status ${statusClass(status)}">${escapeHtml(statusLabel)}</span>`;
+}
+
+function dashboardCategoryBar(label, score, tone = "red") {
+  const numericScore = Number.isFinite(Number(score)) ? Math.round(Number(score)) : null;
+  const width = numericScore === null ? 0 : Math.max(0, Math.min(100, numericScore));
+  return `<div class="category-row"><span>${escapeHtml(label)}</span><div class="category-track ${tone} coverage-${coverageClass(width)}"><span></span></div><strong>${numericScore === null ? "—" : `${numericScore} / 100`}</strong></div>`;
+}
+
+function renderDashboardReport(scan) {
+  const risk = scan.risk || {};
+  const score = risk.finalScore;
+  const scoreLabel = score === null || score === undefined ? "INSUFFICIENT DATA" : Math.round(score);
+  const findings = scan.findings || [];
+  const risks = findings.filter((finding) => !finding.positive).slice(0, 4);
+  const categories = risk.categories || {};
+  const securityScore = categories.contract?.score;
+  const tradingScore = categories.trading?.score;
+  const reliabilityScore = scan.reliability?.score;
+  const marketScore = categories.marketProject?.score;
+  const sourceCount = scan.evidence?.length || 0;
+  const partialCount = scan.errors?.length || 0;
+  const tokenName = dashboardValue(scan.token?.name);
+  const tokenSymbol = dashboardValue(scan.token?.symbol);
+  const totalSupply = dashboardValue(scan.token?.totalSupply, (value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? (numeric / 10 ** Number(dashboardValue(scan.token?.decimals, formatValue))).toLocaleString("en-US", { maximumFractionDigits: 0 }) : formatValue(value);
+  });
+  const contractAddress = scan.contract?.address || "UNKNOWN";
+  const statusPoint = (point) => point || { status: scan.mode === "DEMO" ? "DEMO" : "VERIFIED", value: true };
+  const topRiskRows = risks.length ? risks : [{ title: "No evidence-backed risk finding", severity: "UNKNOWN", why: "No material risk was established.", category: "—" }];
+  const dataRows = [
+    ["On-Chain Data", statusPoint(scan.network)],
+    ["Contract Code", statusPoint(scan.security?.sourceVerified)],
+    ["Liquidity Data", statusPoint(scan.liquidity?.liquidityUsd)],
+    ["Holder Data", statusPoint(scan.holders?.totalHolders)],
+    ["Market Data", statusPoint(scan.market?.price)],
+    ["Social Data", { status: "UNAVAILABLE", value: null }],
+  ];
+  return `
+    <div class="dashboard-report">
+      <div class="report-heading">
+        <div>
+          <h2>Scan Report</h2>
+          <p class="report-subtitle">Evidence-backed forensic assessment for the selected contract.</p>
+        </div>
+        <button type="button" class="download-button" id="download-report">⇩ <span>Download Report</span></button>
+      </div>
+      <div class="report-contract-row">
+        <div><span>Contract</span><button type="button" class="contract-link" data-copy="${escapeHtml(contractAddress)}">${escapeHtml(truncateAddress(contractAddress))} <small>▣</small></button></div>
+        <div><span>Network</span><strong class="inline-network">◆ ${escapeHtml(scan.network?.name || "Unknown")}</strong></div>
+        <div><span>Scan Mode</span>${dashboardStatus({ status: scan.mode === "DEMO" ? "DEMO" : "VERIFIED" }, scan.mode === "DEMO" ? "Demo" : "Live")}</div>
+        <div><span>Scan ID</span><strong>${escapeHtml(scan.scanId || "UNKNOWN")}</strong></div>
+        <div><span>Date</span><strong>${escapeHtml(formatDate(scan.timestamp))}</strong></div>
+      </div>
+      ${scan.mode === "DEMO" ? `<div class="dashboard-demo-note">Demo report shown with fixed sample data. Run a live scan to replace it with provider evidence.</div>` : ""}
+      <div class="dashboard-report-grid">
+        <section class="overview-card">
+          <div class="overview-risk">
+            <span class="card-kicker">OVERALL RISK</span>
+            <div class="dashboard-score ${scoreTone(score)}">${escapeHtml(String(scoreLabel))}<small>/ 100</small></div>
+            <span class="risk-badge ${scoreTone(score)}">${escapeHtml(risk.level || "UNKNOWN")}</span>
+            <div class="score-meter"><span class="${scoreTone(score)} coverage-${coverageClass(score)}"></span></div>
+            <div class="overview-metric"><span>Risk Score</span><strong>${score === null || score === undefined ? "Unknown" : `${Math.round(score)} / 100`}</strong></div>
+            <div class="overview-metric reliability"><span>Reliability Score</span><strong>${scan.reliability ? `${Math.round(scan.reliability.score)} / 100` : "Unknown"}</strong></div>
+            <div class="overview-metric"><span>Confidence</span><strong>${escapeHtml(scan.risk?.confidence || "Unknown")}</strong></div>
+            <div class="overview-metric"><span>Scan Mode</span><strong>${scan.mode === "DEMO" ? "Demo Data" : "Live Data"}</strong></div>
+          </div>
+          <div class="why-score">
+            <div class="card-kicker">WHY THIS SCORE?</div>
+            <p class="why-intro">This score is primarily influenced by the contract's control surface, trading conditions, and available evidence quality.</p>
+            <ul class="reason-list">${(risks.length ? risks : [{ title: "No material risk finding established.", severity: "POSITIVE", positive: true }]).map((finding) => `<li><span class="reason-icon ${finding.positive ? "positive" : "negative"}">${finding.positive ? "✓" : "!"}</span><span>${escapeHtml(finding.title)}</span><em class="${finding.positive ? "positive" : "negative"}">${finding.positive ? "Positive" : "High Impact"}</em></li>`).join("")}</ul>
+            <button type="button" class="outline-button" id="open-full-analysis">View Full Analysis <span>→</span></button>
+          </div>
+        </section>
+        <aside class="report-side-column">
+          <section class="side-card"><div class="card-kicker">QUICK SUMMARY</div>
+            <div class="summary-row"><span>Token Name</span><strong>${escapeHtml(tokenName)}</strong></div>
+            <div class="summary-row"><span>Symbol</span><strong>${escapeHtml(tokenSymbol)}</strong></div>
+            <div class="summary-row"><span>Decimals</span><strong>${escapeHtml(dashboardValue(scan.token?.decimals))}</strong></div>
+            <div class="summary-row"><span>Total Supply</span><strong>${escapeHtml(totalSupply)}</strong></div>
+            <div class="summary-row"><span>Holders</span><strong>${escapeHtml(dashboardValue(scan.holders?.totalHolders))}</strong></div>
+            <div class="summary-row"><span>Contract Age</span><strong>${escapeHtml(dashboardValue(scan.deployer?.deploymentDate))}</strong></div>
+          </section>
+          <section class="side-card"><div class="card-kicker">RISK BREAKDOWN</div>
+            ${dashboardCategoryBar("Security", securityScore, "red")}
+            ${dashboardCategoryBar("Trading Safety", tradingScore, "orange")}
+            ${dashboardCategoryBar("Reliability", reliabilityScore, "yellow")}
+            ${dashboardCategoryBar("Market", marketScore, "yellow")}
+            <button type="button" class="side-link" id="open-risk-breakdown">View All Categories <span>→</span></button>
+          </section>
+        </aside>
+      </div>
+      <div class="report-tabs" role="tablist" aria-label="Report sections">
+        <button class="active" type="button">Overview</button><button type="button">Contract Forensics</button><button type="button">Trading Safety</button><button type="button">Liquidity</button><button type="button">Holder Analysis</button><button type="button">Market</button><button type="button">Evidence</button>
+      </div>
+      <div class="dashboard-lower-grid">
+        <section class="report-table-card">
+          <div class="card-heading"><div class="card-kicker">TOP RISKS</div><button type="button" class="side-link" id="open-findings">View All Findings <span>→</span></button></div>
+          <div class="responsive-table"><table><thead><tr><th>RISK</th><th>CATEGORY</th><th>SEVERITY</th><th>IMPACT</th><th>STATUS</th></tr></thead><tbody>${topRiskRows.map((finding) => `<tr><td><strong>${escapeHtml(finding.title)}</strong></td><td>${escapeHtml(categoryLabels[finding.category] || finding.category || "Security")}</td><td><span class="severity-chip ${statusClass(finding.severity)}">${escapeHtml(finding.severity || "UNKNOWN")}</span></td><td>${escapeHtml(finding.impact ? `+${finding.impact}` : finding.severity === "UNKNOWN" ? "—" : "High")}</td><td><span class="detected-chip">${finding.severity === "UNKNOWN" ? "Unknown" : "Detected"}</span></td></tr>`).join("")}</tbody></table></div>
+        </section>
+        <div class="report-side-column lower-side">
+          <section class="side-card"><div class="card-kicker">DATA STATUS</div>${dataRows.map(([label, point]) => `<div class="status-row"><span>${label}</span>${dashboardStatus(point, point.status === "UNAVAILABLE" ? "Unavailable" : point.status === "DEMO" ? "Valid" : "Valid")}</div>`).join("")}</section>
+          <section class="side-card"><div class="card-kicker">EVIDENCE SOURCES</div><div class="evidence-count"><strong>${sourceCount}</strong><span>Total Sources</span></div><div class="evidence-breakdown"><span><b class="green-text">${Math.max(0, sourceCount - partialCount)}</b> Successful</span><span><b class="orange-text">${partialCount}</b> Partial</span><span><b class="red-text">0</b> Failed</span></div><button type="button" class="side-link" id="open-evidence">View Evidence <span>→</span></button></section>
+        </div>
+      </div>
+      <div id="dashboard-deep" class="dashboard-deep" hidden>${renderUserImpacts(scan)}${renderRiskBreakdown(scan)}${renderForensics(scan)}${renderHolderLiquidity(scan)}${renderMarketDeployer(scan)}${renderFindings(scan)}${renderEvidence(scan)}${renderFinalAssessment(scan)}</div>
+    </div>`;
+}
+
 function renderRiskProfile(scan) {
   const profile = scan.intelligence?.riskProfile || [];
   return `<section class="report-section full intelligence-section">${sectionHeading("02", "RISK PROFILE", "02 / 16")}
@@ -548,23 +668,21 @@ function renderCoverage(scan) {
 
 function renderReport(scan) {
   updateLoading(scan);
-  landing.hidden = true;
+  landing.hidden = false;
   loading.hidden = true;
-  report.hidden = false;
-  report.innerHTML = `<div class="report-shell">${renderHero(scan)}<div class="report-grid quick-xray">${renderExecutiveSummary(scan)}${renderRiskProfile(scan)}${renderCapabilities(scan)}${renderPowerMap(scan)}${renderExitability(scan)}</div>
-    <div class="investigation-switch"><div><span class="data-label">INVESTIGATION MODE</span><strong>QUICK X-RAY</strong><p>Open the detailed evidence and calculation sections when deeper review is required.</p></div><button class="view-all" id="toggle-investigation">OPEN DEEP INVESTIGATION</button></div>
-    <div id="deep-investigation" class="report-grid deep-investigation" hidden>${renderUserImpacts(scan)}${renderRiskBreakdown(scan)}${renderScoreExplanation(scan)}${renderForensics(scan)}${renderHolderLiquidity(scan)}${renderMarketDeployer(scan)}${renderCompoundRisk(scan)}${renderSignalContext(scan)}${renderFindings(scan)}${renderEvidence(scan)}${renderCoverage(scan)}${renderFinalAssessment(scan)}</div><div class="report-footer">CA X-RAY / ASSESSMENT BASED ON AVAILABLE DATA AT SCAN TIME / NO FINANCIAL ADVICE</div></div>`;
-  document.querySelector("#back-home")?.addEventListener("click", showLanding);
-  document.querySelector("#toggle-investigation")?.addEventListener("click", (event) => {
-    const target = document.querySelector("#deep-investigation");
-    target.hidden = !target.hidden;
-    event.currentTarget.textContent = target.hidden ? "OPEN DEEP INVESTIGATION" : "CLOSE DEEP INVESTIGATION";
-  });
-  document.querySelector("#view-all-findings")?.addEventListener("click", (event) => {
-    const target = document.querySelector("#all-findings");
-    target.hidden = !target.hidden;
-    event.currentTarget.textContent = target.hidden ? `VIEW ALL FINDINGS (${scan.findings.length - 5})` : "HIDE ADDITIONAL FINDINGS";
-  });
+  report.hidden = true;
+  document.querySelector("#dashboard-report").innerHTML = renderDashboardReport(scan);
+  document.querySelector("#download-report")?.addEventListener("click", () => window.print());
+  const deep = document.querySelector("#dashboard-deep");
+  const openDeep = () => {
+    if (!deep) return;
+    deep.hidden = false;
+    deep.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  document.querySelector("#open-full-analysis")?.addEventListener("click", openDeep);
+  document.querySelector("#open-risk-breakdown")?.addEventListener("click", openDeep);
+  document.querySelector("#open-findings")?.addEventListener("click", openDeep);
+  document.querySelector("#open-evidence")?.addEventListener("click", openDeep);
   document.querySelectorAll("[data-copy]").forEach((button) => {
     button.addEventListener("click", async () => {
       try {
@@ -595,6 +713,12 @@ clearAddress.addEventListener("click", () => {
 });
 networkInput.addEventListener("change", () => { networkError.textContent = ""; });
 document.querySelectorAll("[data-demo]").forEach((button) => button.addEventListener("click", () => scanDemo(button.dataset.demo)));
+document.querySelector("#mobile-menu")?.addEventListener("click", (event) => {
+  const sidebar = document.querySelector("#sidebar");
+  const open = sidebar.classList.toggle("open");
+  event.currentTarget.setAttribute("aria-expanded", String(open));
+});
 
 const demoQuery = new URLSearchParams(window.location.search).get("demo");
 if (["high", "moderate", "low"].includes(demoQuery)) scanDemo(demoQuery);
+else scanDemo("high");

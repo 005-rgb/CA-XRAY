@@ -22,6 +22,7 @@ berikutnya dimulai.
 | 1 | Architecture dan threat model | P0 | Trust boundary dan risk register disetujui |
 | 2 | Core engine audit dan API adaptability | P0 | Core stabil, versioned, dan provider-resilient |
 | 3 | PostgreSQL dan persistence | P0 | Data durable, tenant-ready, recoverable |
+| 3.A | Responsive dashboard dan forensic report UI | P0 | Report-first UI konsisten di desktop dan mobile |
 | 4 | Authentication dan tenant isolation | P0 | Tidak ada akses lintas tenant |
 | 5 | Private dashboard dan scan jobs | P0 | User dapat menjalankan dan menelusuri scan |
 | 6 | Continuous intelligence dan retention | P1 | Risk Passport dan Watchtower menghasilkan repeat value |
@@ -115,6 +116,36 @@ Keputusan Phase 3 yang telah dikunci:
 
 **Gate:** data tetap konsisten setelah restart, duplicate request, partial failure,
 migration rollback, dan restore drill.
+
+## Fase 3.A — Responsive dashboard dan forensic report UI
+
+**Tujuan:** menerjemahkan report forensic menjadi pengalaman dashboard yang dapat
+dibaca dan digunakan pada desktop maupun mobile, tanpa memisahkan implementasi UI.
+
+**Referensi wajib:**
+
+- Visual target: `attached_assets/ChatGPT_Image_13_Agu_2026,_07.07.14_1786579645013.png`
+- Responsive contract:
+  `attached_assets/Pasted--29-RESPONSIVE-UI-DESKTOP-MOBILE--1786579572882_1786579572884.txt`
+
+**Output:**
+
+- Shell dashboard dengan sidebar, top bar, workspace context, plan usage, scan form,
+  scan mode, quick summary, risk breakdown, data status, evidence sources, tabs, dan
+  top-risk table.
+- Report-first hierarchy: token identity → overall risk → reliability/confidence →
+  why this score → top risks → metrics → findings → evidence.
+- Satu komponen/layout yang responsif; sidebar menjadi drawer di mobile dan multi-column
+  card menjadi single-column tanpa menghilangkan informasi penting.
+- Tabel forensic menggunakan container scroll terkontrol; address, status, severity,
+  dan evidence tetap dapat diakses tanpa horizontal scroll halaman.
+- Demo report tetap diberi label demo dan tidak boleh bercampur dengan data live.
+- Visual QA pada 1440, 1280, 1024, 768, 390, dan 375 px, termasuk scan form, loading,
+  error, risk prominence, tab navigation, dan report readability.
+
+**Gate:** screenshot desktop mendekati referensi yang disetujui; mobile tidak
+overflow/overlap; user dapat memasukkan address, memilih network, menjalankan scan,
+melihat risk, membuka detail analysis, dan mengakses evidence.
 
 ## Fase 4 — Authentication dan tenant isolation
 

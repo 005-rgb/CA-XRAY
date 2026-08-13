@@ -1,0 +1,239 @@
+==================================================
+29. RESPONSIVE UI — DESKTOP + MOBILE
+==================================================
+
+The UI MUST support two deliberate layouts:
+
+A. DESKTOP — PRIMARY EXPERIENCE
+B. MOBILE — RESPONSIVE EXPERIENCE
+
+IMPORTANT:
+This is NOT a separate mobile application.
+Do NOT create a second UI codebase.
+
+Use the same components and design system with responsive behavior.
+
+--------------------------------------------------
+A. DESKTOP
+--------------------------------------------------
+
+Desktop is the primary CA X-RAY experience.
+
+Target:
+
+- wide desktop screens
+- laptop screens
+- 1440px+ displays
+
+Maintain:
+
+- persistent navigation where appropriate
+- clear content max-width
+- report-first layout
+- readable tables
+- comfortable information density
+- two-column layouts where they improve usability
+- right-side summary panels where already appropriate
+
+Do not make the interface excessively wide.
+
+Important information must remain within a comfortable reading width.
+
+The report should feel like a professional forensic report, not a dashboard filled with oversized cards.
+
+--------------------------------------------------
+B. MOBILE
+--------------------------------------------------
+
+The application MUST remain fully usable on mobile.
+
+Do NOT simply shrink the desktop UI.
+
+Adapt the layout intelligently.
+
+On mobile:
+
+- sidebar becomes a compact navigation/drawer
+- horizontal desktop navigation may become a menu
+- multi-column layouts become single-column layouts
+- secondary panels move below primary content
+- scan input becomes vertically stacked
+- buttons become touch-friendly
+- report sections become sequential
+- important risk information remains visible near the top
+- typography remains readable
+- spacing becomes tighter but never cramped
+
+The user must be able to:
+
+1. Enter a contract address.
+2. Select a network.
+3. Start a scan.
+4. See scan status.
+5. Read the overall risk.
+6. Understand the primary findings.
+7. Read detailed analysis.
+8. Access evidence.
+9. Navigate scan history.
+
+All of these must remain practical on a normal smartphone screen.
+
+--------------------------------------------------
+C. MOBILE REPORT PRIORITY
+--------------------------------------------------
+
+On mobile, preserve this priority:
+
+1. Token identity
+2. Overall risk
+3. Confidence / reliability
+4. Why this score
+5. Top risks
+6. Positive signals
+7. Key metrics
+8. Contract findings
+9. Trading safety
+10. Liquidity
+11. Holder analysis
+12. Deployer
+13. Market
+14. Evidence
+15. Final assessment
+
+Do not force the user to horizontally scroll through the entire report.
+
+--------------------------------------------------
+D. MOBILE TABLES
+--------------------------------------------------
+
+Tables are important and MUST remain usable.
+
+Prefer:
+
+- responsive table containers
+- controlled horizontal scrolling when necessary
+- compact but readable columns
+- priority columns shown first
+- expandable/detail rows where an existing table cannot reasonably fit
+
+Never:
+
+- squash text until unreadable
+- clip important values
+- break addresses into ugly multi-line blocks
+- hide critical findings simply because the screen is narrow
+
+For very wide forensic tables, controlled horizontal scrolling is acceptable.
+
+--------------------------------------------------
+E. TOUCH INTERACTION
+--------------------------------------------------
+
+Mobile controls must have comfortable touch targets.
+
+Ensure:
+
+- buttons are easy to tap
+- dropdowns are usable
+- tabs are horizontally scrollable when necessary
+- copy-address actions remain accessible
+- no tiny icon-only controls for important actions
+
+Avoid hover-dependent interactions because mobile has no hover.
+
+--------------------------------------------------
+F. RESPONSIVE BREAKPOINTS
+--------------------------------------------------
+
+Use the project's existing responsive system if one exists.
+
+Do NOT introduce a new responsive framework just for this task.
+
+Use sensible breakpoints for:
+
+- desktop
+- tablet
+- mobile
+
+Avoid excessive breakpoint fragmentation.
+
+Prefer fluid CSS/layout rules over many device-specific overrides.
+
+--------------------------------------------------
+G. RESPONSIVE STATES
+--------------------------------------------------
+
+Test at minimum:
+
+- 1440px desktop
+- 1280px desktop
+- 1024px tablet/small desktop
+- 768px tablet
+- 390px mobile
+- 375px mobile
+
+Verify:
+
+[ ] No horizontal page overflow.
+[ ] No overlapping components.
+[ ] Navigation remains accessible.
+[ ] Scan form remains usable.
+[ ] Risk score remains prominent.
+[ ] Tables remain readable.
+[ ] Findings remain understandable.
+[ ] Buttons remain usable.
+[ ] Long contract addresses do not break layout.
+[ ] Error messages remain readable.
+[ ] Loading states remain usable.
+[ ] Report sections maintain correct hierarchy.
+
+--------------------------------------------------
+H. RESPONSIVE DESIGN PRINCIPLE
+--------------------------------------------------
+
+Desktop and mobile should feel like the SAME CA X-RAY PRODUCT.
+
+Do not create:
+
+- separate visual identities
+- separate color systems
+- separate typography systems
+- separate component implementations
+
+The design language must remain consistent.
+
+Desktop:
+MORE INFORMATION DENSITY
+
+Mobile:
+MORE INFORMATION PRIORITIZATION
+
+This is the key responsive principle.
+
+--------------------------------------------------
+I. FINAL RESPONSIVE ACCEPTANCE TEST
+--------------------------------------------------
+
+Before completion, visually inspect the actual application at desktop and mobile widths.
+
+Do not assume responsive CSS works merely because the build passes.
+
+The UI is NOT complete until:
+
+- desktop looks polished
+- mobile looks intentional
+- report remains readable
+- tables remain usable
+- scan flow works
+- no major overflow exists
+- no critical information disappears
+
+FINAL RULE:
+
+BUILD ONE CA X-RAY UI.
+
+MAKE IT EXCELLENT ON DESKTOP.
+
+MAKE IT EQUALLY USABLE ON MOBILE.
+
+DO NOT BUILD TWO DIFFERENT PRODUCTS.
