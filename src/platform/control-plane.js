@@ -185,6 +185,14 @@ class PlatformControlPlane {
         concurrencyLimit: config.concurrencyLimit,
         priority: config.priority ?? 100,
         version: config.version,
+        draft: config.draft || null,
+        published: config.published ? {
+          version: config.version,
+          state: config.published.state,
+          killSwitch: Boolean(config.published.killSwitch),
+          updatedAt: config.updatedAt || null,
+        } : null,
+        hasHistory: Array.isArray(config.history) && config.history.length > 0,
         runtime: health[providerId] || null,
         updatedAt: config.updatedAt || null,
       };

@@ -76,6 +76,7 @@ const adminUsers = document.querySelector("#admin-users");
 const adminWorkspaces = document.querySelector("#admin-workspaces");
 const adminSubscriptions = document.querySelector("#admin-subscriptions");
 const adminWebhooks = document.querySelector("#admin-webhooks");
+const adminNetworks = document.querySelector("#admin-networks");
 const adminInventoryDrawer = document.querySelector("#admin-inventory-drawer");
 const adminInventoryTitle = document.querySelector("#admin-inventory-title");
 const adminInventorySearch = document.querySelector("#admin-inventory-search");
@@ -88,6 +89,7 @@ let currentJob = null;
 let activeScanJobId = null;
 let historyCursor = null;
 let adminInventoryType = null;
+const adminState = { providers: [] };
 const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
 const isAdminRoute = () => pathName() === "/admin";
@@ -188,11 +190,17 @@ async function refreshAuth() {
       setShell({ authView: authRequested });
       return;
     }
-    const workspaces = await apiJson("/api/workspaces");
-    workspaceSelector.innerHTML = workspaces.workspaces.map((workspace) =>
-      `<option value="${escapeHtml(workspace.id)}" ${workspace.id === authState.workspace?.id ? "selected" : ""}>${escapeHtml(workspace.name || workspace.workspaceType)} · ${escapeHtml(workspace.planId)}</option>`).join("");
-    authEntry.textContent = "Dashboard →";
-    authEntry.href = "/dashboard";
+    if (authState.user?.platformRole === "Superadmin") {
+      workspaceBar.hidden = true;
+      authEntry.textContent = "Platform Ops →";
+      authEntry.href = "/admin";
+    } else {
+      const workspaces = await apiJson("/api/workspaces");
+      workspaceSelector.innerHTML = workspaces.workspaces.map((workspace) =>
+        `<option value="${escapeHtml(workspace.id)}" ${workspace.id === authState.workspace?.id ? "selected" : ""}>${escapeHtml(workspace.name || workspace.workspaceType)} · ${escapeHtml(workspace.planId)}</option>`).join("");
+      authEntry.textContent = "Dashboard →";
+      authEntry.href = "/dashboard";
+    }
     const queuedScan = pendingScan();
     if (queuedScan) {
       networkInput.value = queuedScan.network;
@@ -507,8 +515,8 @@ function adminProviderMarkup(provider, approvals = []) {
       <input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="REASON_CODE" aria-label="Reason code" required />
       <button class="secondary-button" type="submit">Save draft</button>
     </form>
-    <div class="admin-provider-actions">
-      <form class="admin-provider-test-form" data-provider-test="${escapeHtml(provider.providerId)}">
+     <div class="admin-provider-actions">
+       <form class="admin-provider-test-form" data-provider-test="${escapeHtml(provider.providerId)}">
         <label>Test network <select name="networkId" aria-label="Test network"><option value="ethereum">Ethereum</option><option value="bsc">BNB Chain</option><option value="base">Base</option><option value="arbitrum">Arbitrum</option><option value="polygon">Polygon</option></select></label>
         <label>Contract address <input name="address" pattern="0x[a-fA-F0-9]{40}" placeholder="0x..." aria-label="Test contract address" required /></label>
         <button class="secondary-button" type="submit">Test connection</button>
@@ -623,6 +631,17 @@ function renderAdminHealth(data) {
     <div class="admin-health-row"><span>Billing</span><strong>${platform.billing?.connected ? "connected" : "not connected"}</strong></div>`;
 }
 
+function renderAdminNetworks(networks) {
+  const items = networks || [];
+  const providerIds = new Set((adminState.providers || []).map((provider) => provider.providerId));
+  adminNetworks.innerHTML = items.length
+    ? items.map((network) => `<div class="admin-list-row">
+        <div><strong>${escapeHtml(network.name)}</strong><span>${escapeHtml(network.id)} · GoPlus ${escapeHtml(network.goplusChainId)} · DexScreener ${escapeHtml(network.dexChainId)}</span></div>
+        ${statusPill({ status: providerIds.size ? "ACTIVE" : "UNKNOWN" }, providerIds.size ? "SUPPORTED" : "UNKNOWN")}
+      </div>`).join("")
+    : `<div class="unknown-message">No supported networks are configured.</div>`;
+}
+
 function renderAdminInventory(data) {
   const users = data.recentUsers || [];
   const workspaces = data.recentWorkspaces || [];
@@ -668,6 +687,7 @@ function renderAdminOverview(data) {
   adminUserSummary.textContent = `${Number(stats.verifiedUsers || 0)} verified · ${Number(stats.activeSessions || 0)} active sessions`;
   adminSnapshotTime.textContent = `Snapshot ${formatDate(data.generatedAt)}`;
   renderAdminHealth(data);
+  renderAdminNetworks(data.networks || []);
   renderAdminInventory(data);
   renderAdminProviders(data.providers || [], data.approvals || []);
   renderAdminFlags(data.flags || [], data.approvals || []);

@@ -580,6 +580,9 @@ async function handleApiUnsafe(req, res, url, context) {
       audit,
       recentUsers: users,
       recentWorkspaces: workspaces,
+      networks: NETWORKS.map(({ id, name, goplusChainId, dexChainId, explorer }) => ({
+        id, name, goplusChainId, dexChainId, explorer,
+      })),
     }, { context });
     return true;
   }
