@@ -199,13 +199,47 @@ class PlatformControlPlane {
     });
   }
 
+  async getProviderPolicy(providerId) {
+    const config = await this.store.getProvider(providerId);
+    const policy = config || {
+      state: "ACTIVE",
+      timeoutMs: 12_000,
+      retries: 1,
+      quotaPerMinute: 120,
+      concurrencyLimit: 2,
+      priority: 100,
+      killSwitch: false,
+      version: 0,
+    };
+    return {
+      state: policy.state,
+      timeoutMs: policy.timeoutMs,
+      retries: policy.retries,
+      quotaPerMinute: policy.quotaPerMinute,
+      concurrencyLimit: policy.concurrencyLimit,
+      priority: policy.priority ?? 100,
+      killSwitch: Boolean(policy.killSwitch),
+      version: policy.version ?? 0,
+    };
+  }
+
   async testProvider({ providerId, providerRegistry, network, address }) {
     const provider = providerRegistry?.get?.(providerId);
     if (!provider) throw error("PROVIDER_NOT_FOUND");
     if (!network || !address) throw error("PROVIDER_TEST_INPUT_REQUIRED");
+    const policy = await this.getProviderPolicy(providerId);
+    if (policy.state !== "ACTIVE" || policy.killSwitch) {
+      return {
+        providerId,
+        ok: false,
+        status: "disabled",
+        errorCode: "PROVIDER_DISABLED",
+        latencyMs: 0,
+      };
+    }
     const startedAt = Date.now();
     try {
-      const result = await providerRegistry.fetch(providerId, { network, address });
+      const result = await providerRegistry.fetch(providerId, { network, address, providerPolicy: policy });
       return {
         providerId,
         ok: true,

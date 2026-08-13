@@ -515,8 +515,8 @@ function adminProviderMarkup(provider, approvals = []) {
       <input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="REASON_CODE" aria-label="Reason code" required />
       <button class="secondary-button" type="submit">Save draft</button>
     </form>
-     <div class="admin-provider-actions">
-       <form class="admin-provider-test-form" data-provider-test="${escapeHtml(provider.providerId)}">
+    <div class="admin-provider-actions">
+      <form class="admin-provider-test-form" data-provider-test="${escapeHtml(provider.providerId)}">
         <label>Test network <select name="networkId" aria-label="Test network"><option value="ethereum">Ethereum</option><option value="bsc">BNB Chain</option><option value="base">Base</option><option value="arbitrum">Arbitrum</option><option value="polygon">Polygon</option></select></label>
         <label>Contract address <input name="address" pattern="0x[a-fA-F0-9]{40}" placeholder="0x..." aria-label="Test contract address" required /></label>
         <button class="secondary-button" type="submit">Test connection</button>

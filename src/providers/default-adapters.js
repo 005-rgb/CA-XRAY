@@ -49,7 +49,7 @@ function makePoint(value, context, evidenceReference = null, transform = null) {
   });
 }
 
-async function fetchJson(url, provider, timeout = 12_000) {
+async function fetchJson(url, provider, timeout = 12_000, retries = 1) {
   assertControlledProviderUrl(url, CONTROLLED_PROVIDER_ORIGINS);
   if (!fetchJson.breakers) fetchJson.breakers = new Map();
   if (!fetchJson.breakers.has(provider)) fetchJson.breakers.set(provider, new CircuitBreaker());
@@ -82,7 +82,7 @@ async function fetchJson(url, provider, timeout = 12_000) {
     provider,
     breaker: fetchJson.breakers.get(provider),
     timeoutMs: timeout,
-    retries: 1,
+    retries,
   });
 }
 
@@ -254,9 +254,9 @@ function createDefaultProviderRegistry(options = {}) {
         isProviderObject(response) && [1, "1"].includes(response.code) && isProviderObject(response.result)
           ? true
           : { code: "MALFORMED_RESPONSE", message: "Provider response failed schema validation." },
-      fetch: ({ address, network }) => {
+      fetch: ({ address, network, providerPolicy = {} }) => {
         const url = `https://api.gopluslabs.io/api/v1/token_security/${network.goplusChainId}?contract_addresses=${encodeURIComponent(address)}`;
-        return fetchJson(url, "GoPlus Security API");
+        return fetchJson(url, "GoPlus Security API", providerPolicy.timeoutMs, providerPolicy.retries);
       },
       normalizeResponse: ({ response, retrievedAt, network, providerId }) =>
         normalizeGoPlus({ response, retrievedAt, network, providerId }),
@@ -270,9 +270,9 @@ function createDefaultProviderRegistry(options = {}) {
         isProviderObject(response) && (response.pairs === null || Array.isArray(response.pairs))
           ? true
           : { code: "MALFORMED_RESPONSE", message: "Provider response failed schema validation." },
-      fetch: ({ address }) => {
+      fetch: ({ address, providerPolicy = {} }) => {
         const url = `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(address)}`;
-        return fetchJson(url, "DexScreener API");
+        return fetchJson(url, "DexScreener API", providerPolicy.timeoutMs, providerPolicy.retries);
       },
       normalizeResponse: ({ response, retrievedAt, network, address, providerId }) =>
         normalizeDexScreener({ response, retrievedAt, network, address, providerId }),

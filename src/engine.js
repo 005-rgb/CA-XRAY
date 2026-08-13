@@ -943,7 +943,12 @@ function validateScanTarget(address, networkId) {
   return { valid: true, normalized: addressValidation.normalized, network };
 }
 
-async function scanLive({ address, networkId, providerRegistry = createDefaultProviderRegistry() }) {
+async function scanLive({
+  address,
+  networkId,
+  providerRegistry = createDefaultProviderRegistry(),
+  providerPolicy = null,
+}) {
   const validation = validateScanTarget(address, networkId);
   if (!validation.valid) {
     const validationError = new Error(validation.code);
@@ -958,11 +963,31 @@ async function scanLive({ address, networkId, providerRegistry = createDefaultPr
     address: validation.normalized,
     network: validation.network,
   };
-  const results = await Promise.allSettled(providers.map((provider) => providerRegistry.fetch(provider.id, context)));
+  const results = await Promise.allSettled(providers.map(async (provider) => {
+    const policy = typeof providerPolicy === "function" ? await providerPolicy(provider.id) : null;
+    if (policy && (policy.state !== "ACTIVE" || policy.killSwitch)) {
+      return Promise.resolve({ disabled: true, policy });
+    }
+    return providerRegistry.fetch(provider.id, {
+      ...context,
+      providerPolicy: policy,
+    });
+  }));
   let successes = 0;
   for (const [index, result] of results.entries()) {
     const provider = providers[index];
-    if (result.status === "fulfilled") {
+    if (result.status === "fulfilled" && result.value?.disabled) {
+      applyProviderResult(scan, {
+        providerId: provider.id,
+        adapterVersion: provider.version,
+        status: PROVIDER_RESULT_STATUS.UNAVAILABLE,
+        retrievedAt: null,
+        confidence: "UNKNOWN",
+        errorCode: "PROVIDER_DISABLED",
+        message: "Provider is disabled by platform operations.",
+        limitations: ["This provider was disabled by a platform operator."],
+      });
+    } else if (result.status === "fulfilled") {
       try {
         providerRegistry.validateResponse(provider.id, result.value.json);
         const normalized = providerRegistry.normalizeResponse(provider.id, {

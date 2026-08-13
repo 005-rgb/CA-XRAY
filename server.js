@@ -61,7 +61,12 @@ const providerRegistry = createDefaultProviderRegistry();
 const intelligenceStore = new IntelligenceStore({ persistence });
 const intelligenceReady = persistenceReady.then(() => intelligenceStore.init());
 const scanQueue = createScanJobQueue({
-  processor: scanLive,
+  processor: (payload, jobContext) => scanLive({
+    ...payload,
+    providerRegistry,
+    providerPolicy: (providerId) => controlPlane.getProviderPolicy(providerId),
+    signal: jobContext.signal,
+  }),
   runtimeConfig,
   maxAttempts: runtimeConfig.queue.maxAttempts,
   timeoutMs: runtimeConfig.queue.timeoutMs,
