@@ -48,6 +48,15 @@ test("provider configuration has explicit draft, publish, approval, and rollback
     (error) => error.code === "FOUR_EYES_REQUIRED",
   );
   await plane.approve({ approvalId: requested.approval.id, actorId: "admin-b", reason: "REVIEW" });
+  await assert.rejects(
+    () => plane.publishProvider({
+      providerId: "dexscreener",
+      actorId: "admin-b",
+      reason: "PROVIDER_INCIDENT",
+      approvalId: requested.approval.id,
+    }),
+    (error) => error.code === "FOUR_EYES_REQUIRED",
+  );
   const disabled = await plane.publishProvider({
     providerId: "dexscreener",
     actorId: "admin-a",

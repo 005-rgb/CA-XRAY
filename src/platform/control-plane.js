@@ -430,7 +430,9 @@ class PlatformControlPlane {
     const approval = await this.store.getApproval(approvalId);
     if (!approval || approval.action !== action || approval.targetId !== targetId) throw error("APPROVAL_INVALID");
     if (approval.status !== "APPROVED") throw error("APPROVAL_NOT_APPROVED");
-    if (approval.requestedBy === actorId) throw error("FOUR_EYES_REQUIRED");
+    // The requester may execute after an independent approver has approved.
+    // The approver must not also execute the privileged change.
+    if (approval.approvedBy === actorId) throw error("FOUR_EYES_REQUIRED");
     return this.store.saveApproval(approvalId, { status: "CONSUMED", consumedBy: actorId, consumedAt: this.clock().toISOString(), consumedReasonCode: code });
   }
 }
