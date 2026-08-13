@@ -1,0 +1,554 @@
+const crypto = require("node:crypto");
+
+const WATCH_INTERVALS = Object.freeze([1, 6, 12, 24, 168]);
+const ALERT_TYPES = Object.freeze([
+  "risk_increase",
+  "owner_change",
+  "privilege_change",
+  "proxy_change",
+  "tax_change",
+  "liquidity_change",
+  "holder_concentration_change",
+  "provider_disagreement",
+]);
+const VISIBILITIES = new Set(["private", "public"]);
+const FINDING_STATUSES = new Set(["open", "reviewing", "resolved"]);
+
+function clone(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+function id(prefix) {
+  return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function contractKey(workspaceId, networkId, address) {
+  return `${workspaceId}:${networkId}:${String(address).toLowerCase()}`;
+}
+
+function publicContract(networkId, address) {
+  return {
+    networkId,
+    address: String(address).toLowerCase(),
+  };
+}
+
+function hash(value) {
+  return crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function valueOf(point) {
+  if (!point || typeof point !== "object") return null;
+  return point.value === undefined ? null : point.value;
+}
+
+function pointStatus(point) {
+  return point?.status || point?.evidenceStatus || "UNKNOWN";
+}
+
+function scalarChange(before, after) {
+  if (before === after) return null;
+  return { before: before ?? null, after: after ?? null };
+}
+
+function compactFinding(finding) {
+  return {
+    id: finding.id || finding.title || finding.finding || "finding",
+    title: finding.title || finding.finding || "Finding",
+    severity: finding.severity || "UNKNOWN",
+    status: finding.status || "UNKNOWN",
+    category: finding.category || "unknown",
+    confidence: finding.confidence || null,
+  };
+}
+
+function snapshotFromScan({ scan, jobId, capturedAt }) {
+  const security = scan.security || {};
+  const trading = scan.trading || {};
+  const liquidity = scan.liquidity || {};
+  const holders = scan.holders || {};
+  const contract = scan.contract || {};
+  const deployer = scan.deployer || {};
+  const changes = {
+    owner: valueOf(contract.owner || contract.ownerAddress || security.owner),
+    proxy: valueOf(contract.proxy || contract.isProxy || security.proxy),
+    buyTax: valueOf(trading.buyTax),
+    sellTax: valueOf(trading.sellTax),
+    liquidityUsd: valueOf(liquidity.liquidityUsd || liquidity.usd),
+    holderConcentration: valueOf(holders.top10Percentage || holders.top10),
+    privilegedWallets: valueOf(security.privilegedWallets || security.ownerPrivileges),
+  };
+  const findings = (scan.findings || []).map(compactFinding);
+  const evidence = clone(scan.evidence || []);
+  const consensus = clone(scan.consensus || scan.providerConsensus || null);
+  const comparable = {
+    riskScore: scan.risk?.finalScore ?? scan.riskScore ?? null,
+    riskLevel: scan.risk?.level || null,
+    reliabilityScore: scan.reliability?.score ?? scan.reliabilityScore ?? null,
+    findings,
+    evidence,
+    changes,
+    consensus,
+  };
+  return {
+    id: id("snapshot"),
+    jobId: jobId || scan.scanId || null,
+    capturedAt: capturedAt || scan.timestamp || new Date().toISOString(),
+    address: scan.contract?.address,
+    networkId: scan.network?.id,
+    engineVersion: scan.engineVersion || null,
+    evidenceSchemaVersion: scan.evidenceSchemaVersion || scan.schemaVersion || null,
+    dataStatus: scan.dataStatus || "unknown",
+    risk: {
+      score: comparable.riskScore,
+      level: comparable.riskLevel,
+    },
+    reliabilityScore: comparable.reliabilityScore,
+    findings,
+    evidence,
+    changes,
+    consensus,
+    evidenceHash: hash(comparable),
+    comparable,
+  };
+}
+
+function changedFields(before, after) {
+  if (!before) return [];
+  const changes = [];
+  for (const field of ["riskScore", "riskLevel", "reliabilityScore"]) {
+    const change = scalarChange(before.comparable[field], after.comparable[field]);
+    if (change) changes.push({ field, ...change });
+  }
+  for (const field of Object.keys(after.changes || {})) {
+    const change = scalarChange(before.changes?.[field], after.changes?.[field]);
+    if (change) changes.push({ field, ...change });
+  }
+  if (hash(before.findings) !== hash(after.findings)) {
+    changes.push({ field: "findings", before: before.findings, after: after.findings });
+  }
+  if (hash(before.consensus) !== hash(after.consensus)) {
+    changes.push({ field: "providerConsensus", before: before.consensus, after: after.consensus });
+  }
+  return changes;
+}
+
+function validateAddress(address) {
+  return typeof address === "string" && /^0x[a-fA-F0-9]{40}$/.test(address.trim());
+}
+
+function invalid(code, message) {
+  throw Object.assign(new Error(message), { code });
+}
+
+class IntelligenceStore {
+  constructor({ clock = () => new Date() } = {}) {
+    this.clock = clock;
+    this.passports = new Map();
+    this.watchlists = new Map();
+    this.alertRules = new Map();
+    this.alertEvents = new Map();
+    this.reports = new Map();
+    this.comments = new Map();
+    this.approvals = new Map();
+  }
+
+  #key(workspaceId, networkId, address) {
+    return contractKey(workspaceId, networkId, address);
+  }
+
+  #passport(workspaceId, networkId, address) {
+    return this.passports.get(this.#key(workspaceId, networkId, address)) || null;
+  }
+
+  recordSnapshot({ workspaceId, scan, jobId = null, capturedAt = this.clock().toISOString() }) {
+    if (!workspaceId || !scan?.contract?.address || !scan?.network?.id) {
+      invalid("SNAPSHOT_INVALID", "A completed contract scan is required.");
+    }
+    const key = this.#key(workspaceId, scan.network.id, scan.contract.address);
+    const passport = this.passports.get(key) || {
+      id: id("passport"),
+      workspaceId,
+      ...publicContract(scan.network.id, scan.contract.address),
+      status: "CURRENT",
+      snapshots: [],
+      createdAt: capturedAt,
+      updatedAt: capturedAt,
+    };
+    const snapshot = snapshotFromScan({ scan, jobId, capturedAt });
+    const previous = passport.snapshots.at(-1) || null;
+    if (previous?.evidenceHash === snapshot.evidenceHash) {
+      passport.updatedAt = capturedAt;
+      this.passports.set(key, passport);
+      return { duplicate: true, passport: clone(passport), snapshot: clone(previous), timeline: null, alerts: [] };
+    }
+    const changes = changedFields(previous, snapshot);
+    snapshot.changeSummary = changes;
+    passport.snapshots.push(snapshot);
+    passport.currentSnapshotId = snapshot.id;
+    passport.status = "CURRENT";
+    passport.updatedAt = capturedAt;
+    this.passports.set(key, passport);
+    const timeline = previous
+      ? {
+        id: id("timeline"),
+        workspaceId,
+        ...publicContract(scan.network.id, scan.contract.address),
+        beforeSnapshotId: previous.id,
+        afterSnapshotId: snapshot.id,
+        changes,
+        why: this.#explainChanges(changes),
+        createdAt: capturedAt,
+        dedupeKey: `${key}:${snapshot.evidenceHash}`,
+      }
+      : null;
+    if (timeline) {
+      const alerts = this.#evaluateAlerts({ workspaceId, passport, previous, snapshot, timeline });
+      return { duplicate: false, passport: clone(passport), snapshot: clone(snapshot), timeline: clone(timeline), alerts: clone(alerts) };
+    }
+    return { duplicate: false, passport: clone(passport), snapshot: clone(snapshot), timeline: null, alerts: [] };
+  }
+
+  #explainChanges(changes) {
+    if (!changes.length) return "Evidence hash changed without a material field-level difference.";
+    return changes.map((change) => {
+      if (change.field === "riskScore") return `Risk score changed from ${change.before ?? "UNKNOWN"} to ${change.after ?? "UNKNOWN"}.`;
+      if (change.field === "riskLevel") return `Risk level changed from ${change.before ?? "UNKNOWN"} to ${change.after ?? "UNKNOWN"}.`;
+      if (change.field === "reliabilityScore") return `Reliability changed from ${change.before ?? "UNKNOWN"} to ${change.after ?? "UNKNOWN"}.`;
+      return `${change.field} changed.`;
+    }).join(" ");
+  }
+
+  #evaluateAlerts({ workspaceId, passport, previous, snapshot, timeline }) {
+    const rules = [...this.alertRules.values()].filter((rule) =>
+      rule.workspaceId === workspaceId
+      && rule.networkId === passport.networkId
+      && rule.address === passport.address
+      && rule.enabled);
+    const events = [];
+    for (const rule of rules) {
+      const riskDelta = Number(snapshot.risk.score) - Number(previous.risk.score);
+      const triggered = rule.type === "risk_increase"
+        ? Number.isFinite(riskDelta) && riskDelta >= rule.threshold
+        : timeline.changes.some((change) => change.field === rule.type.replace("_change", "")
+          || (rule.type === "provider_disagreement" && change.field === "providerConsensus"));
+      if (!triggered) continue;
+      const dedupeKey = `${rule.id}:${snapshot.evidenceHash}`;
+      if (this.alertEvents.has(dedupeKey)) continue;
+      const event = {
+        id: id("alert"),
+        workspaceId,
+        ruleId: rule.id,
+        type: rule.type,
+        ...publicContract(passport.networkId, passport.address),
+        snapshotId: snapshot.id,
+        timelineId: timeline.id,
+        status: "QUEUED",
+        delivery: rule.delivery,
+        createdAt: snapshot.capturedAt,
+        dedupeKey,
+        message: rule.type === "risk_increase"
+          ? `Risk increased by ${riskDelta.toFixed(1)} points.`
+          : `${rule.type.replaceAll("_", " ")} detected.`,
+      };
+      this.alertEvents.set(dedupeKey, event);
+      events.push(event);
+    }
+    return events;
+  }
+
+  listPassports(workspaceId, { status = null } = {}) {
+    return [...this.passports.values()]
+      .filter((passport) => passport.workspaceId === workspaceId && (!status || passport.status === status))
+      .map((passport) => this.publicPassport(passport));
+  }
+
+  getPassport(workspaceId, networkId, address) {
+    const passport = this.#passport(workspaceId, networkId, address);
+    return passport ? this.publicPassport(passport) : null;
+  }
+
+  publicPassport(passport) {
+    const snapshot = passport.snapshots.at(-1) || null;
+    return {
+      id: passport.id,
+      ...publicContract(passport.networkId, passport.address),
+      status: passport.status,
+      createdAt: passport.createdAt,
+      updatedAt: passport.updatedAt,
+      current: snapshot ? clone({
+        id: snapshot.id,
+        jobId: snapshot.jobId,
+        capturedAt: snapshot.capturedAt,
+        engineVersion: snapshot.engineVersion,
+        evidenceSchemaVersion: snapshot.evidenceSchemaVersion,
+        dataStatus: snapshot.dataStatus,
+        risk: snapshot.risk,
+        reliabilityScore: snapshot.reliabilityScore,
+        findings: snapshot.findings,
+        evidence: snapshot.evidence,
+        changes: snapshot.changes,
+        consensus: snapshot.consensus,
+        evidenceHash: snapshot.evidenceHash,
+      }) : null,
+      snapshotCount: passport.snapshots.length,
+    };
+  }
+
+  listTimeline(workspaceId, networkId, address) {
+    const passport = this.#passport(workspaceId, networkId, address);
+    if (!passport) return [];
+    return passport.snapshots.map((snapshot, index) => {
+      const previous = passport.snapshots[index - 1] || null;
+      return {
+        id: snapshot.id,
+        ...publicContract(networkId, address),
+        capturedAt: snapshot.capturedAt,
+        risk: snapshot.risk,
+        reliabilityScore: snapshot.reliabilityScore,
+        engineVersion: snapshot.engineVersion,
+        evidenceHash: snapshot.evidenceHash,
+        before: previous ? {
+          snapshotId: previous.id,
+          risk: previous.risk,
+          reliabilityScore: previous.reliabilityScore,
+        } : null,
+        changes: snapshot.changeSummary || [],
+        why: previous ? this.#explainChanges(snapshot.changeSummary || []) : "Initial evidence snapshot.",
+      };
+    }).reverse();
+  }
+
+  createWatchlist({ workspaceId, actorId, networkId, address, label = "", intervalHours = 24 }) {
+    if (!validateAddress(address)) invalid("INVALID_ADDRESS", "Enter a valid contract address.");
+    if (!Number.isInteger(intervalHours) || !WATCH_INTERVALS.includes(intervalHours)) {
+      invalid("INVALID_MONITOR_INTERVAL", "Monitoring interval is not supported.");
+    }
+    const key = this.#key(workspaceId, networkId, address);
+    const existing = [...this.watchlists.values()].find((item) => item.workspaceId === workspaceId && item.networkId === networkId && item.address === address.toLowerCase());
+    if (existing) return clone(existing);
+    const item = {
+      id: id("watch"),
+      workspaceId,
+      actorId,
+      ...publicContract(networkId, address),
+      label: String(label).slice(0, 120),
+      intervalHours,
+      status: "active",
+      lastCheckedAt: null,
+      nextCheckAt: null,
+      createdAt: this.clock().toISOString(),
+    };
+    this.watchlists.set(key, item);
+    return clone(item);
+  }
+
+  listWatchlists(workspaceId) {
+    return [...this.watchlists.values()].filter((item) => item.workspaceId === workspaceId).map(clone);
+  }
+
+  updateWatchlist(workspaceId, watchId, patch) {
+    const item = [...this.watchlists.values()].find((candidate) => candidate.id === watchId && candidate.workspaceId === workspaceId);
+    if (!item) return null;
+    if (patch.intervalHours !== undefined) {
+      if (!WATCH_INTERVALS.includes(Number(patch.intervalHours))) invalid("INVALID_MONITOR_INTERVAL", "Monitoring interval is not supported.");
+      item.intervalHours = Number(patch.intervalHours);
+    }
+    if (patch.label !== undefined) item.label = String(patch.label).slice(0, 120);
+    if (patch.status !== undefined) {
+      if (!["active", "paused"].includes(patch.status)) invalid("INVALID_WATCHLIST_STATUS", "Watchlist status is invalid.");
+      item.status = patch.status;
+    }
+    return clone(item);
+  }
+
+  deleteWatchlist(workspaceId, watchId) {
+    const entry = [...this.watchlists.entries()].find(([, item]) => item.id === watchId && item.workspaceId === workspaceId);
+    return entry ? this.watchlists.delete(entry[0]) : false;
+  }
+
+  createAlertRule({ workspaceId, actorId, networkId, address, type, threshold = 5, delivery = "in_app" }) {
+    if (!ALERT_TYPES.includes(type)) invalid("INVALID_ALERT_TYPE", "Alert type is not supported.");
+    if (!["in_app", "webhook", "email"].includes(delivery)) invalid("INVALID_ALERT_DELIVERY", "Alert delivery is not supported.");
+    const normalizedThreshold = Number(threshold);
+    if (type === "risk_increase" && (!Number.isFinite(normalizedThreshold) || normalizedThreshold <= 0 || normalizedThreshold > 100)) {
+      invalid("INVALID_ALERT_THRESHOLD", "Risk threshold must be between 0 and 100.");
+    }
+    const rule = {
+      id: id("rule"),
+      workspaceId,
+      actorId,
+      ...publicContract(networkId, address),
+      type,
+      threshold: normalizedThreshold,
+      delivery,
+      enabled: true,
+      createdAt: this.clock().toISOString(),
+    };
+    this.alertRules.set(rule.id, rule);
+    return clone(rule);
+  }
+
+  listAlertRules(workspaceId) {
+    return [...this.alertRules.values()].filter((rule) => rule.workspaceId === workspaceId).map(clone);
+  }
+
+  updateAlertRule(workspaceId, ruleId, patch) {
+    const rule = this.alertRules.get(ruleId);
+    if (!rule || rule.workspaceId !== workspaceId) return null;
+    if (patch.enabled !== undefined) rule.enabled = Boolean(patch.enabled);
+    if (patch.threshold !== undefined) {
+      const threshold = Number(patch.threshold);
+      if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 100) invalid("INVALID_ALERT_THRESHOLD", "Risk threshold must be between 0 and 100.");
+      rule.threshold = threshold;
+    }
+    if (patch.delivery !== undefined) {
+      if (!["in_app", "webhook", "email"].includes(patch.delivery)) invalid("INVALID_ALERT_DELIVERY", "Alert delivery is not supported.");
+      rule.delivery = patch.delivery;
+    }
+    return clone(rule);
+  }
+
+  listAlerts(workspaceId, { status = null } = {}) {
+    return [...this.alertEvents.values()]
+      .filter((event) => event.workspaceId === workspaceId && (!status || event.status === status))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(clone);
+  }
+
+  getGraph(workspaceId, networkId, address) {
+    const passport = this.#passport(workspaceId, networkId, address);
+    if (!passport) return null;
+    const snapshot = passport.snapshots.at(-1);
+    const nodes = [{ id: "contract", type: "contract", label: `${address.slice(0, 6)}...${address.slice(-4)}`, status: "valid" }];
+    const edges = [];
+    const addEvidenceNode = (type, point, relation) => {
+      const value = valueOf(point);
+      if (value === null || value === undefined || value === "") return;
+      const nodeId = `${type}:${String(value)}`;
+      if (!nodes.some((node) => node.id === nodeId)) nodes.push({ id: nodeId, type, label: String(value), status: pointStatus(point) });
+      edges.push({ source: "contract", target: nodeId, relation, evidenceStatus: pointStatus(point) });
+    };
+    addEvidenceNode("owner", snapshot.changes.owner, "owned_by");
+    addEvidenceNode("proxy", snapshot.changes.proxy, "delegates_to");
+    addEvidenceNode("pair", snapshot.changes.pair, "trades_on");
+    addEvidenceNode("holder_cluster", snapshot.changes.holderConcentration, "holder_concentration");
+    return { networkId, address: address.toLowerCase(), snapshotId: snapshot.id, nodes, edges, generatedAt: snapshot.capturedAt };
+  }
+
+  compare(workspaceId, contracts) {
+    if (!Array.isArray(contracts) || contracts.length < 2 || contracts.length > 5) invalid("INVALID_COMPARE_REQUEST", "Compare between two and five contracts.");
+    return contracts.map((contract) => {
+      const passport = this.#passport(workspaceId, contract.networkId, contract.address);
+      const current = passport?.snapshots.at(-1);
+      return {
+        ...publicContract(contract.networkId, contract.address),
+        found: Boolean(current),
+        ...(current ? {
+          risk: current.risk,
+          reliabilityScore: current.reliabilityScore,
+          findingCount: current.findings.length,
+          evidenceHash: current.evidenceHash,
+          capturedAt: current.capturedAt,
+        } : {}),
+      };
+    });
+  }
+
+  simulate(workspaceId, { networkId, address, adjustments = {} }) {
+    const passport = this.#passport(workspaceId, networkId, address);
+    if (!passport) return null;
+    const current = passport.snapshots.at(-1);
+    const base = Number(current.risk.score);
+    const delta = Number(adjustments.riskDelta || 0);
+    const score = Number.isFinite(base) ? Math.min(100, Math.max(0, base + delta)) : null;
+    return {
+      simulation: true,
+      disclaimer: "Simulation only. This is not a prediction, guarantee, or financial advice.",
+      ...publicContract(networkId, address),
+      basedOnSnapshotId: current.id,
+      basedOnCapturedAt: current.capturedAt,
+      inputs: clone(adjustments),
+      result: { riskScore: score, riskDelta: Number.isFinite(score) && Number.isFinite(base) ? score - base : null },
+    };
+  }
+
+  createReport({ workspaceId, actorId, networkId, address, expiresAt, visibility = "private" }) {
+    if (!VISIBILITIES.has(visibility)) invalid("INVALID_REPORT_VISIBILITY", "Report visibility is invalid.");
+    const passport = this.#passport(workspaceId, networkId, address);
+    if (!passport?.snapshots.length) invalid("PASSPORT_NOT_FOUND", "A completed passport is required.");
+    const snapshot = passport.snapshots.at(-1);
+    const report = {
+      id: id("report"),
+      workspaceId,
+      actorId,
+      ...publicContract(networkId, address),
+      snapshotId: snapshot.id,
+      engineVersion: snapshot.engineVersion,
+      evidenceHash: snapshot.evidenceHash,
+      issuedAt: this.clock().toISOString(),
+      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : new Date(Date.now() + 7 * 86400000).toISOString(),
+      visibility,
+      immutable: true,
+      status: "VERIFIED",
+    };
+    this.reports.set(report.id, report);
+    return clone(report);
+  }
+
+  listReports(workspaceId) {
+    return [...this.reports.values()].filter((report) => report.workspaceId === workspaceId).map(clone);
+  }
+
+  getReport(reportId, workspaceId = null) {
+    const report = this.reports.get(reportId);
+    if (!report || (workspaceId && report.workspaceId !== workspaceId) || (!workspaceId && report.visibility !== "public")) return null;
+    const passport = this.#passport(report.workspaceId, report.networkId, report.address);
+    const current = passport?.snapshots.find((snapshot) => snapshot.id === report.snapshotId);
+    const expired = new Date(report.expiresAt).getTime() <= this.clock().getTime();
+    const outdated = !current || passport.currentSnapshotId !== report.snapshotId;
+    return { ...clone(report), status: expired ? "EXPIRED" : outdated ? "OUTDATED" : "VERIFIED", snapshot: clone(current || null) };
+  }
+
+  updateReportVisibility(workspaceId, reportId, visibility) {
+    const report = this.reports.get(reportId);
+    if (!report || report.workspaceId !== workspaceId) return null;
+    if (!VISIBILITIES.has(visibility)) invalid("INVALID_REPORT_VISIBILITY", "Report visibility is invalid.");
+    report.visibility = visibility;
+    return clone(report);
+  }
+
+  addComment({ workspaceId, actorId, networkId, address, findingId, body }) {
+    if (!String(body || "").trim() || String(body).length > 2000) invalid("INVALID_COMMENT", "Comment must be between 1 and 2000 characters.");
+    const comment = { id: id("comment"), workspaceId, actorId, ...publicContract(networkId, address), findingId: findingId || null, body: String(body).trim(), createdAt: this.clock().toISOString() };
+    this.comments.set(comment.id, comment);
+    return clone(comment);
+  }
+
+  listComments(workspaceId, networkId, address) {
+    return [...this.comments.values()].filter((comment) => comment.workspaceId === workspaceId && comment.networkId === networkId && comment.address === address.toLowerCase()).map(clone);
+  }
+
+  updateFindingStatus({ workspaceId, findingId, status, assigneeId = null }) {
+    if (!FINDING_STATUSES.has(status)) invalid("INVALID_FINDING_STATUS", "Finding status is invalid.");
+    const passports = [...this.passports.values()].filter((passport) => passport.workspaceId === workspaceId);
+    for (const passport of passports) {
+      const snapshot = passport.snapshots.at(-1);
+      const finding = snapshot?.findings.find((item) => item.id === findingId);
+      if (finding) {
+        finding.status = status;
+        finding.assigneeId = assigneeId;
+        return clone(finding);
+      }
+    }
+    return null;
+  }
+}
+
+module.exports = {
+  ALERT_TYPES,
+  FINDING_STATUSES,
+  IntelligenceStore,
+  WATCH_INTERVALS,
+  snapshotFromScan,
+};

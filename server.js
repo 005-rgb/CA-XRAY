@@ -39,6 +39,7 @@ const {
   requireEntitlement,
   resolveEffectiveEntitlements,
 } = require("./src/platform/entitlements");
+const { IntelligenceStore } = require("./src/intelligence/store");
 
 const PORT = Number(process.env.PORT || 5000);
 const HOST = "0.0.0.0";
@@ -57,6 +58,7 @@ const controlPlane = new PlatformControlPlane({
   audit: (entry) => authService.audit(entry.action, entry.actorId, entry.workspaceId, entry.metadata),
 });
 const providerRegistry = createDefaultProviderRegistry();
+const intelligenceStore = new IntelligenceStore();
 const scanQueue = createScanJobQueue({
   processor: scanLive,
   runtimeConfig,
@@ -64,7 +66,18 @@ const scanQueue = createScanJobQueue({
   timeoutMs: runtimeConfig.queue.timeoutMs,
   onStatusChange: (job) => {
     if (job.status === "RUNNING") return persistence.markJobRunning(job);
-    if (job.status === "SUCCEEDED") return persistence.markJobSucceeded(job);
+    if (job.status === "SUCCEEDED") {
+      return Promise.resolve(persistence.markJobSucceeded(job)).then(() => {
+        if (job.scan?.mode === "LIVE" && job.workspaceId) {
+          intelligenceStore.recordSnapshot({
+            workspaceId: job.workspaceId,
+            scan: job.scan,
+            jobId: job.id,
+            capturedAt: job.completedAt,
+          });
+        }
+      });
+    }
     if (job.status === "FAILED") return persistence.markJobFailed(job);
     if (job.status === "CANCELLED") return persistence.markJobCancelled(job);
     return undefined;
@@ -712,6 +725,250 @@ async function handleApiUnsafe(req, res, url, context) {
 
   if (req.method === "GET" && url.pathname === "/api/networks") {
     sendJson(res, 200, { networks: NETWORKS }, { context });
+    return true;
+  }
+
+  // Phase 6: continuous intelligence. Every resource below is scoped to the
+  // authenticated workspace; public reports are the only exception.
+  if (req.method === "GET" && url.pathname === "/api/risk-passports") {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, {
+      passports: intelligenceStore.listPassports(authenticated.workspaceId, {
+        status: url.searchParams.get("status") || null,
+      }),
+    }, { context });
+    return true;
+  }
+
+  const passportMatch = url.pathname.match(/^\/api\/risk-passports\/([^/]+)\/(0x[a-fA-F0-9]{40})$/);
+  if (req.method === "GET" && passportMatch) {
+    const authenticated = requireAuthenticated(context);
+    const passport = intelligenceStore.getPassport(authenticated.workspaceId, passportMatch[1], passportMatch[2]);
+    if (!passport) {
+      sendJson(res, 404, { error: "PASSPORT_NOT_FOUND", message: "Risk Passport not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { passport }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/watchlists") {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, { watchlists: intelligenceStore.listWatchlists(authenticated.workspaceId) }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/watchlists") {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const watchlist = intelligenceStore.createWatchlist({
+      workspaceId: authenticated.workspaceId,
+      actorId: authenticated.actor.id,
+      networkId: body.networkId || body.network,
+      address: body.address,
+      label: body.label,
+      intervalHours: Number(body.intervalHours || 24),
+    });
+    sendJson(res, 201, { watchlist }, { context });
+    return true;
+  }
+
+  const watchlistMatch = url.pathname.match(/^\/api\/watchlists\/([^/]+)$/);
+  if (["PATCH", "DELETE"].includes(req.method) && watchlistMatch) {
+    const authenticated = requireAuthenticated(context);
+    if (req.method === "DELETE") {
+      if (!intelligenceStore.deleteWatchlist(authenticated.workspaceId, watchlistMatch[1])) {
+        sendJson(res, 404, { error: "WATCHLIST_NOT_FOUND", message: "Watchlist not found." }, { context });
+        return true;
+      }
+      sendJson(res, 200, { deleted: true }, { context });
+      return true;
+    }
+    const body = await readBody(req);
+    const watchlist = intelligenceStore.updateWatchlist(authenticated.workspaceId, watchlistMatch[1], body);
+    if (!watchlist) {
+      sendJson(res, 404, { error: "WATCHLIST_NOT_FOUND", message: "Watchlist not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { watchlist }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/alerts") {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, {
+      rules: intelligenceStore.listAlertRules(authenticated.workspaceId),
+      events: intelligenceStore.listAlerts(authenticated.workspaceId, { status: url.searchParams.get("status") || null }),
+    }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/alerts") {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const rule = intelligenceStore.createAlertRule({
+      workspaceId: authenticated.workspaceId,
+      actorId: authenticated.actor.id,
+      networkId: body.networkId || body.network,
+      address: body.address,
+      type: body.type,
+      threshold: body.threshold,
+      delivery: body.delivery,
+    });
+    sendJson(res, 201, { rule }, { context });
+    return true;
+  }
+
+  const alertRuleMatch = url.pathname.match(/^\/api\/alerts\/([^/]+)$/);
+  if (req.method === "PATCH" && alertRuleMatch) {
+    const authenticated = requireAuthenticated(context);
+    const rule = intelligenceStore.updateAlertRule(authenticated.workspaceId, alertRuleMatch[1], await readBody(req));
+    if (!rule) {
+      sendJson(res, 404, { error: "ALERT_RULE_NOT_FOUND", message: "Alert rule not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { rule }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/risk-timeline") {
+    const authenticated = requireAuthenticated(context);
+    const networkId = url.searchParams.get("network") || url.searchParams.get("networkId");
+    const address = url.searchParams.get("address");
+    if (!networkId || !address) {
+      sendJson(res, 400, { error: "CONTRACT_REQUIRED", message: "Network and address are required." }, { context });
+      return true;
+    }
+    sendJson(res, 200, {
+      timeline: intelligenceStore.listTimeline(authenticated.workspaceId, networkId, address),
+    }, { context });
+    return true;
+  }
+
+  const graphMatch = url.pathname.match(/^\/api\/scans\/([^/]+)\/graph$/);
+  if (req.method === "GET" && graphMatch) {
+    const authenticated = requireAuthenticated(context);
+    const job = await persistence.getScanJob(graphMatch[1], authenticated.workspaceId);
+    if (!job?.scan?.network?.id || !job.scan.contract?.address) {
+      sendJson(res, 404, { error: "GRAPH_NOT_FOUND", message: "Evidence graph is not available." }, { context });
+      return true;
+    }
+    const graph = intelligenceStore.getGraph(authenticated.workspaceId, job.scan.network.id, job.scan.contract.address);
+    sendJson(res, 200, { graph }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/compare") {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    sendJson(res, 200, {
+      comparison: intelligenceStore.compare(authenticated.workspaceId, body.contracts),
+    }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/simulate") {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const simulation = intelligenceStore.simulate(authenticated.workspaceId, {
+      networkId: body.networkId || body.network,
+      address: body.address,
+      adjustments: body.adjustments || {},
+    });
+    if (!simulation) {
+      sendJson(res, 404, { error: "PASSPORT_NOT_FOUND", message: "A completed passport is required." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { simulation }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/reports") {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, { reports: intelligenceStore.listReports(authenticated.workspaceId) }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/reports") {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const report = intelligenceStore.createReport({
+      workspaceId: authenticated.workspaceId,
+      actorId: authenticated.actor.id,
+      networkId: body.networkId || body.network,
+      address: body.address,
+      expiresAt: body.expiresAt,
+      visibility: body.visibility,
+    });
+    sendJson(res, 201, { report }, { context });
+    return true;
+  }
+
+  const reportMatch = url.pathname.match(/^\/api\/reports\/([^/]+)$/);
+  if (req.method === "PATCH" && reportMatch) {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const report = intelligenceStore.updateReportVisibility(authenticated.workspaceId, reportMatch[1], body.visibility);
+    if (!report) {
+      sendJson(res, 404, { error: "REPORT_NOT_FOUND", message: "Report not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { report }, { context });
+    return true;
+  }
+
+  const publicReportMatch = url.pathname.match(/^\/api\/reports\/public\/([^/]+)$/);
+  if (req.method === "GET" && publicReportMatch) {
+    const result = intelligenceStore.getReport(publicReportMatch[1]);
+    if (!result) {
+      sendJson(res, 404, { error: "REPORT_NOT_FOUND", message: "Public report not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { report: result }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/comments") {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, {
+      comments: intelligenceStore.listComments(
+        authenticated.workspaceId,
+        url.searchParams.get("network") || url.searchParams.get("networkId"),
+        url.searchParams.get("address"),
+      ),
+    }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/comments") {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const comment = intelligenceStore.addComment({
+      workspaceId: authenticated.workspaceId,
+      actorId: authenticated.actor.id,
+      networkId: body.networkId || body.network,
+      address: body.address,
+      findingId: body.findingId,
+      body: body.body,
+    });
+    sendJson(res, 201, { comment }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/finding-status") {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const finding = intelligenceStore.updateFindingStatus({
+      workspaceId: authenticated.workspaceId,
+      findingId: body.findingId,
+      status: body.status,
+      assigneeId: body.assigneeId,
+    });
+    if (!finding) {
+      sendJson(res, 404, { error: "FINDING_NOT_FOUND", message: "Finding not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { finding }, { context });
     return true;
   }
 
