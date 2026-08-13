@@ -429,6 +429,15 @@ async function scanLive() {
       body: JSON.stringify({ address: addressInput.value.trim(), network: networkInput.value }),
     });
     const body = await response.json();
+    if (response.status === 401) {
+      sessionStorage.setItem(pendingScanStorageKey, JSON.stringify({
+        network: networkInput.value,
+        address: addressInput.value.trim(),
+      }));
+      authRequested = true;
+      window.location.assign(`/login?returnTo=${encodeURIComponent("/")}`);
+      return;
+    }
     if (!response.ok) throw new Error(body.message || "The scan failed.");
     if (!body.job?.id) throw new Error("The scan job could not be created.");
     const job = await waitForScan(body.job.id);

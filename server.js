@@ -425,6 +425,12 @@ async function handleApiUnsafe(req, res, url, context) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/demo") {
+    const authenticated = requireAuthenticated(context);
+    authorize({
+      actor: authenticated.actor,
+      workspaceId: authenticated.workspaceId,
+      action: ACTIONS.SCAN_READ,
+    });
     const scenario = url.searchParams.get("scenario") || "high";
     if (!["high", "moderate", "low"].includes(scenario)) {
       sendJson(res, 400, { error: "INVALID_DEMO", message: "Unknown demo scenario." }, { context });

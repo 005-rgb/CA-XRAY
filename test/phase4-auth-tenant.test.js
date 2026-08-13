@@ -108,6 +108,28 @@ test("recovery revokes sessions and is single-use", async () => {
   assert.equal(login.mfaRequired, undefined);
 });
 
+test("expired sessions are rejected server-side", async () => {
+  let now = new Date("2026-08-13T12:00:00.000Z");
+  const { service } = (() => {
+    const store = new MemoryAuthStore({ clock: () => now });
+    const service = new AuthService({
+      store,
+      sessionSecret: crypto.randomBytes(32).toString("hex"),
+      clock: () => now,
+    });
+    return { store, service };
+  })();
+  const registered = await service.register({
+    email: "expired@example.com",
+    password: "correct horse battery staple",
+  });
+  const cookie = registered.setCookie.match(/ca_xray_session=([^;]+)/)[1];
+  now = new Date(new Date(registered.session.expiresAt).getTime() + 1);
+  const context = await service.authenticateRequest({ headers: { cookie: `ca_xray_session=${cookie}` } });
+  assert.equal(context.kind, "visitor");
+  assert.match(context.setCookie, /Max-Age=0/);
+});
+
 test("superadmin sessions require TOTP and never gain workspace scope", async () => {
   const { service } = makeService({ superadminEmail: "root@example.com" });
   const registered = await service.register({ email: "root@example.com", password: "correct horse battery staple" });
