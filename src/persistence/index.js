@@ -322,6 +322,32 @@ class MemoryPersistence {
     return pageResult(jobs, pageOptions.limit);
   }
 
+  async getPlatformScanMetrics() {
+    const now = this.clock().getTime();
+    const since = now - 24 * 60 * 60 * 1000;
+    const counts = Object.fromEntries(["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"].map((status) => [status, 0]));
+    let completed24h = 0;
+    let averageDurationMs = null;
+    for (const job of this.jobs.values()) {
+      counts[job.status] = (counts[job.status] || 0) + 1;
+      if (job.completedAt && Date.parse(job.completedAt) >= since) completed24h += 1;
+    }
+    const durations = [...this.jobs.values()]
+      .filter((job) => job.startedAt && job.completedAt)
+      .map((job) => Date.parse(job.completedAt) - Date.parse(job.startedAt))
+      .filter((duration) => Number.isFinite(duration) && duration >= 0);
+    if (durations.length) averageDurationMs = Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length);
+    const terminal = counts.SUCCEEDED + counts.FAILED + counts.CANCELLED;
+    return {
+      total: Object.values(counts).reduce((sum, count) => sum + count, 0),
+      ...counts,
+      completed24h,
+      averageDurationMs,
+      successRate: terminal ? Number((counts.SUCCEEDED / terminal).toFixed(4)) : null,
+      measuredAt: this.clock().toISOString(),
+    };
+  }
+
   async recordWebhookEvent({ provider, eventId, payload = {}, receivedAt = this.clock() }) {
     const key = `${provider}:${eventId}`;
     if (this.webhooks.has(key)) return { duplicate: true, event: clone(this.webhooks.get(key)) };
@@ -662,6 +688,36 @@ class PostgresPersistence {
       values,
     );
     return pageResult(result.rows.map(scanJobFromRow), pageOptions.limit);
+  }
+
+  async getPlatformScanMetrics() {
+    const result = await this.pool.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE status = 'QUEUED')::int AS queued,
+         COUNT(*) FILTER (WHERE status = 'RUNNING')::int AS running,
+         COUNT(*) FILTER (WHERE status = 'SUCCEEDED')::int AS succeeded,
+         COUNT(*) FILTER (WHERE status = 'FAILED')::int AS failed,
+         COUNT(*) FILTER (WHERE status = 'CANCELLED')::int AS cancelled,
+         COUNT(*) FILTER (WHERE completed_at >= NOW() - INTERVAL '24 hours')::int AS completed_24h,
+         ROUND(AVG(EXTRACT(EPOCH FROM (completed_at - started_at)) * 1000)
+           FILTER (WHERE started_at IS NOT NULL AND completed_at IS NOT NULL))::int AS average_duration_ms
+       FROM scan_jobs`,
+    );
+    const row = result.rows[0] || {};
+    const terminal = Number(row.succeeded || 0) + Number(row.failed || 0) + Number(row.cancelled || 0);
+    return {
+      total: Number(row.total || 0),
+      queued: Number(row.queued || 0),
+      running: Number(row.running || 0),
+      succeeded: Number(row.succeeded || 0),
+      failed: Number(row.failed || 0),
+      cancelled: Number(row.cancelled || 0),
+      completed24h: Number(row.completed_24h || 0),
+      averageDurationMs: row.average_duration_ms === null ? null : Number(row.average_duration_ms),
+      successRate: terminal ? Number((Number(row.succeeded || 0) / terminal).toFixed(4)) : null,
+      measuredAt: this.clock().toISOString(),
+    };
   }
 
   async recordWebhookEvent({ provider, eventId, payload = {}, receivedAt = this.clock() }) {

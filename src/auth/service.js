@@ -459,6 +459,55 @@ class MemoryAuthStore {
       .slice(0, Math.max(1, Math.min(500, Number(limit) || 200)))
       .map(clone);
   }
+
+  async listPlatformUsers({ query = "", limit = 100 } = {}) {
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
+    return [...this.users.values()]
+      .filter((user) => !user.deletedAt)
+      .filter((user) => !normalizedQuery
+        || [user.id, user.email, user.displayName].some((value) => String(value || "").toLowerCase().includes(normalizedQuery)))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, safeLimit)
+      .map((user) => ({
+        ...publicUser(user),
+        workspaceCount: [...this.memberships.values()].filter((item) => item.userId === user.id && item.status === ACTIVE).length,
+        activeSessionCount: [...this.sessions.values()].filter((item) => item.userId === user.id
+          && !item.revokedAt && new Date(item.expiresAt) > this.clock()).length,
+      }));
+  }
+
+  async listPlatformWorkspaces({ query = "", limit = 100 } = {}) {
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
+    return [...this.workspaces.values()]
+      .filter((workspace) => !workspace.deletedAt)
+      .filter((workspace) => !normalizedQuery
+        || [workspace.id, workspace.name, workspace.planId, workspace.workspaceType]
+          .some((value) => String(value || "").toLowerCase().includes(normalizedQuery)))
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+      .slice(0, safeLimit)
+      .map((workspace) => ({
+        ...clone(workspace),
+        memberCount: [...this.memberships.values()].filter((item) => item.workspaceId === workspace.id && item.status === ACTIVE).length,
+        owner: publicUser(this.users.get(workspace.ownerUserId)),
+      }));
+  }
+
+  async getPlatformStats() {
+    const users = [...this.users.values()].filter((user) => !user.deletedAt);
+    const workspaces = [...this.workspaces.values()].filter((workspace) => !workspace.deletedAt);
+    const activeSessions = [...this.sessions.values()].filter((session) => !session.revokedAt && new Date(session.expiresAt) > this.clock());
+    return {
+      users: users.length,
+      verifiedUsers: users.filter((user) => user.emailVerified).length,
+      superadmins: users.filter((user) => user.platformRole === ROLES.SUPERADMIN).length,
+      workspaces: workspaces.length,
+      personalWorkspaces: workspaces.filter((workspace) => workspace.workspaceType === "personal").length,
+      teamWorkspaces: workspaces.filter((workspace) => workspace.workspaceType === "team").length,
+      activeSessions: activeSessions.length,
+    };
+  }
 }
 
 class PostgresAuthStore {
@@ -935,6 +984,94 @@ class PostgresAuthStore {
       [safeLimit],
     );
     return result.rows.map(rowAudit);
+  }
+
+  async listPlatformUsers({ query = "", limit = 100 } = {}) {
+    const values = [];
+    const conditions = ["u.deleted_at IS NULL"];
+    if (String(query || "").trim()) {
+      values.push(`%${String(query).trim()}%`);
+      conditions.push(`(u.id ILIKE $${values.length} OR u.email ILIKE $${values.length} OR COALESCE(u.display_name, '') ILIKE $${values.length})`);
+    }
+    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
+    values.push(safeLimit);
+    const result = await this.pool.query(
+      `SELECT u.id, u.email, u.display_name, u.platform_role, u.mfa_enabled,
+              u.email_verified, u.email_verified_at, u.created_at, u.deleted_at,
+              COUNT(DISTINCT m.workspace_id) FILTER (WHERE m.status = 'active' AND m.deleted_at IS NULL)::int AS workspace_count,
+              COUNT(DISTINCT s.id) FILTER (WHERE s.revoked_at IS NULL AND s.expires_at > NOW())::int AS active_session_count
+         FROM users u
+         LEFT JOIN memberships m ON m.user_id = u.id
+         LEFT JOIN auth_sessions s ON s.user_id = u.id
+        WHERE ${conditions.join(" AND ")}
+        GROUP BY u.id
+        ORDER BY u.created_at DESC
+        LIMIT $${values.length}`,
+      values,
+    );
+    return result.rows.map((row) => ({
+      ...rowUser(row),
+      workspaceCount: Number(row.workspace_count || 0),
+      activeSessionCount: Number(row.active_session_count || 0),
+    }));
+  }
+
+  async listPlatformWorkspaces({ query = "", limit = 100 } = {}) {
+    const values = [];
+    const conditions = ["w.deleted_at IS NULL"];
+    if (String(query || "").trim()) {
+      values.push(`%${String(query).trim()}%`);
+      conditions.push(`(w.id ILIKE $${values.length} OR COALESCE(w.name, '') ILIKE $${values.length} OR w.plan_id ILIKE $${values.length} OR w.workspace_type ILIKE $${values.length})`);
+    }
+    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
+    values.push(safeLimit);
+    const result = await this.pool.query(
+      `SELECT w.id, w.name, w.owner_user_id, w.workspace_type, w.plan_id, w.created_at,
+              w.archived_at, w.deleted_at,
+              u.email AS owner_email, u.display_name AS owner_display_name,
+              COUNT(m.user_id) FILTER (WHERE m.status = 'active' AND m.deleted_at IS NULL)::int AS member_count
+         FROM workspaces w
+         LEFT JOIN users u ON u.id = w.owner_user_id
+         LEFT JOIN memberships m ON m.workspace_id = w.id
+        WHERE ${conditions.join(" AND ")}
+        GROUP BY w.id, u.email, u.display_name
+        ORDER BY w.created_at DESC
+        LIMIT $${values.length}`,
+      values,
+    );
+    return result.rows.map((row) => ({
+      ...rowWorkspace(row),
+      memberCount: Number(row.member_count || 0),
+      owner: row.owner_user_id ? {
+        id: row.owner_user_id,
+        email: row.owner_email,
+        displayName: row.owner_display_name,
+      } : null,
+    }));
+  }
+
+  async getPlatformStats() {
+    const result = await this.pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL)::int AS users,
+         (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND email_verified = TRUE)::int AS verified_users,
+         (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND platform_role = $1)::int AS superadmins,
+         (SELECT COUNT(*) FROM workspaces WHERE deleted_at IS NULL)::int AS workspaces,
+         (SELECT COUNT(*) FROM workspaces WHERE deleted_at IS NULL AND workspace_type = 'personal')::int AS personal_workspaces,
+         (SELECT COUNT(*) FROM workspaces WHERE deleted_at IS NULL AND workspace_type = 'team')::int AS team_workspaces,
+         (SELECT COUNT(*) FROM auth_sessions WHERE revoked_at IS NULL AND expires_at > NOW())::int AS active_sessions`,
+      [ROLES.SUPERADMIN],
+    );
+    const row = result.rows[0] || {};
+    return {
+      users: Number(row.users || 0),
+      verifiedUsers: Number(row.verified_users || 0),
+      superadmins: Number(row.superadmins || 0),
+      workspaces: Number(row.workspaces || 0),
+      personalWorkspaces: Number(row.personal_workspaces || 0),
+      teamWorkspaces: Number(row.team_workspaces || 0),
+      activeSessions: Number(row.active_sessions || 0),
+    };
   }
 }
 

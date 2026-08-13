@@ -58,8 +58,24 @@ const adminApprovals = document.querySelector("#admin-approvals");
 const adminAudit = document.querySelector("#admin-audit");
 const adminProviderCount = document.querySelector("#admin-provider-count");
 const adminProviderSummary = document.querySelector("#admin-provider-summary");
+const adminScanThroughput = document.querySelector("#admin-scan-throughput");
+const adminScanThroughputNote = document.querySelector("#admin-scan-throughput-note");
+const adminFailureRate = document.querySelector("#admin-failure-rate");
+const adminFailureRateNote = document.querySelector("#admin-failure-rate-note");
+const adminQueueDepth = document.querySelector("#admin-queue-depth");
+const adminQueueNote = document.querySelector("#admin-queue-note");
+const adminWorkspaceCount = document.querySelector("#admin-workspace-count");
+const adminWorkspaceSummary = document.querySelector("#admin-workspace-summary");
+const adminUserCount = document.querySelector("#admin-user-count");
+const adminUserSummary = document.querySelector("#admin-user-summary");
 const adminApprovalCount = document.querySelector("#admin-approval-count");
 const adminAuditCount = document.querySelector("#admin-audit-count");
+const adminSnapshotTime = document.querySelector("#admin-snapshot-time");
+const adminHealth = document.querySelector("#admin-health");
+const adminUsers = document.querySelector("#admin-users");
+const adminWorkspaces = document.querySelector("#admin-workspaces");
+const adminSubscriptions = document.querySelector("#admin-subscriptions");
+const adminWebhooks = document.querySelector("#admin-webhooks");
 let authState = null;
 let currentScan = null;
 let currentJob = null;
@@ -448,47 +464,86 @@ function adminErrorMessage(error) {
   adminMessage(message, "error");
 }
 
-function adminProviderMarkup(provider) {
+function adminApprovalOptions(approvals, action, targetId) {
+  const matches = approvals.filter((approval) => approval.action === action
+    && approval.targetId === targetId && ["PENDING", "APPROVED"].includes(approval.status));
+  return matches.map((approval) => `<option value="${escapeHtml(approval.id)}">${escapeHtml(approval.status)} · ${escapeHtml(approval.id.slice(-12))}</option>`).join("");
+}
+
+function adminProviderMarkup(provider, approvals = []) {
   const runtime = provider.runtime || {};
   const errorRate = Number.isFinite(Number(runtime.errorRate)) ? `${(Number(runtime.errorRate) * 100).toFixed(1)}%` : "—";
   const health = provider.killSwitch || provider.state === "DISABLED" ? "DISABLED" : runtime.lastError ? "DEGRADED" : "ACTIVE";
+  const providerApprovals = adminApprovalOptions(approvals, provider.killSwitch || provider.state === "DISABLED" ? "provider.kill_switch" : "provider.publish", provider.providerId);
+  const draftLabel = provider.draft ? `DRAFT READY · ${escapeHtml(provider.draft.requestedBy || "operator")}` : "NO DRAFT";
   return `<article class="admin-provider-row">
     <div class="admin-provider-main">
       <div><strong>${escapeHtml(provider.source || provider.providerId)}</strong><span>${escapeHtml(provider.providerId)} · adapter ${escapeHtml(provider.adapterVersion || "UNKNOWN")}</span></div>
-      ${statusPill({ status: health }, health)}
+      <div class="admin-provider-status">${statusPill({ status: health }, health)}<span class="admin-draft-state ${provider.draft ? "ready" : ""}">${draftLabel}</span></div>
     </div>
     <div class="admin-provider-metrics">
       <span><b>CAPABILITY</b>${escapeHtml((provider.capabilities || []).join(", ") || "UNKNOWN")}</span>
       <span><b>LATENCY</b>${runtime.averageLatencyMs === null || runtime.averageLatencyMs === undefined ? "—" : `${runtime.averageLatencyMs} ms avg`}</span>
       <span><b>ERROR RATE</b>${errorRate}</span>
       <span><b>QUOTA</b>${escapeHtml(String(provider.quotaPerMinute))}/min</span>
+      <span><b>TIMEOUT</b>${escapeHtml(String(provider.timeoutMs))} ms</span>
       <span><b>PRIORITY</b>${escapeHtml(String(provider.priority ?? 100))}</span>
       <span><b>LAST SUCCESS</b>${formatDate(runtime.lastSuccessfulAt)}</span>
     </div>
     <form class="admin-provider-form" data-provider-id="${escapeHtml(provider.providerId)}">
-      <input name="timeoutMs" type="number" min="100" max="120000" value="${escapeHtml(provider.timeoutMs)}" aria-label="Timeout milliseconds" />
-      <input name="retries" type="number" min="0" max="2" value="${escapeHtml(provider.retries)}" aria-label="Retry count" />
-      <input name="quotaPerMinute" type="number" min="1" max="100000" value="${escapeHtml(provider.quotaPerMinute)}" aria-label="Quota per minute" />
-      <select name="state" aria-label="Provider state"><option value="ACTIVE" ${provider.state === "ACTIVE" ? "selected" : ""}>ACTIVE</option><option value="DISABLED" ${provider.state === "DISABLED" ? "selected" : ""}>DISABLED</option></select>
+      <label>Timeout <input name="timeoutMs" type="number" min="100" max="120000" value="${escapeHtml(provider.timeoutMs)}" aria-label="Timeout milliseconds" /></label>
+      <label>Retries <input name="retries" type="number" min="0" max="2" value="${escapeHtml(provider.retries)}" aria-label="Retry count" /></label>
+      <label>Quota/min <input name="quotaPerMinute" type="number" min="1" max="100000" value="${escapeHtml(provider.quotaPerMinute)}" aria-label="Quota per minute" /></label>
+      <label>Priority <input name="priority" type="number" min="1" max="10000" value="${escapeHtml(provider.priority ?? 100)}" aria-label="Provider priority" /></label>
+      <label>State <select name="state" aria-label="Provider state"><option value="ACTIVE" ${provider.state === "ACTIVE" ? "selected" : ""}>ACTIVE</option><option value="DISABLED" ${provider.state === "DISABLED" ? "selected" : ""}>DISABLED</option></select></label>
+      <label class="admin-check-label"><input name="killSwitch" type="checkbox" ${provider.killSwitch ? "checked" : ""} /> Kill switch</label>
       <input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="REASON_CODE" aria-label="Reason code" required />
       <button class="secondary-button" type="submit">Save draft</button>
-      <button class="secondary-button provider-test-button" type="button" data-provider-test="${escapeHtml(provider.providerId)}">Test connection</button>
     </form>
+    <div class="admin-provider-actions">
+      <form class="admin-provider-test-form" data-provider-test="${escapeHtml(provider.providerId)}">
+        <label>Test network <select name="networkId" aria-label="Test network"><option value="ethereum">Ethereum</option><option value="bsc">BNB Chain</option><option value="base">Base</option><option value="arbitrum">Arbitrum</option><option value="polygon">Polygon</option></select></label>
+        <label>Contract address <input name="address" pattern="0x[a-fA-F0-9]{40}" placeholder="0x..." aria-label="Test contract address" required /></label>
+        <button class="secondary-button" type="submit">Test connection</button>
+      </form>
+      ${provider.draft ? `<form class="admin-provider-publish-form" data-provider-publish="${escapeHtml(provider.providerId)}">
+        <input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="PUBLISH_REASON" aria-label="Publish reason" required />
+        <select name="approvalId" aria-label="Approval reference"><option value="">No approval reference</option>${providerApprovals}</select>
+        <button class="secondary-button" type="submit">Publish draft</button>
+      </form>` : ""}
+      ${provider.hasHistory ? `<form class="admin-provider-rollback-form" data-provider-rollback="${escapeHtml(provider.providerId)}">
+        <input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="ROLLBACK_REASON" aria-label="Rollback reason" required />
+        <select name="approvalId" aria-label="Rollback approval reference"><option value="">Select approval</option>${adminApprovalOptions(approvals, "provider.publish", provider.providerId)}</select>
+        <button class="secondary-button" type="submit">Rollback one version</button>
+      </form>` : ""}
+    </div>
   </article>`;
 }
 
-function renderAdminProviders(providers) {
+function renderAdminProviders(providers, approvals = []) {
   adminProviderCount.textContent = providers.length;
   const active = providers.filter((provider) => !provider.killSwitch && provider.state === "ACTIVE").length;
   adminProviderSummary.textContent = `${active} active · ${providers.length - active} needs attention`;
   adminProviders.innerHTML = providers.length
-    ? providers.map(adminProviderMarkup).join("")
+    ? providers.map((provider) => adminProviderMarkup(provider, approvals)).join("")
     : `<div class="unknown-message">No provider adapters are registered.</div>`;
 }
 
-function renderAdminFlags(flags) {
+function renderAdminFlags(flags, approvals = []) {
   adminFlags.innerHTML = flags.length
-    ? flags.map((flag) => `<div class="admin-list-row"><div><strong>${escapeHtml(flag.key)}</strong><span>version ${escapeHtml(flag.version)}</span></div>${statusPill({ status: flag.enabled ? "ACTIVE" : "DISABLED" }, flag.enabled ? "ON" : "OFF")}</div>`).join("")
+    ? flags.map((flag) => `<div class="admin-flag-row">
+      <div class="admin-list-row"><div><strong>${escapeHtml(flag.key)}</strong><span>version ${escapeHtml(flag.version)}${flag.draft ? " · draft staged" : ""}</span></div>${statusPill({ status: flag.enabled ? "ACTIVE" : "DISABLED" }, flag.enabled ? "ON" : "OFF")}</div>
+      <form class="admin-flag-form" data-flag-key="${escapeHtml(flag.key)}">
+        <label class="admin-check-label"><input name="enabled" type="checkbox" ${flag.draft?.enabled ?? flag.enabled ? "checked" : ""} /> Enabled</label>
+        <input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="ROLL_OUT_REASON" aria-label="Feature flag reason" required />
+        <button class="secondary-button" type="submit">Save draft</button>
+      </form>
+      ${flag.draft ? `<form class="admin-flag-publish-form" data-flag-publish="${escapeHtml(flag.key)}">
+        <input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="PUBLISH_REASON" aria-label="Feature flag publish reason" required />
+        <select name="approvalId" aria-label="Feature flag approval reference"><option value="">Select approval</option>${adminApprovalOptions(approvals, "feature_flag.publish", flag.key)}</select>
+        <button class="secondary-button" type="submit">Publish flag</button>
+      </form>` : ""}
+    </div>`).join("")
     : `<div class="unknown-message">No feature flag drafts or published values.</div>`;
 }
 
@@ -500,7 +555,7 @@ function renderAdminApprovals(approvals) {
   const pending = approvals.filter((approval) => approval.status === "PENDING");
   adminApprovalCount.textContent = pending.length;
   adminApprovals.innerHTML = approvals.length
-    ? approvals.slice(0, 20).map((approval) => `<div class="admin-list-row"><div><strong>${escapeHtml(approval.action)}</strong><span>${escapeHtml(approval.targetId)} · requested by ${escapeHtml(approval.requestedBy)}</span></div><div class="admin-approval-action">${statusPill({ status: approval.status }, approval.status)}${approval.status === "PENDING" ? `<button class="text-button admin-approve-button" data-approval-id="${escapeHtml(approval.id)}">Approve</button>` : ""}</div></div>`).join("")
+    ? approvals.slice(0, 20).map((approval) => `<div class="admin-approval-row"><div class="admin-list-row"><div><strong>${escapeHtml(approval.action)}</strong><span>${escapeHtml(approval.targetId)} · requested by ${escapeHtml(approval.requestedBy)} · ${formatDate(approval.createdAt)}</span></div><div class="admin-approval-action">${statusPill({ status: approval.status }, approval.status)}</div></div>${approval.status === "PENDING" ? `<form class="admin-approval-form" data-approval-id="${escapeHtml(approval.id)}"><input name="reasonCode" pattern="[A-Za-z][A-Za-z0-9_.-]{2,63}" placeholder="REVIEW_REASON" aria-label="Approval reason" required /><button class="secondary-button" type="submit">Grant approval</button></form>` : ""}</div>`).join("")
     : `<div class="unknown-message">No approvals have been requested.</div>`;
 }
 
@@ -511,21 +566,79 @@ function renderAdminAudit(audit) {
     : `<div class="unknown-message">No platform events recorded.</div>`;
 }
 
+function renderAdminHealth(data) {
+  const platform = data.platform || {};
+  const storage = platform.storage || {};
+  const auth = platform.auth || {};
+  adminHealth.innerHTML = `
+    <div class="admin-health-row"><span>Environment</span><strong>${escapeHtml(data.environment || "UNKNOWN")}</strong></div>
+    <div class="admin-health-row"><span>Queue driver</span><strong>${escapeHtml(data.queue?.driver || "UNKNOWN")}</strong></div>
+    <div class="admin-health-row"><span>Worker concurrency</span><strong>${escapeHtml(data.queue?.concurrency ?? platform.queue?.workerConcurrency ?? "—")}</strong></div>
+    <div class="admin-health-row"><span>Primary storage</span><strong>${escapeHtml(storage.primary || "UNKNOWN")} · ${storage.configured ? "configured" : "memory only"}</strong></div>
+    <div class="admin-health-row"><span>Identity</span><strong>${escapeHtml(auth.provider || "UNKNOWN")} · ${auth.configured ? "configured" : "not configured"}</strong></div>
+    <div class="admin-health-row"><span>Billing</span><strong>${platform.billing?.connected ? "connected" : "not connected"}</strong></div>`;
+}
+
+function renderAdminInventory(data) {
+  const users = data.recentUsers || [];
+  const workspaces = data.recentWorkspaces || [];
+  adminUsers.innerHTML = users.length
+    ? users.map((user) => `<div class="admin-list-row"><div><strong>${escapeHtml(user.displayName || user.email)}</strong><span>${escapeHtml(user.email)} · ${user.workspaceCount} workspace${user.workspaceCount === 1 ? "" : "s"} · ${user.activeSessionCount} session${user.activeSessionCount === 1 ? "" : "s"}</span></div>${statusPill({ status: user.mfaEnabled ? "VERIFIED" : "UNKNOWN" }, user.mfaEnabled ? "MFA ON" : "MFA OFF")}</div>`).join("")
+    : `<div class="unknown-message">No users in the platform inventory.</div>`;
+  adminWorkspaces.innerHTML = workspaces.length
+    ? workspaces.map((workspace) => `<div class="admin-list-row"><div><strong>${escapeHtml(workspace.name || workspace.id)}</strong><span>${escapeHtml(workspace.workspaceType)} · ${escapeHtml(workspace.planId)} · ${workspace.memberCount} member${workspace.memberCount === 1 ? "" : "s"}</span></div><span class="admin-list-value">${escapeHtml(truncateAddress(workspace.id))}</span></div>`).join("")
+    : `<div class="unknown-message">No workspaces in the platform inventory.</div>`;
+}
+
+function renderAdminSubscriptions(subscriptions) {
+  const items = subscriptions || [];
+  adminSubscriptions.innerHTML = items.length
+    ? items.slice(0, 8).map((subscription) => `<div class="admin-list-row"><div><strong>${escapeHtml(subscription.planId || "UNKNOWN PLAN")}</strong><span>${escapeHtml(subscription.workspaceId || "workspace unavailable")} · ${escapeHtml(subscription.source || "provider unknown")}</span></div>${statusPill({ status: subscription.status }, subscription.status)}</div>`).join("")
+    : `<div class="unknown-message">No subscription overrides recorded.</div>`;
+}
+
+function renderAdminWebhooks(webhooks) {
+  const items = webhooks || [];
+  adminWebhooks.innerHTML = items.length
+    ? items.slice(0, 8).map((webhook) => `<div class="admin-list-row"><div><strong>${escapeHtml(webhook.provider)}</strong><span>${escapeHtml(webhook.eventId)} · ${formatDate(webhook.receivedAt)}</span></div>${statusPill({ status: webhook.status }, webhook.status)}</div>`).join("")
+    : `<div class="unknown-message">No billing webhook events recorded.</div>`;
+}
+
+function renderAdminOverview(data) {
+  const stats = data.stats || {};
+  const scans = data.scans || {};
+  const queue = data.queue || {};
+  const terminal = Number(scans.succeeded || 0) + Number(scans.failed || 0) + Number(scans.cancelled || 0);
+  const failureRate = terminal ? `${((Number(scans.failed || 0) / terminal) * 100).toFixed(1)}%` : "—";
+  adminScanThroughput.textContent = Number(scans.completed24h || 0).toLocaleString("en-US");
+  adminScanThroughputNote.textContent = scans.averageDurationMs === null || scans.averageDurationMs === undefined
+    ? "No completed-job latency"
+    : `avg ${Number(scans.averageDurationMs).toLocaleString("en-US")} ms`;
+  adminFailureRate.textContent = failureRate;
+  adminFailureRateNote.textContent = `${Number(scans.failed || 0).toLocaleString("en-US")} failed · ${terminal.toLocaleString("en-US")} terminal`;
+  adminQueueDepth.textContent = Number(queue.depth || 0).toLocaleString("en-US");
+  adminQueueNote.textContent = `${Number(queue.running || 0)} running · ${Number(queue.pending || 0)} pending`;
+  adminWorkspaceCount.textContent = Number(stats.workspaces || 0).toLocaleString("en-US");
+  adminWorkspaceSummary.textContent = `${Number(stats.teamWorkspaces || 0)} team · ${Number(stats.personalWorkspaces || 0)} personal`;
+  adminUserCount.textContent = Number(stats.users || 0).toLocaleString("en-US");
+  adminUserSummary.textContent = `${Number(stats.verifiedUsers || 0)} verified · ${Number(stats.activeSessions || 0)} active sessions`;
+  adminSnapshotTime.textContent = `Snapshot ${formatDate(data.generatedAt)}`;
+  renderAdminHealth(data);
+  renderAdminInventory(data);
+  renderAdminProviders(data.providers || [], data.approvals || []);
+  renderAdminFlags(data.flags || [], data.approvals || []);
+  renderAdminPlans(data.plans?.items || []);
+  renderAdminApprovals(data.approvals || []);
+  renderAdminSubscriptions(data.subscriptions || []);
+  renderAdminWebhooks(data.webhooks || []);
+  renderAdminAudit(data.audit || []);
+}
+
 async function loadAdminData() {
   try {
     adminMessage("Refreshing platform telemetry…");
-    const [providerData, flagData, planData, approvalData, auditData] = await Promise.all([
-      apiJson("/api/admin/providers"),
-      apiJson("/api/admin/feature-flags"),
-      apiJson("/api/admin/plans"),
-      apiJson("/api/admin/approvals"),
-      apiJson("/api/admin/audit?limit=200"),
-    ]);
-    renderAdminProviders(providerData.providers || []);
-    renderAdminFlags(flagData.flags || []);
-    renderAdminPlans(planData.plans || []);
-    renderAdminApprovals(approvalData.approvals || []);
-    renderAdminAudit(auditData.audit || []);
+    const overview = await apiJson("/api/admin/overview");
+    renderAdminOverview(overview);
     adminMessage(`Last refreshed ${new Date().toLocaleTimeString()}.`, "success");
   } catch (error) {
     adminErrorMessage(error);

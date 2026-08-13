@@ -549,6 +549,61 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/admin/overview") {
+    requirePlatformAdmin(context);
+    const [providers, flags, plans, approvals, subscriptions, webhooks, audit, stats, users, workspaces, scanMetrics] = await Promise.all([
+      controlPlane.listProviderHealth(providerRegistry),
+      controlPlane.listFeatureFlags(),
+      Promise.resolve(publicPlanCatalog()),
+      controlPlane.listApprovals(),
+      controlPlane.listSubscriptions(),
+      controlPlane.listWebhooks(),
+      authService.store.listPlatformAudit({ limit: 200 }),
+      authService.store.getPlatformStats(),
+      authService.store.listPlatformUsers({ limit: 8 }),
+      authService.store.listPlatformWorkspaces({ limit: 8 }),
+      persistence.getPlatformScanMetrics(),
+    ]);
+    sendJson(res, 200, {
+      generatedAt: new Date().toISOString(),
+      environment: runtimeConfig.environment,
+      platform: publicPlatformConfig(runtimeConfig),
+      stats,
+      queue: { driver: runtimeConfig.queue.driver, ...scanQueue.metrics() },
+      scans: scanMetrics,
+      providers,
+      flags,
+      plans: { items: plans, source: "platform-config", mutable: false },
+      approvals,
+      subscriptions,
+      webhooks,
+      audit,
+      recentUsers: users,
+      recentWorkspaces: workspaces,
+    }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/users") {
+    requirePlatformAdmin(context);
+    const users = await authService.store.listPlatformUsers({
+      query: url.searchParams.get("q") || "",
+      limit: Number(url.searchParams.get("limit") || 100),
+    });
+    sendJson(res, 200, { users }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/workspaces") {
+    requirePlatformAdmin(context);
+    const workspaces = await authService.store.listPlatformWorkspaces({
+      query: url.searchParams.get("q") || "",
+      limit: Number(url.searchParams.get("limit") || 100),
+    });
+    sendJson(res, 200, { workspaces }, { context });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/admin/providers") {
     requirePlatformAdmin(context);
     sendJson(res, 200, { providers: await controlPlane.listProviderHealth(providerRegistry) }, { context });
@@ -1430,12 +1485,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   const privateUiRoute = url.pathname === "/dashboard" || url.pathname.startsWith("/dashboard/");
-  if (privateUiRoute && context.kind !== "authenticated") {
+  const adminUiRoute = url.pathname === "/admin";
+  if ((privateUiRoute || adminUiRoute) && context.kind !== "authenticated") {
     sendRedirect(res, `/login?returnTo=${encodeURIComponent(url.pathname)}`);
     return;
   }
   const filePath = safePublicPath(
-    privateUiRoute || url.pathname === "/login" || url.pathname === "/register"
+    privateUiRoute || adminUiRoute || url.pathname === "/login" || url.pathname === "/register"
       ? "/index.html"
       : url.pathname,
   );

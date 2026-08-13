@@ -100,57 +100,85 @@
             <select id="workspace-selector" aria-label="Select workspace"></select>
             <button type="button" class="secondary-button" id="logout-action">Sign out</button>
           </section>
-           <section id="admin-panel" class="admin-page" hidden>
-             <div class="admin-heading">
-               <div>
-                 <p class="eyebrow">PHASE 7 / PLATFORM OPERATIONS</p>
-                 <h1>Superadmin control plane</h1>
-                 <p>Manage provider posture and platform controls with MFA step-up, four-eyes approval, and an immutable audit trail.</p>
-               </div>
-               <span class="admin-security-badge">MFA + RBAC ENFORCED</span>
-             </div>
-             <section class="admin-stepup" id="admin-stepup">
-               <div>
-                 <span class="card-kicker">PRIVILEGED SESSION</span>
-                 <h2>Verify operator session</h2>
-                 <p>Platform data and configuration changes require a fresh six-digit authenticator code. No provider secret is sent to this browser.</p>
-               </div>
-               <form id="admin-stepup-form" class="inline-form">
-                 <input id="admin-stepup-code" inputmode="numeric" maxlength="6" placeholder="000000" aria-label="Authenticator code" required />
-                 <button class="primary-button" type="submit"><span>Verify</span><span>→</span></button>
-               </form>
-               <p id="admin-stepup-status" class="field-error" role="alert"></p>
-             </section>
-             <div id="admin-status" class="admin-status" role="status"></div>
-             <div class="admin-summary-grid">
-               <article class="admin-summary-card"><span class="card-kicker">PROVIDERS</span><strong id="admin-provider-count">—</strong><span id="admin-provider-summary">Awaiting verification</span></article>
-               <article class="admin-summary-card"><span class="card-kicker">APPROVALS</span><strong id="admin-approval-count">—</strong><span>Pending independent review</span></article>
-               <article class="admin-summary-card"><span class="card-kicker">AUDIT EVENTS</span><strong id="admin-audit-count">—</strong><span>Most recent platform events</span></article>
-             </div>
-             <div class="admin-grid">
-               <section class="admin-card admin-card-wide">
-                 <div class="admin-card-heading"><div><span class="card-kicker">PROVIDER CONTROL</span><h2>Provider and network posture</h2></div><button class="secondary-button" type="button" id="admin-refresh">Refresh</button></div>
-                 <p class="admin-note">Runtime health is process telemetry. Published configuration is versioned separately and kill switches require four-eyes approval.</p>
-                 <div id="admin-providers" class="admin-table-wrap"><div class="unknown-message">Verify your session to load provider health.</div></div>
-               </section>
-               <section class="admin-card">
-                 <div class="admin-card-heading"><div><span class="card-kicker">FEATURE FLAGS</span><h2>Controlled rollout</h2></div></div>
-                 <div id="admin-flags" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
-               </section>
-               <section class="admin-card">
-                 <div class="admin-card-heading"><div><span class="card-kicker">PLAN CATALOG</span><h2>Effective capabilities</h2></div></div>
-                 <div id="admin-plans" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
-               </section>
-               <section class="admin-card admin-card-wide">
-                 <div class="admin-card-heading"><div><span class="card-kicker">FOUR-EYES QUEUE</span><h2>Pending approvals</h2></div></div>
-                 <div id="admin-approvals" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
-               </section>
-               <section class="admin-card admin-card-wide">
-                 <div class="admin-card-heading"><div><span class="card-kicker">AUDIT TRAIL</span><h2>Platform changes</h2></div></div>
-                 <div id="admin-audit" class="admin-audit-list"><div class="unknown-message">Awaiting verification.</div></div>
-               </section>
-             </div>
-           </section>
+            <section id="admin-panel" class="admin-page" hidden>
+              <div class="admin-heading">
+                <div>
+                  <p class="eyebrow">PHASE 7 / PLATFORM OPERATIONS</p>
+                  <h1>Superadmin control plane</h1>
+                  <p>Platform-wide visibility and controlled change management. Every privileged read is step-up protected; every write is reasoned and auditable.</p>
+                </div>
+                <div class="admin-heading-actions">
+                  <span class="admin-security-badge">MFA + RBAC ENFORCED</span>
+                  <button class="secondary-button" type="button" id="admin-refresh">Refresh snapshot</button>
+                </div>
+              </div>
+              <section class="admin-stepup" id="admin-stepup">
+                <div>
+                  <span class="card-kicker">PRIVILEGED SESSION</span>
+                  <h2>Verify operator session</h2>
+                  <p>Platform data and configuration changes require a fresh six-digit authenticator code. Provider secrets are never returned to this browser.</p>
+                </div>
+                <form id="admin-stepup-form" class="inline-form">
+                  <input id="admin-stepup-code" inputmode="numeric" maxlength="6" placeholder="000000" aria-label="Authenticator code" required />
+                  <button class="primary-button" type="submit"><span>Verify session</span><span>→</span></button>
+                </form>
+                <p id="admin-stepup-status" class="field-error" role="alert"></p>
+              </section>
+              <div id="admin-status" class="admin-status" role="status"></div>
+              <div class="admin-summary-grid">
+                <article class="admin-summary-card"><span class="card-kicker">PROVIDERS</span><strong id="admin-provider-count">—</strong><span id="admin-provider-summary">Awaiting verification</span></article>
+                <article class="admin-summary-card"><span class="card-kicker">SCANS / 24H</span><strong id="admin-scan-throughput">—</strong><span id="admin-scan-throughput-note">No telemetry loaded</span></article>
+                <article class="admin-summary-card"><span class="card-kicker">FAILURE RATE</span><strong id="admin-failure-rate">—</strong><span id="admin-failure-rate-note">Terminal jobs only</span></article>
+                <article class="admin-summary-card"><span class="card-kicker">QUEUE DEPTH</span><strong id="admin-queue-depth">—</strong><span id="admin-queue-note">Awaiting verification</span></article>
+                <article class="admin-summary-card"><span class="card-kicker">WORKSPACES</span><strong id="admin-workspace-count">—</strong><span id="admin-workspace-summary">Platform inventory</span></article>
+                <article class="admin-summary-card"><span class="card-kicker">USERS</span><strong id="admin-user-count">—</strong><span id="admin-user-summary">Platform inventory</span></article>
+              </div>
+              <div class="admin-grid">
+                <section class="admin-card admin-card-wide">
+                  <div class="admin-card-heading"><div><span class="card-kicker">PROVIDER CONTROL</span><h2>Provider and network posture</h2></div><span class="admin-snapshot-time" id="admin-snapshot-time">—</span></div>
+                  <p class="admin-note">Runtime health is process telemetry. Configuration is staged as a draft, validated by the API, and published separately. Kill switches and disabled states require independent approval.</p>
+                  <div id="admin-providers" class="admin-table-wrap"><div class="unknown-message">Verify your session to load provider health.</div></div>
+                </section>
+                <section class="admin-card">
+                  <div class="admin-card-heading"><div><span class="card-kicker">PLATFORM HEALTH</span><h2>Runtime boundary</h2></div></div>
+                  <div id="admin-health" class="admin-health-list"><div class="unknown-message">Awaiting verification.</div></div>
+                </section>
+                <section class="admin-card">
+                  <div class="admin-card-heading"><div><span class="card-kicker">FEATURE FLAGS</span><h2>Controlled rollout</h2></div></div>
+                  <div id="admin-flags" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+                </section>
+                <section class="admin-card">
+                  <div class="admin-card-heading"><div><span class="card-kicker">PLAN CATALOG</span><h2>Effective capabilities</h2></div></div>
+                  <div id="admin-plans" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+                </section>
+                <section class="admin-card">
+                  <div class="admin-card-heading"><div><span class="card-kicker">ACCOUNT INVENTORY</span><h2>Recent users</h2></div></div>
+                  <div id="admin-users" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+                  <button type="button" class="view-all admin-inventory-link" id="admin-users-link">Open user inventory</button>
+                </section>
+                <section class="admin-card">
+                  <div class="admin-card-heading"><div><span class="card-kicker">TENANT INVENTORY</span><h2>Recent workspaces</h2></div></div>
+                  <div id="admin-workspaces" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+                  <button type="button" class="view-all admin-inventory-link" id="admin-workspaces-link">Open workspace inventory</button>
+                </section>
+                <section class="admin-card admin-card-wide">
+                  <div class="admin-card-heading"><div><span class="card-kicker">FOUR-EYES QUEUE</span><h2>Pending approvals</h2></div><span class="admin-card-meta">Independent operator required</span></div>
+                  <div id="admin-approvals" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+                </section>
+                <section class="admin-card">
+                  <div class="admin-card-heading"><div><span class="card-kicker">BILLING SIGNALS</span><h2>Subscriptions</h2></div></div>
+                  <div id="admin-subscriptions" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+                </section>
+                <section class="admin-card">
+                  <div class="admin-card-heading"><div><span class="card-kicker">WEBHOOK INBOX</span><h2>Billing events</h2></div></div>
+                  <div id="admin-webhooks" class="admin-list"><div class="unknown-message">Awaiting verification.</div></div>
+                </section>
+                <section class="admin-card admin-card-wide">
+                  <div class="admin-card-heading"><div><span class="card-kicker">AUDIT TRAIL</span><h2>Platform changes</h2></div><span class="admin-card-meta">Newest first · provider identity retained server-side</span></div>
+                  <div id="admin-audit" class="admin-audit-list"><div class="unknown-message">Awaiting verification.</div></div>
+                </section>
+              </div>
+            </section>
           <section id="landing" class="dashboard-page public-home">
             <div class="dashboard-heading" id="dashboard">
               <div>

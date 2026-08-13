@@ -93,6 +93,19 @@ class InMemoryScanJobQueue {
     ).length;
   }
 
+  metrics() {
+    const counts = Object.fromEntries(Object.values(JOB_STATUS).map((status) => [status, 0]));
+    for (const job of this.jobs.values()) counts[job.status] = (counts[job.status] || 0) + 1;
+    return {
+      ...counts,
+      pending: this.pending.length,
+      running: this.running,
+      depth: this.pending.length + this.running,
+      concurrency: this.concurrency,
+      maxQueueDepth: this.maxQueueDepth,
+    };
+  }
+
   cancel(jobId) {
     const job = this.jobs.get(jobId);
     if (!job) return null;
