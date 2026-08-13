@@ -1,0 +1,986 @@
+# CA X-RAY — PUBLIC HOMEPAGE & PRIVATE DASHBOARD BOUNDARY CORRECTION
+
+## EXECUTION MODE
+
+Implement this correction on the existing CA X-RAY project.
+
+This is a **controlled information-architecture and routing correction**, NOT a redesign.
+
+The existing visual identity, report design, typography, spacing language, colors, components, business logic, scan engine, provider adapters, persistence, authentication architecture, and billing architecture are valuable and MUST be preserved.
+
+Make the smallest safe change set necessary.
+
+Do NOT rebuild the application from scratch.
+
+Do NOT introduce a new design system.
+
+Do NOT rewrite the report UI.
+
+Do NOT modify Phase 2 core engine behavior.
+
+Do NOT modify provider adapters.
+
+Do NOT modify PostgreSQL persistence architecture.
+
+Do NOT modify Clerk/authentication implementation except where routing/visibility requires integration.
+
+Do NOT implement Phase 5+ features.
+
+---
+
+# 1. PRIMARY PRODUCT BOUNDARY
+
+CA X-RAY must have a clear separation between:
+
+## PUBLIC EXPERIENCE
+
+The public homepage is the entry point for contract analysis.
+
+It should contain:
+
+* CA X-RAY branding
+* short product explanation
+* Network selector
+* Contract Address input
+* Start Scan button
+* minimal trust/read-only statement
+* Sign In / authentication entry point
+
+The homepage MUST NOT behave like a private dashboard.
+
+---
+
+# 2. HOMEPAGE — REQUIRED FINAL STRUCTURE
+
+The root homepage `/` must be a clean public scan-entry page.
+
+Recommended hierarchy:
+
+CA X-RAY
+
+Contract Intelligence / Contract Forensic Analysis
+
+Short explanation:
+
+"Analyze a smart contract before you trust it."
+
+Then the primary scan form:
+
+Network
+[ Ethereum ▼ ]
+
+Contract Address
+[ 0x........................................ ]
+
+[ Start Scan → ]
+
+Small supporting text:
+
+"Read-only analysis. No wallet connection required."
+
+Keep the existing visual identity.
+
+The page should feel:
+
+* professional
+* restrained
+* trustworthy
+* clean
+* technical
+* information-focused
+
+It must NOT feel like:
+
+* an AI-generated dashboard
+* a SaaS admin template
+* a cryptocurrency trading terminal
+* a marketing-heavy landing page
+
+---
+
+# 3. HOMEPAGE MUST NOT CONTAIN PRIVATE REPORT DATA
+
+REMOVE the following from the public homepage:
+
+* Scan Report
+* Scan History
+* private workspace content
+* private findings
+* private evidence
+* private risk history
+* personal plan information
+* private usage information
+* private dashboard navigation
+* private workspace selector
+* logout control
+
+A visitor must never see a private report simply because they opened `/`.
+
+Demo/sample information may only appear if the existing product explicitly requires a public demo experience.
+
+Do not expose a user's actual scan history publicly.
+
+---
+
+# 4. VISITOR STATE
+
+When the visitor is NOT authenticated, the homepage must display only public UI.
+
+Header should contain:
+
+CA X-RAY
+
+and an authentication entry such as:
+
+Sign in
+
+Optionally:
+
+Create account
+
+Do NOT show:
+
+* Visitor as if it were a workspace user
+* Workspace / Personal
+* Dashboard
+* Scan History
+* Current Plan
+* Logout
+* private navigation
+
+The current screenshot showing:
+
+"Workspace / Personal"
+
+together with:
+
+"Visitor"
+
+is an incorrect information boundary.
+
+Correct this.
+
+---
+
+# 5. AUTHENTICATION GATE FOR START SCAN
+
+The CA input MUST remain publicly accessible.
+
+A visitor should be able to:
+
+1. Select network.
+2. Enter contract address.
+3. Click Start Scan.
+
+However:
+
+## If the visitor is NOT authenticated:
+
+Do NOT start a private scan job yet.
+
+Instead:
+
+1. Validate the input.
+2. Preserve the entered network.
+3. Preserve the entered contract address.
+4. Redirect to the existing authentication flow.
+5. After successful authentication, return the user to the pending scan intent.
+6. Do NOT require the user to enter the CA again.
+7. Start the scan after authentication according to the existing scan architecture.
+
+This is critical.
+
+The user's scan intent must survive authentication.
+
+Example:
+
+Visitor enters:
+
+Network = BNB Chain
+
+CA = 0xABC...
+
+Clicks:
+
+Start Scan
+
+Then:
+
+Login
+
+After login:
+
+Resume scan for:
+
+BNB Chain / 0xABC...
+
+The user should not have to repeat the form.
+
+---
+
+# 6. AUTHENTICATED HOMEPAGE BEHAVIOR
+
+If the user is already authenticated and visits `/`, the public scan form may remain available.
+
+Do not automatically redirect authenticated users directly to a report.
+
+The homepage can function as the quick entry point for a new scan.
+
+However, private navigation may now be visible:
+
+* Dashboard
+* New Scan
+* Scan History
+* Settings
+
+Only authenticated users may see these private navigation items.
+
+Keep this visually subtle and consistent with the existing design.
+
+---
+
+# 7. PRIVATE DASHBOARD
+
+All user-specific scan reports MUST live inside the authenticated/private dashboard boundary.
+
+Conceptually:
+
+/dashboard
+
+The dashboard should contain private information such as:
+
+* recent scans
+* scan history
+* latest reports
+* risk summaries
+* scan status
+* personal usage where already implemented
+* private workspace information
+
+Only the authenticated user/workspace may access these resources.
+
+---
+
+# 8. PRIVATE REPORT ROUTING
+
+A complete report must NOT render on `/`.
+
+Use the existing routing architecture where possible.
+
+Conceptually:
+
+/dashboard/scans/:scanId
+
+or the equivalent existing route.
+
+The exact route name may differ according to the existing project.
+
+The important rule is:
+
+> REPORT = PRIVATE RESOURCE
+
+The report must require authentication and server-side authorization.
+
+Do not rely only on frontend route hiding.
+
+---
+
+# 9. REPORT UI MUST BE PRESERVED
+
+The existing report design is already strong and must NOT be redesigned.
+
+Preserve:
+
+* Overall Risk
+* Risk Score
+* Reliability Score
+* Confidence
+* Why This Score?
+* Quick Summary
+* Risk Breakdown
+* Top Risks
+* Data Status
+* Evidence
+* Contract Forensics
+* Trading Safety
+* Liquidity
+* Holder Analysis
+* Market
+* Final Assessment
+* tables
+* typography
+* spacing
+* evidence presentation
+* address handling
+* severity indicators
+
+The goal is to move the report into the correct private boundary, NOT to redesign it.
+
+Do not simplify the forensic report.
+
+Do not remove useful information.
+
+Do not replace tables with generic cards unless required for responsive behavior.
+
+---
+
+# 10. PRIVATE NAVIGATION
+
+Authenticated users may have a navigation structure similar to:
+
+Dashboard
+New Scan
+Scan History
+Risk Passport
+Watchtower
+API Access
+Settings
+
+BUT:
+
+Do not activate unfinished Phase 6–8 functionality.
+
+Existing "Soon" states may remain "Soon".
+
+Do not implement additional functionality merely to make navigation appear complete.
+
+---
+
+# 11. ROUTE VISIBILITY RULES
+
+Implement a clear route boundary.
+
+## PUBLIC
+
+`/`
+
+Public scan input.
+
+`/login`
+
+Authentication.
+
+`/register`
+
+If already supported by the existing auth architecture.
+
+Other existing public/auth routes may remain.
+
+## PRIVATE
+
+`/dashboard`
+
+`/dashboard/*`
+
+Any user scan history.
+
+Any individual scan report.
+
+Any workspace-specific data.
+
+Any private settings.
+
+Any private billing/usage data.
+
+Use the existing route structure where possible.
+
+Do NOT introduce unnecessary routing complexity.
+
+---
+
+# 12. SERVER-SIDE AUTHORIZATION
+
+Frontend hiding is NOT sufficient.
+
+For every private scan/report resource:
+
+1. Verify authentication server-side.
+2. Resolve the current user.
+3. Resolve the user's workspace according to the existing Phase 4 architecture.
+4. Verify ownership/membership.
+5. Verify the requested scan belongs to the authorized workspace.
+6. Reject unauthorized cross-workspace access.
+
+Never trust:
+
+* workspace_id from the browser
+* user_id from request payload
+* scan ownership supplied by client
+* hidden frontend fields
+
+The server remains authoritative.
+
+Do not change the existing tenant architecture unless a concrete bug is found.
+
+---
+
+# 13. NO CROSS-TENANT REPORT ACCESS
+
+This is a hard security requirement.
+
+User A MUST NOT be able to access User B's report by changing:
+
+`scanId`
+
+in the URL.
+
+Test:
+
+User A requests User B's scan ID.
+
+Expected:
+
+403/404 according to existing security convention.
+
+Never return the report data.
+
+Do not reveal whether another user's scan exists if the current security model avoids resource enumeration.
+
+---
+
+# 14. HOME → LOGIN → RESUME FLOW
+
+Implement and verify this exact user journey:
+
+### Case A — Visitor
+
+Open `/`
+
+↓
+
+Enter Network
+
+↓
+
+Enter CA
+
+↓
+
+Click Start Scan
+
+↓
+
+Authentication required
+
+↓
+
+Login/Register
+
+↓
+
+Return to intended scan
+
+↓
+
+Scan starts
+
+↓
+
+Private dashboard/report
+
+### Case B — Authenticated user
+
+Open `/`
+
+↓
+
+Enter Network
+
+↓
+
+Enter CA
+
+↓
+
+Click Start Scan
+
+↓
+
+Scan starts
+
+↓
+
+Private dashboard/report
+
+### Case C — Direct private URL without authentication
+
+Open private report URL
+
+↓
+
+Authentication required
+
+↓
+
+After authentication:
+
+Return to requested authorized resource.
+
+### Case D — Unauthorized scan URL
+
+Authenticated User A opens User B's report URL
+
+↓
+
+Server rejects access.
+
+No report data returned.
+
+---
+
+# 15. SCAN INPUT VALIDATION
+
+Do not change the existing validation engine unless required.
+
+The homepage form should provide clear validation for:
+
+* missing network
+* missing contract address
+* malformed address
+* unsupported network
+* network/address mismatch
+
+Do not show a generic error when a precise error is available.
+
+Use existing validation logic.
+
+Do not duplicate complex blockchain validation in the UI.
+
+---
+
+# 16. NETWORK + CONTRACT ADDRESS
+
+The form must clearly associate:
+
+Network
+
+with:
+
+Contract Address.
+
+Example:
+
+[ Ethereum ▼ ]
+
+[ 0x1234................................ ]
+
+Avoid ambiguity where the user can enter a BNB address while Ethereum is selected.
+
+Use the existing supported network list.
+
+Do not invent new networks in this correction.
+
+---
+
+# 17. DEMO MODE
+
+Preserve existing demo mode behavior.
+
+Do NOT:
+
+* silently substitute demo data for failed live scans
+* label demo data as live
+* expose provider names in the user-facing report
+* change scoring behavior
+
+If the existing demo/sample mechanism is explicitly available, clearly label it as demo/sample data.
+
+LIVE and DEMO semantics must remain truthful.
+
+---
+
+# 18. PROVIDER INFORMATION
+
+Do not expose internal provider names in the user-facing interface.
+
+The application should present itself as a standalone product.
+
+Do not display:
+
+* GoPlus
+* DexScreener
+* provider adapter names
+* provider implementation details
+
+in the normal user-facing report or homepage.
+
+Internal provider provenance may remain in internal logs/evidence structures where required by architecture.
+
+Do not delete provider metadata from backend systems merely to hide it from users.
+
+This is a PRESENTATION concern, not a data-model rewrite.
+
+---
+
+# 19. RESPONSIVE REQUIREMENT
+
+The corrected homepage MUST work on:
+
+* desktop
+* laptop
+* tablet
+* mobile
+
+Desktop is the primary experience.
+
+Mobile must be a deliberate responsive adaptation.
+
+Do NOT create a separate mobile application.
+
+On mobile:
+
+* navigation becomes compact
+* scan form stacks vertically
+* network selector remains accessible
+* CA input remains readable
+* Start Scan remains prominent
+* no horizontal page overflow
+* no overlapping components
+* buttons remain touch-friendly
+
+The report remains inside the private dashboard.
+
+---
+
+# 20. VISUAL PRESERVATION
+
+This is NOT a redesign.
+
+Keep the current:
+
+* white background
+* black/dark typography
+* restrained gray borders
+* subtle green/status accents
+* professional report aesthetic
+* existing logo/branding
+* existing typography
+* existing spacing language
+
+Avoid:
+
+* gradients
+* excessive rounded cards
+* huge hero sections
+* decorative illustrations
+* excessive animations
+* flashy crypto visuals
+* AI-chat styling
+* glassmorphism
+* unnecessary icons
+* excessive color
+
+The application should look like a serious forensic analysis product.
+
+---
+
+# 21. HOMEPAGE INFORMATION DENSITY
+
+The homepage should be intentionally simple.
+
+It should answer:
+
+1. What is CA X-RAY?
+2. What can I analyze?
+3. Where do I enter the contract?
+4. How do I start?
+
+Nothing more is required for this correction.
+
+The detailed intelligence belongs inside the private report.
+
+---
+
+# 22. DO NOT MOVE THE REPORT INTO THE HOMEPAGE
+
+This is a hard rule.
+
+DO NOT create:
+
+Homepage
+→ Scan Form
+→ Full Scan Report
+
+Instead:
+
+Homepage
+→ Scan Form
+→ Authentication if required
+→ Scan
+→ Private Dashboard
+→ Full Report
+
+---
+
+# 23. DO NOT BREAK PHASE 4
+
+Phase 4 has already established authentication and tenant isolation.
+
+Do NOT:
+
+* remove Clerk
+* replace authentication
+* rewrite membership
+* remove workspace IDs
+* bypass authorization
+* create client-only authentication
+* introduce a second authentication system
+
+Only correct the UI/routing integration necessary to enforce the intended product flow.
+
+---
+
+# 24. IMPLEMENTATION STRATEGY
+
+Before modifying anything:
+
+1. Inspect current routes.
+2. Inspect current auth guards.
+3. Inspect current homepage component.
+4. Inspect dashboard component.
+5. Inspect report component.
+6. Identify why report/private dashboard content is currently rendered on the homepage.
+7. Identify the existing authenticated/visitor state logic.
+8. Identify the existing scan-start handler.
+9. Identify the existing return/redirect mechanism.
+
+Then make the smallest possible changes.
+
+Do NOT modify unrelated files.
+
+---
+
+# 25. ACCEPTANCE TESTS
+
+The implementation is complete only when ALL are true.
+
+### Homepage
+
+[ ] `/` contains the CA X-RAY public entry experience.
+
+[ ] Homepage contains Network selector.
+
+[ ] Homepage contains Contract Address input.
+
+[ ] Homepage contains Start Scan.
+
+[ ] Homepage does not display a private scan report.
+
+[ ] Homepage does not display private scan history.
+
+[ ] Homepage does not display private workspace information to visitors.
+
+[ ] Visitor sees Sign In/Create Account entry.
+
+### Authentication
+
+[ ] Visitor can enter CA before login.
+
+[ ] Clicking Start Scan while logged out redirects to authentication.
+
+[ ] Network selection is preserved.
+
+[ ] Contract address is preserved.
+
+[ ] User does not need to re-enter CA after login.
+
+### Private dashboard
+
+[ ] Authenticated user can access Dashboard.
+
+[ ] Authenticated user can access scan history.
+
+[ ] Authenticated user can access reports.
+
+[ ] Reports are private.
+
+[ ] Direct report URLs require authentication.
+
+[ ] Server verifies workspace ownership/membership.
+
+[ ] Cross-tenant report access is rejected.
+
+### Report
+
+[ ] Existing report design remains intact.
+
+[ ] No report logic was rewritten.
+
+[ ] Risk score remains unchanged.
+
+[ ] Evidence remains unchanged.
+
+[ ] Tables remain intact.
+
+[ ] Existing report sections remain available.
+
+### Provider abstraction
+
+[ ] No provider names appear in normal user-facing UI.
+
+[ ] Provider adapters remain untouched.
+
+[ ] Provider metadata remains available internally where required.
+
+### Responsive
+
+[ ] Desktop homepage is clean.
+
+[ ] Mobile homepage is clean.
+
+[ ] No horizontal overflow.
+
+[ ] Scan form works on mobile.
+
+[ ] Private report remains usable on mobile.
+
+---
+
+# 26. REGRESSION PROTECTION
+
+Before completion:
+
+Run the existing test suite.
+
+Run syntax/build checks.
+
+Verify:
+
+* homepage
+* login
+* authenticated dashboard
+* new scan
+* scan history
+* report
+* logout
+* unauthorized private route
+* cross-tenant access if test fixtures exist
+
+Do not claim success without actually checking.
+
+---
+
+# 27. SCOPE GUARD
+
+DO NOT implement:
+
+* Phase 5 scan job redesign
+* Phase 6 Risk Passport
+* Phase 6 Watchtower
+* Phase 7 superadmin operations
+* Phase 8 Stripe changes
+* developer API product
+* new blockchain providers
+* new scoring models
+* new report sections
+* new database architecture
+* microservices
+* major visual redesign
+* mobile app
+* AI chatbot
+* AI copilot
+* WhatsApp
+* notifications
+* realtime
+* CRM
+* accounting
+* inventory
+* unrelated features
+
+This task is ONLY:
+
+PUBLIC HOMEPAGE
++
+AUTHENTICATION GATE
++
+PRIVATE DASHBOARD BOUNDARY
++
+PRIVATE REPORT ROUTING
++
+RESPONSIVE CORRECTION
++
+MINIMAL UI/Routing FIXES.
+
+---
+
+# 28. FINAL PRODUCT FLOW
+
+The final CA X-RAY experience must communicate this architecture naturally:
+
+PUBLIC:
+
+"Enter a contract and start analysis."
+
+↓
+
+AUTHENTICATION:
+
+"Sign in to continue and securely save your analysis."
+
+↓
+
+PRIVATE:
+
+"Your scans and forensic reports live here."
+
+↓
+
+REPORT:
+
+"Detailed contract intelligence and evidence."
+
+The user should never be confused about whether they are:
+
+* browsing publicly
+* authenticating
+* scanning
+* viewing private data
+
+---
+
+# FINAL STOP RULE
+
+After all acceptance tests pass:
+
+STOP.
+
+Do not continue improving unrelated UI.
+
+Do not redesign the report.
+
+Do not start Phase 5.
+
+Do not modify core analysis logic.
+
+Do not modify provider architecture.
+
+Do not add features.
+
+Return a concise implementation summary containing:
+
+1. Files changed.
+2. Routes corrected.
+3. Authentication flow verified.
+4. Private authorization verified.
+5. Responsive behavior verified.
+6. Tests/build status.
+7. Any remaining issue.
+
+The objective is not to make the application "more beautiful".
+
+The objective is to restore the correct CA X-RAY product architecture:
+
+PUBLIC HOMEPAGE
+→
+CA INPUT
+→
+AUTH GATE
+→
+SCAN
+→
+PRIVATE DASHBOARD
+→
+PRIVATE FORENSIC REPORT.
+
+Preserve everything that already works.
+Fix only what is structurally wrong.
