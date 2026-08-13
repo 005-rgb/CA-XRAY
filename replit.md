@@ -25,6 +25,7 @@ npm test
 - Clerk is provisioned for authentication. Stripe is the planned billing provider, but paid checkout remains disabled until its connection is authorized.
 - Phase 1 security contract is documented in `DOC/PHASE-1-SECURITY.md`. Workspace scope is assigned server-side, never accepted from request bodies.
 - Phase 4 authentication and tenant isolation are implemented in `src/auth/service.js`: opaque signed/revocable sessions, password hashing, one-time recovery and workspace invites, server-side membership authorization, ownership transfer, audit events, and encrypted TOTP MFA for superadmins. Development uses the memory auth store; PostgreSQL auth uses the Phase 4 migration.
+- Phase 4 status and release sign-off checklist are documented in `DOC/PHASE-4-CONFIRMATION.md`: the current implementation is a tested foundation, while production readiness still requires identity, email, durable queue, abuse-resistance, lifecycle, and operations gates.
 - Phase 4 private routes fail closed across workspace boundaries. Superadmins are platform-scoped and cannot select or access a workspace through workspace routes.
 - Scan requests enforce bounded request size, multi-dimensional rate protection, monthly plan quota, concurrent-scan limits, idempotency, and append-only audit events.
 - Provider calls use a server-controlled HTTPS allowlist, strict adapter response validation, timeout/retry budgets, and circuit breakers. LIVE data is never replaced with DEMO data.
