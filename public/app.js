@@ -8,7 +8,154 @@ const addressError = document.querySelector("#address-error");
 const networkError = document.querySelector("#network-error");
 const clearAddress = document.querySelector("#clear-address");
 const loadingStages = document.querySelector("#loading-stages");
+const authPanel = document.querySelector("#auth-panel");
+const authForm = document.querySelector("#auth-form");
+const authMode = document.querySelector("#auth-mode");
+const authTitle = document.querySelector("#auth-title");
+const authSubmitLabel = document.querySelector("#auth-submit-label");
+const authEmail = document.querySelector("#auth-email");
+const authPassword = document.querySelector("#auth-password");
+const authStatus = document.querySelector("#auth-status");
+const authSwitch = document.querySelector("#auth-switch");
+const recoveryToggle = document.querySelector("#recovery-toggle");
+const recoveryForm = document.querySelector("#recovery-form");
+const recoveryStatus = document.querySelector("#recovery-status");
+const mfaForm = document.querySelector("#mfa-form");
+const mfaStatus = document.querySelector("#mfa-status");
+const workspaceBar = document.querySelector("#workspace-bar");
+const workspaceSelector = document.querySelector("#workspace-selector");
+const userName = document.querySelector("#user-name");
+let authState = null;
 let currentScan = null;
+
+async function apiJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message || body.error || "Request failed.");
+  return body;
+}
+
+function authMessage(message, target = authStatus) {
+  if (target) target.textContent = message || "";
+}
+
+async function refreshAuth() {
+  try {
+    authState = await apiJson("/api/auth/me");
+    const authenticated = authState.authenticated;
+    const pending = authState.mfaPending;
+    userName.textContent = authenticated ? (authState.user?.displayName || authState.user?.email || "User") : pending ? "Verification required" : "Visitor";
+    if (pending) {
+      authPanel.hidden = false;
+      authForm.hidden = true;
+      recoveryForm.hidden = true;
+      mfaForm.hidden = false;
+      authTitle.textContent = "Verify your superadmin session";
+      authMessage("Enter the six-digit code from your authenticator.", mfaStatus);
+      workspaceBar.hidden = true;
+      return;
+    }
+    authPanel.hidden = authenticated;
+    workspaceBar.hidden = !authenticated;
+    mfaForm.hidden = true;
+    authForm.hidden = false;
+    if (!authenticated) return;
+    const workspaces = await apiJson("/api/workspaces");
+    workspaceSelector.innerHTML = workspaces.workspaces.map((workspace) =>
+      `<option value="${escapeHtml(workspace.id)}" ${workspace.id === authState.workspace?.id ? "selected" : ""}>${escapeHtml(workspace.name || workspace.workspaceType)} · ${escapeHtml(workspace.planId)}</option>`).join("");
+  } catch (error) {
+    authMessage(error.message);
+  }
+}
+
+authForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  authMessage("");
+  const mode = authMode.value;
+  try {
+    const result = await apiJson(`/api/auth/${mode === "register" ? "register" : "login"}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: authEmail.value.trim(), password: authPassword.value }),
+    });
+    if (result.mfaRequired) {
+      authForm.hidden = true;
+      mfaForm.hidden = false;
+      authMessage("A second factor is required for this platform account.", mfaStatus);
+      return;
+    }
+    authPassword.value = "";
+    await refreshAuth();
+  } catch (error) {
+    authMessage(error.message);
+  }
+});
+
+authSwitch?.addEventListener("click", () => {
+  const register = authMode.value !== "register";
+  authMode.value = register ? "register" : "login";
+  authTitle.textContent = register ? "Create your CA X-RAY account" : "Sign in to CA X-RAY";
+  authSubmitLabel.textContent = register ? "Create account" : "Sign in";
+  authSwitch.textContent = register ? "I already have an account" : "Create an account";
+  authPassword.autocomplete = register ? "new-password" : "current-password";
+  authMessage("");
+});
+
+recoveryToggle?.addEventListener("click", () => {
+  recoveryForm.hidden = !recoveryForm.hidden;
+});
+
+recoveryForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await apiJson("/api/auth/recovery/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: document.querySelector("#recovery-email").value.trim() }),
+    });
+    recoveryStatus.textContent = result.recoveryToken
+      ? `Development recovery token: ${result.recoveryToken}`
+      : result.message;
+  } catch (error) {
+    recoveryStatus.textContent = error.message;
+  }
+});
+
+mfaForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await apiJson("/api/auth/mfa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: document.querySelector("#mfa-code").value.trim() }),
+    });
+    await refreshAuth();
+  } catch (error) {
+    mfaStatus.textContent = error.message;
+  }
+});
+
+workspaceSelector?.addEventListener("change", async () => {
+  try {
+    await apiJson("/api/workspaces/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: workspaceSelector.value }),
+    });
+    await refreshAuth();
+  } catch (error) {
+    authMessage(error.message);
+  }
+});
+
+document.querySelector("#logout-action")?.addEventListener("click", async () => {
+  await apiJson("/api/auth/logout", { method: "POST" }).catch(() => {});
+  await refreshAuth();
+});
+document.querySelector(".logout-button")?.addEventListener("click", async () => {
+  await apiJson("/api/auth/logout", { method: "POST" }).catch(() => {});
+  await refreshAuth();
+});
 
 const categoryLabels = {
   contract: "Contract Control",
@@ -722,3 +869,4 @@ document.querySelector("#mobile-menu")?.addEventListener("click", (event) => {
 const demoQuery = new URLSearchParams(window.location.search).get("demo");
 if (["high", "moderate", "low"].includes(demoQuery)) scanDemo(demoQuery);
 else scanDemo("high");
+refreshAuth();

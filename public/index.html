@@ -42,12 +42,51 @@
           <div class="topbar-actions">
             <button type="button" class="icon-button" aria-label="Notifications">♧</button>
             <span class="user-avatar">U</span>
-            <span class="user-name">User</span>
+            <span class="user-name" id="user-name">Visitor</span>
             <span class="chevron">⌄</span>
           </div>
         </header>
 
         <main id="app">
+          <section id="auth-panel" class="auth-panel" hidden>
+            <div class="auth-copy">
+              <p class="eyebrow">PRIVATE WORKSPACE ACCESS</p>
+              <h1 id="auth-title">Sign in to CA X-RAY</h1>
+              <p>Keep scan history and workspace membership isolated to your account. Demo reports remain available without an account.</p>
+            </div>
+            <form id="auth-form" class="auth-form" novalidate>
+              <input type="hidden" id="auth-mode" value="login" />
+              <div class="form-field">
+                <label for="auth-email">Email</label>
+                <input id="auth-email" type="email" autocomplete="email" required placeholder="you@example.com" />
+              </div>
+              <div class="form-field">
+                <label for="auth-password">Password <span class="label-note">(12+ characters)</span></label>
+                <input id="auth-password" type="password" autocomplete="current-password" required minlength="12" />
+              </div>
+              <button class="primary-button" type="submit"><span id="auth-submit-label">Sign in</span><span>→</span></button>
+              <p id="auth-status" class="field-error" role="alert"></p>
+            </form>
+            <div class="auth-actions">
+              <button type="button" class="text-button" id="auth-switch">Create an account</button>
+              <button type="button" class="text-button" id="recovery-toggle">Forgot password?</button>
+            </div>
+            <form id="recovery-form" class="recovery-form" hidden>
+              <label for="recovery-email">Recovery email</label>
+              <div class="inline-form"><input id="recovery-email" type="email" required /><button class="secondary-button" type="submit">Request link</button></div>
+              <p id="recovery-status" class="field-error" role="alert"></p>
+            </form>
+            <form id="mfa-form" class="recovery-form" hidden>
+              <label for="mfa-code">Superadmin verification code</label>
+              <div class="inline-form"><input id="mfa-code" inputmode="numeric" maxlength="6" required /><button class="secondary-button" type="submit">Verify</button></div>
+              <p id="mfa-status" class="field-error" role="alert"></p>
+            </form>
+          </section>
+          <section id="workspace-bar" class="workspace-bar" hidden>
+            <span class="data-label">ACTIVE WORKSPACE</span>
+            <select id="workspace-selector" aria-label="Select workspace"></select>
+            <button type="button" class="secondary-button" id="logout-action">Sign out</button>
+          </section>
           <section id="landing" class="dashboard-page">
             <div class="dashboard-heading" id="dashboard">
               <div>

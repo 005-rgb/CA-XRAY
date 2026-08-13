@@ -7,18 +7,25 @@ async function main() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
-    const version = "001_phase3_persistence";
-    const applied = await client.query("SELECT 1 FROM _ca_xray_migrations WHERE version = $1", [version]);
-    if (!applied.rowCount) {
-      console.log(`${version} is not applied.`);
+    const versions = ["002_phase4_auth_tenant", "001_phase3_persistence"];
+    const version = versions.find((candidate) => {
+      return true;
+    });
+    const appliedVersions = await client.query(
+      "SELECT version FROM _ca_xray_migrations WHERE version = ANY($1::text[]) ORDER BY version DESC",
+      [versions],
+    );
+    const appliedVersion = appliedVersions.rows[0]?.version;
+    if (!appliedVersion) {
+      console.log("No supported migration is applied.");
       return;
     }
-    const sql = await fs.readFile(path.join(__dirname, "..", "migrations", `${version}.down.sql`), "utf8");
+    const sql = await fs.readFile(path.join(__dirname, "..", "migrations", `${appliedVersion}.down.sql`), "utf8");
     await client.query("BEGIN");
     await client.query(sql);
-    await client.query("DELETE FROM _ca_xray_migrations WHERE version = $1", [version]);
+    await client.query("DELETE FROM _ca_xray_migrations WHERE version = $1", [appliedVersion]);
     await client.query("COMMIT");
-    console.log(`Rolled back ${version}.`);
+    console.log(`Rolled back ${appliedVersion}.`);
   } finally {
     await client.end();
   }

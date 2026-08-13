@@ -28,6 +28,7 @@ const {
 } = require("./src/security/policy");
 const { PLAN_CATALOG } = require("./src/platform/config");
 const { createPersistence } = require("./src/persistence");
+const { createAuthService } = require("./src/auth/service");
 
 const PORT = Number(process.env.PORT || 5000);
 const HOST = "0.0.0.0";
@@ -36,6 +37,11 @@ const runtimeConfig = getRuntimeConfig();
 assertProductionRuntime(runtimeConfig);
 const persistence = createPersistence({ runtimeConfig });
 const persistenceReady = persistence.init();
+const authService = createAuthService({
+  persistence,
+  runtimeConfig,
+  sessionSecret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
+});
 const scanQueue = createScanJobQueue({
   processor: scanLive,
   runtimeConfig,
@@ -113,7 +119,17 @@ function signVisitorId(visitorId) {
   return crypto.createHmac("sha256", visitorSigningKey).update(visitorId).digest("base64url");
 }
 
-function requestContext(req) {
+async function requestContext(req) {
+  const authenticated = await authService.authenticateRequest(req);
+  if (authenticated.kind === "authenticated" || authenticated.kind === "mfa_pending") {
+    return {
+      ...authenticated,
+      ip: req.socket.remoteAddress || "unknown",
+      apiClient: typeof req.headers["x-api-client"] === "string"
+        ? req.headers["x-api-client"].slice(0, 80)
+        : "web",
+    };
+  }
   const cookies = parseCookies(req.headers.cookie);
   const [visitorId, signature] = String(cookies.ca_xray_visitor || "").split(".");
   const expectedSignature = visitorId ? signVisitorId(visitorId) : "";
@@ -126,6 +142,7 @@ function requestContext(req) {
   }
   const context = createVisitorContext({ visitorId: validCookie ? visitorId : crypto.randomUUID() });
   return {
+    kind: "visitor",
     ...context,
     ip: req.socket.remoteAddress || "unknown",
     apiClient: typeof req.headers["x-api-client"] === "string"
@@ -134,6 +151,33 @@ function requestContext(req) {
     setCookie: validCookie
       ? null
       : `ca_xray_visitor=${context.actor.id.slice("visitor_".length)}.${signVisitorId(context.actor.id.slice("visitor_".length))}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000${runtimeConfig.environment === "production" ? "; Secure" : ""}`,
+  };
+}
+
+function requestMeta(req) {
+  return {
+    userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null,
+    ip: req.socket.remoteAddress || "unknown",
+  };
+}
+
+function requireAuthenticated(context) {
+  if (context.kind !== "authenticated") {
+    throw Object.assign(new Error("UNAUTHORIZED"), { code: "UNAUTHORIZED" });
+  }
+  return context;
+}
+
+function publicSession(session, currentId) {
+  return {
+    id: session.id,
+    workspaceId: session.workspaceId,
+    userAgent: session.userAgent,
+    ip: session.ip,
+    createdAt: session.createdAt,
+    lastSeenAt: session.lastSeenAt,
+    expiresAt: session.expiresAt,
+    current: session.id === currentId,
   };
 }
 
@@ -161,8 +205,202 @@ function enforceScanProtection(req, context, networkId) {
   return { plan, networkId };
 }
 
-async function handleApi(req, res, url, context) {
+async function handleApiUnsafe(req, res, url, context) {
   await persistenceReady;
+  if (req.method === "POST" && url.pathname === "/api/auth/register") {
+    const body = await readBody(req);
+    const result = await authService.register({
+      email: body.email,
+      password: body.password,
+      displayName: body.displayName,
+    }, requestMeta(req));
+    sendJson(res, 201, {
+      user: result.user,
+      workspace: result.workspace,
+    }, { context: { ...context, setCookie: result.setCookie } });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    const body = await readBody(req);
+    const result = await authService.login({
+      email: body.email,
+      password: body.password,
+    }, requestMeta(req));
+    sendJson(res, result.mfaRequired ? 202 : 200, {
+      user: result.user,
+      ...(result.mfaRequired ? { mfaRequired: true } : {}),
+    }, { context: { ...context, setCookie: result.setCookie } });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/recovery/request") {
+    const body = await readBody(req);
+    const result = await authService.requestRecovery(body.email);
+    sendJson(res, 202, {
+      accepted: true,
+      message: "If the account exists, recovery instructions have been issued.",
+      ...(result.recoveryToken ? { recoveryToken: result.recoveryToken } : {}),
+    }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/recovery/reset") {
+    const body = await readBody(req);
+    const result = await authService.resetPassword(body.token, body.password);
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/mfa/verify") {
+    const body = await readBody(req);
+    const result = await authService.verifyPendingMfa(context, body.code);
+    sendJson(res, 200, { user: result.user }, { context: { ...context, setCookie: result.setCookie } });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/auth/me") {
+    sendJson(res, 200, {
+      authenticated: context.kind === "authenticated",
+      ...(context.kind === "authenticated"
+        ? { user: context.user, workspace: context.workspace || null, membership: context.membership || null }
+        : context.kind === "mfa_pending" ? { mfaPending: true, user: context.user } : {}),
+    }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    const result = await authService.logout(context);
+    sendJson(res, 200, { signedOut: true }, { context: { ...context, setCookie: result.setCookie } });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/auth/sessions") {
+    const authenticated = requireAuthenticated(context);
+    const sessions = await authService.store.listSessions(authenticated.user.id);
+    sendJson(res, 200, { sessions: sessions.map((session) => publicSession(session, context.sessionId)) }, { context });
+    return true;
+  }
+
+  const revokeSessionMatch = url.pathname.match(/^\/api\/auth\/sessions\/([^/]+)$/);
+  if (req.method === "DELETE" && revokeSessionMatch) {
+    const authenticated = requireAuthenticated(context);
+    const revoked = await authService.store.revokeSession(authenticated.user.id, revokeSessionMatch[1]);
+    if (!revoked) {
+      sendJson(res, 404, { error: "SESSION_NOT_FOUND", message: "Session not found." }, { context });
+      return true;
+    }
+    await authService.audit("SESSION_REVOKED", authenticated.user.id, null, { sessionId: revokeSessionMatch[1] });
+    sendJson(res, 200, { revoked: true }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/mfa/enroll") {
+    const authenticated = requireAuthenticated(context);
+    const result = await authService.enrollMfa(authenticated);
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/mfa/confirm") {
+    const body = await readBody(req);
+    const result = await authService.confirmMfa(requireAuthenticated(context), body.code);
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/workspaces") {
+    const authenticated = requireAuthenticated(context);
+    if (authenticated.user.platformRole === "Superadmin") {
+      throw Object.assign(new Error("WORKSPACE_PATH_FORBIDDEN"), { code: "WORKSPACE_PATH_FORBIDDEN" });
+    }
+    const workspaces = await authService.store.listWorkspaces(authenticated.user.id);
+    sendJson(res, 200, { workspaces }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/workspaces") {
+    const authenticated = requireAuthenticated(context);
+    if (authenticated.user.platformRole === "Superadmin") {
+      throw Object.assign(new Error("WORKSPACE_PATH_FORBIDDEN"), { code: "WORKSPACE_PATH_FORBIDDEN" });
+    }
+    const body = await readBody(req);
+    const workspace = await authService.store.createWorkspace({
+      userId: authenticated.user.id,
+      name: body.name,
+      workspaceType: body.workspaceType,
+      planId: body.planId,
+    });
+    await authService.audit("WORKSPACE_CREATED", authenticated.user.id, workspace.id, {
+      workspaceType: workspace.workspaceType, planId: workspace.planId,
+    });
+    sendJson(res, 201, { workspace }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/workspaces/select") {
+    const body = await readBody(req);
+    const result = await authService.selectWorkspace(requireAuthenticated(context), body.workspaceId);
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  const workspaceMembersMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/members$/);
+  if (req.method === "GET" && workspaceMembersMatch) {
+    const authenticated = requireAuthenticated(context);
+    await authService.requireWorkspace(authenticated, workspaceMembersMatch[1]);
+    const members = await authService.store.listMemberships(workspaceMembersMatch[1]);
+    sendJson(res, 200, { members }, { context });
+    return true;
+  }
+
+  const inviteMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/invites$/);
+  if (req.method === "POST" && inviteMatch) {
+    const body = await readBody(req);
+    const result = await authService.createInvite(requireAuthenticated(context), {
+      workspaceId: inviteMatch[1], email: body.email, role: body.role,
+    });
+    sendJson(res, 201, result, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/invites/accept") {
+    const body = await readBody(req);
+    const result = await authService.acceptInvite(requireAuthenticated(context), body.token);
+    sendJson(res, 200, { membership: result }, { context });
+    return true;
+  }
+
+  const memberMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/members\/([^/]+)$/);
+  if (["PATCH", "POST"].includes(req.method) && memberMatch) {
+    const body = await readBody(req);
+    const result = await authService.updateMember(requireAuthenticated(context), memberMatch[1], memberMatch[2], {
+      role: body.role,
+      status: body.status || (body.disabled === true ? "disabled" : body.disabled === false ? "active" : undefined),
+    });
+    sendJson(res, 200, { membership: result }, { context });
+    return true;
+  }
+
+  const transferMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/ownership-transfer$/);
+  if (req.method === "POST" && transferMatch) {
+    const body = await readBody(req);
+    const workspace = await authService.transferOwnership(
+      requireAuthenticated(context), transferMatch[1], body.nextOwnerId,
+    );
+    sendJson(res, 200, { workspace }, { context });
+    return true;
+  }
+
+  const auditMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)\/audit$/);
+  if (req.method === "GET" && auditMatch) {
+    const authenticated = requireAuthenticated(context);
+    await authService.requireWorkspace(authenticated, auditMatch[1], { owner: true });
+    const audit = await authService.store.listAudit(auditMatch[1]);
+    sendJson(res, 200, { audit }, { context });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/platform") {
     sendJson(res, 200, publicPlatformConfig(runtimeConfig), { context });
     return true;
@@ -317,9 +555,51 @@ async function handleApi(req, res, url, context) {
   return false;
 }
 
+async function handleApi(req, res, url, context) {
+  try {
+    return await handleApiUnsafe(req, res, url, context);
+  } catch (error) {
+    const status = {
+      UNAUTHORIZED: 401,
+      INVALID_CREDENTIALS: 401,
+      FORBIDDEN: 403,
+      SUPERADMIN_REQUIRED: 403,
+      WORKSPACE_PATH_FORBIDDEN: 403,
+      NOT_FOUND: 404,
+      WORKSPACE_NOT_FOUND: 404,
+      MEMBER_NOT_FOUND: 404,
+      SESSION_NOT_FOUND: 404,
+      INVITE_INVALID_OR_EXPIRED: 400,
+      INVITE_EMAIL_MISMATCH: 403,
+      WEAK_PASSWORD: 400,
+      INVALID_EMAIL: 400,
+      EMAIL_IN_USE: 409,
+      INVALID_INVITE: 400,
+      INVALID_MEMBER_STATUS: 400,
+      LAST_OWNER_PROTECTED: 409,
+      CANNOT_DISABLE_SELF: 400,
+      OWNER_REQUIRED: 403,
+      TARGET_MEMBER_REQUIRED: 400,
+      WORKSPACE_MEMBER_LIMIT: 409,
+      INVALID_MFA_CODE: 401,
+      MFA_SESSION_REQUIRED: 401,
+      MFA_REQUIRED: 401,
+      RECOVERY_TOKEN_INVALID: 400,
+      SESSION_REVOKED: 401,
+      WORKSPACE_SCOPE_MISMATCH: 404,
+    }[error.code] || (error.message === "REQUEST_TOO_LARGE" ? 413 : 500);
+    sendJson(res, status, {
+      error: error.code || "INTERNAL_ERROR",
+      message: status >= 500 ? "The request could not be completed." : error.message,
+    }, { context });
+    return true;
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  const context = requestContext(req);
+  await persistenceReady;
+  const context = await requestContext(req);
   if (req.method === "GET" && url.pathname === "/healthz") {
     sendJson(res, 200, { status: "ok" }, { context });
     return;
