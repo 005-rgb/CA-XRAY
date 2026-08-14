@@ -13,6 +13,18 @@ const ALERT_TYPES = Object.freeze([
 ]);
 const VISIBILITIES = new Set(["private", "public"]);
 const FINDING_STATUSES = new Set(["open", "reviewing", "resolved"]);
+const NON_COMPARABLE_STATUSES = new Set(["UNKNOWN", "UNAVAILABLE", "ERROR"]);
+const TRAJECTORY_FIELDS = Object.freeze([
+  { field: "riskScore", label: "Risk score", kind: "number", unit: "points", direction: "higher-risk" },
+  { field: "buyTax", label: "Buy tax", kind: "percent", unit: "%", direction: "higher-risk" },
+  { field: "sellTax", label: "Sell tax", kind: "percent", unit: "%", direction: "higher-risk" },
+  { field: "transferTax", label: "Transfer tax", kind: "percent", unit: "%", direction: "higher-risk" },
+  { field: "liquidityUsd", label: "Liquidity", kind: "currency", unit: "USD", direction: "lower-risk" },
+  { field: "holderConcentration", label: "Top-10 concentration", kind: "percent", unit: "%", direction: "higher-risk" },
+  { field: "totalHolders", label: "Holder count", kind: "count", unit: "holders", direction: "lower-risk" },
+  { field: "owner", label: "Owner address", kind: "address", unit: null, direction: "changed" },
+  { field: "proxy", label: "Upgradeability", kind: "boolean", unit: null, direction: "changed" },
+]);
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -46,6 +58,13 @@ function pointStatus(point) {
   return point?.status || point?.evidenceStatus || "UNKNOWN";
 }
 
+function comparableValue(point) {
+  const value = valueOf(point);
+  if (value === null || value === undefined || value === "" || NON_COMPARABLE_STATUSES.has(pointStatus(point))) return null;
+  if (typeof value === "number" && !Number.isFinite(value)) return null;
+  return value;
+}
+
 function scalarChange(before, after) {
   if (before === after) return null;
   return { before: before ?? null, after: after ?? null };
@@ -68,15 +87,18 @@ function snapshotFromScan({ scan, jobId, capturedAt }) {
   const liquidity = scan.liquidity || {};
   const holders = scan.holders || {};
   const contract = scan.contract || {};
-  const deployer = scan.deployer || {};
+  const changePoints = {
+    owner: contract.owner || contract.ownerAddress || security.ownerAddress || security.owner,
+    proxy: contract.proxy || contract.isProxy || security.isUpgradeable || security.proxy,
+    buyTax: trading.buyTax,
+    sellTax: trading.sellTax,
+    transferTax: trading.transferTax,
+    liquidityUsd: liquidity.liquidityUsd || liquidity.usd,
+    holderConcentration: holders.top10Percent || holders.top10Percentage || holders.top10,
+    totalHolders: holders.totalHolders,
+  };
   const changes = {
-    owner: valueOf(contract.owner || contract.ownerAddress || security.owner),
-    proxy: valueOf(contract.proxy || contract.isProxy || security.proxy),
-    buyTax: valueOf(trading.buyTax),
-    sellTax: valueOf(trading.sellTax),
-    liquidityUsd: valueOf(liquidity.liquidityUsd || liquidity.usd),
-    holderConcentration: valueOf(holders.top10Percentage || holders.top10),
-    privilegedWallets: valueOf(security.privilegedWallets || security.ownerPrivileges),
+    ...Object.fromEntries(Object.entries(changePoints).map(([field, point]) => [field, comparableValue(point)])),
   };
   const findings = (scan.findings || []).map(compactFinding);
   const evidence = clone(scan.evidence || []);
@@ -107,9 +129,85 @@ function snapshotFromScan({ scan, jobId, capturedAt }) {
     findings,
     evidence,
     changes,
+    changePoints: clone(Object.fromEntries(Object.entries(changePoints).map(([field, point]) => [
+      field,
+      point ? {
+        value: valueOf(point),
+        status: pointStatus(point),
+        evidenceStatus: point.evidenceStatus || null,
+      } : null,
+    ]))),
     consensus,
     evidenceHash: hash(comparable),
     comparable,
+  };
+}
+
+function snapshotFieldValue(snapshot, field) {
+  if (!snapshot) return null;
+  if (field === "riskScore") {
+    return snapshot.risk?.score ?? snapshot.comparable?.riskScore ?? null;
+  }
+  if (field === "riskLevel") return snapshot.risk?.level ?? snapshot.comparable?.riskLevel ?? null;
+  if (field === "reliabilityScore") return snapshot.reliabilityScore ?? snapshot.comparable?.reliabilityScore ?? null;
+  const point = snapshot.changePoints?.[field];
+  return point ? comparableValue(point) : snapshot.changes?.[field] ?? null;
+}
+
+function trajectoryDefinition(field) {
+  return TRAJECTORY_FIELDS.find((item) => item.field === field) || {
+    field,
+    label: field,
+    kind: "value",
+    unit: null,
+    direction: "changed",
+  };
+}
+
+function trajectoryTone(definition, delta, changed) {
+  if (!changed) return "neutral";
+  if (!Number.isFinite(delta)) return "neutral";
+  if (definition.direction === "higher-risk") return delta > 0 ? "negative" : delta < 0 ? "positive" : "neutral";
+  if (definition.direction === "lower-risk") return delta < 0 ? "negative" : delta > 0 ? "positive" : "neutral";
+  return "neutral";
+}
+
+function trajectoryChanges(before, after) {
+  if (!before || !after) return [];
+  return TRAJECTORY_FIELDS.flatMap((definition) => {
+    const beforeValue = snapshotFieldValue(before, definition.field);
+    const afterValue = snapshotFieldValue(after, definition.field);
+    if (beforeValue === null || afterValue === null || beforeValue === undefined || afterValue === undefined) return [];
+    const changed = JSON.stringify(beforeValue) !== JSON.stringify(afterValue);
+    if (!changed) return [];
+    const numeric = typeof beforeValue === "number" && typeof afterValue === "number"
+      && Number.isFinite(beforeValue) && Number.isFinite(afterValue);
+    const delta = numeric ? Number((afterValue - beforeValue).toFixed(6)) : null;
+    const relativeDelta = numeric && beforeValue !== 0
+      ? Number((((afterValue - beforeValue) / Math.abs(beforeValue)) * 100).toFixed(2))
+      : null;
+    return [{
+      field: definition.field,
+      label: definition.label,
+      kind: definition.kind,
+      unit: definition.unit,
+      before: beforeValue,
+      after: afterValue,
+      delta,
+      relativeDelta,
+      direction: delta === null ? "changed" : delta > 0 ? "increase" : delta < 0 ? "decrease" : "unchanged",
+      tone: trajectoryTone(definition, delta, changed),
+    }];
+  });
+}
+
+function elapsedBetween(before, after) {
+  const elapsedMs = Date.parse(after.capturedAt) - Date.parse(before.capturedAt);
+  return {
+    elapsedMs: Number.isFinite(elapsedMs) && elapsedMs >= 0 ? elapsedMs : null,
+    elapsedHours: Number.isFinite(elapsedMs) && elapsedMs >= 0
+      ? Number((elapsedMs / 3600000).toFixed(2))
+      : null,
   };
 }
 
@@ -117,11 +215,14 @@ function changedFields(before, after) {
   if (!before) return [];
   const changes = [];
   for (const field of ["riskScore", "riskLevel", "reliabilityScore"]) {
-    const change = scalarChange(before.comparable[field], after.comparable[field]);
+    const change = scalarChange(snapshotFieldValue(before, field), snapshotFieldValue(after, field));
     if (change) changes.push({ field, ...change });
   }
-  for (const field of Object.keys(after.changes || {})) {
-    const change = scalarChange(before.changes?.[field], after.changes?.[field]);
+  for (const field of Object.keys(after.changePoints || after.changes || {})) {
+    const beforeValue = snapshotFieldValue(before, field);
+    const afterValue = snapshotFieldValue(after, field);
+    if (beforeValue === null || afterValue === null || beforeValue === undefined || afterValue === undefined) continue;
+    const change = scalarChange(beforeValue, afterValue);
     if (change) changes.push({ field, ...change });
   }
   if (hash(before.findings) !== hash(after.findings)) {
@@ -217,6 +318,16 @@ class IntelligenceStore {
     }
     const changes = changedFields(previous, snapshot);
     snapshot.changeSummary = changes;
+    snapshot.trajectory = previous ? {
+      status: "CHANGED",
+      ...elapsedBetween(previous, snapshot),
+      changes: trajectoryChanges(previous, snapshot),
+    } : {
+      status: "INITIAL",
+      elapsedMs: null,
+      elapsedHours: null,
+      changes: [],
+    };
     passport.snapshots.push(snapshot);
     passport.currentSnapshotId = snapshot.id;
     passport.status = "CURRENT";
@@ -230,6 +341,7 @@ class IntelligenceStore {
         beforeSnapshotId: previous.id,
         afterSnapshotId: snapshot.id,
         changes,
+        trajectory: snapshot.trajectory,
         why: this.#explainChanges(changes),
         createdAt: capturedAt,
         dedupeKey: `${key}:${snapshot.evidenceHash}`,
@@ -331,6 +443,7 @@ class IntelligenceStore {
         findings: snapshot.findings,
         evidence: snapshot.evidence,
         changes: snapshot.changes,
+        trajectory: snapshot.trajectory,
         consensus: snapshot.consensus,
         evidenceHash: snapshot.evidenceHash,
       }) : null,
@@ -353,10 +466,17 @@ class IntelligenceStore {
         evidenceHash: snapshot.evidenceHash,
         before: previous ? {
           snapshotId: previous.id,
+          capturedAt: previous.capturedAt,
           risk: previous.risk,
           reliabilityScore: previous.reliabilityScore,
         } : null,
         changes: snapshot.changeSummary || [],
+        trajectory: snapshot.trajectory || {
+          status: previous ? "UNCHANGED" : "INITIAL",
+          elapsedMs: previous ? elapsedBetween(previous, snapshot).elapsedMs : null,
+          elapsedHours: previous ? elapsedBetween(previous, snapshot).elapsedHours : null,
+          changes: previous ? trajectoryChanges(previous, snapshot) : [],
+        },
         why: previous ? this.#explainChanges(snapshot.changeSummary || []) : "Initial evidence snapshot.",
       };
     }).reverse();

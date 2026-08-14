@@ -1472,6 +1472,79 @@ function dashboardCategoryBar(label, score, tone = "red") {
   return `<div class="category-row"><span>${escapeHtml(label)}</span><div class="category-track ${tone} coverage-${coverageClass(width)}"><span></span></div><strong>${numericScore === null ? "—" : `${numericScore} / 100`}</strong></div>`;
 }
 
+function trajectoryValue(change, value) {
+  if (value === null || value === undefined) return "UNKNOWN";
+  if (change.kind === "currency") return formatCurrency(value);
+  if (change.kind === "percent") return formatPercent(value);
+  if (change.kind === "count") return Number(value).toLocaleString("en-US");
+  if (change.kind === "address") return truncateAddress(String(value));
+  if (change.kind === "boolean") return value ? "Upgradeable" : "Not upgradeable";
+  if (change.kind === "number") return Number(value).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  return formatValue(value);
+}
+
+function trajectoryDelta(change) {
+  if (change.delta === null || change.delta === undefined) return "Changed";
+  const sign = change.delta > 0 ? "+" : "";
+  if (change.kind === "percent") return `${sign}${formatPercent(change.delta)} pp`;
+  if (change.kind === "currency") {
+    const absolute = formatCurrency(Math.abs(change.delta));
+    const relative = change.relativeDelta === null || change.relativeDelta === undefined
+      ? ""
+      : ` (${sign}${change.relativeDelta}% )`;
+    return `${change.delta < 0 ? "-" : sign}${absolute}${relative}`;
+  }
+  if (change.kind === "count") return `${sign}${Number(change.delta).toLocaleString("en-US")} holders`;
+  if (change.kind === "points") return `${sign}${Number(change.delta).toLocaleString("en-US", { maximumFractionDigits: 2 })} pts`;
+  return change.direction === "increase" ? "Increased" : "Decreased";
+}
+
+function trajectoryElapsed(entry) {
+  const hours = entry?.trajectory?.elapsedHours;
+  if (!Number.isFinite(Number(hours))) return "time unavailable";
+  const value = Number(hours);
+  if (value < 1) return `${Math.max(1, Math.round(value * 60))} min`;
+  if (value < 24) return `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })} hr`;
+  return `${(value / 24).toLocaleString("en-US", { maximumFractionDigits: 1 })} days`;
+}
+
+function renderRiskTrajectory(timeline = []) {
+  const current = timeline[0] || null;
+  const trajectory = current?.trajectory;
+  if (!current || !trajectory || trajectory.status === "INITIAL") {
+    return `<section id="risk-trajectory" class="trajectory-card">
+      <div class="trajectory-heading"><div><span class="card-kicker">ADVANCED REPORT INTELLIGENCE</span><h3>Risk Trajectory</h3></div><span class="trajectory-state neutral">INITIAL SNAPSHOT</span></div>
+      <p class="trajectory-empty">No prior scan is stored for this contract. A future scan will show evidence-backed changes here.</p>
+    </section>`;
+  }
+  const changes = trajectory.changes || [];
+  const stateLabel = changes.length ? `${changes.length} CHANGE${changes.length === 1 ? "" : "S"}` : "NO MATERIAL CHANGE";
+  return `<section id="risk-trajectory" class="trajectory-card">
+    <div class="trajectory-heading"><div><span class="card-kicker">ADVANCED REPORT INTELLIGENCE</span><h3>Risk Trajectory</h3></div><span class="trajectory-state ${changes.length ? "changed" : "neutral"}">${stateLabel}</span></div>
+    <p class="trajectory-intro">${changes.length
+      ? `Compared with the previous completed scan ${escapeHtml(trajectoryElapsed(current))} earlier. Unknown and unavailable evidence is excluded from deltas.`
+      : `Compared with the previous completed scan ${escapeHtml(trajectoryElapsed(current))} earlier, no comparable metric changed.`}</p>
+    ${changes.length ? `<div class="trajectory-list">${changes.map((change) => `
+      <div class="trajectory-row ${escapeHtml(change.tone || "neutral")}">
+        <div class="trajectory-change-main"><strong>${escapeHtml(change.label || change.field)}</strong><span>${escapeHtml(trajectoryValue(change, change.before))} <b>→</b> ${escapeHtml(trajectoryValue(change, change.after))}</span></div>
+        <div class="trajectory-change-meta"><strong>${escapeHtml(trajectoryDelta(change))}</strong><span>${escapeHtml(change.direction || "changed")}</span></div>
+      </div>`).join("")}</div>` : `<div class="trajectory-empty">The previous scan had the same comparable risk, trading, liquidity, holder, and control values.</div>`}
+    <div class="trajectory-foot"><span>PREVIOUS SCAN <b>${escapeHtml(formatDate(current.before?.capturedAt))}</b></span><span>CURRENT SCAN <b>${escapeHtml(formatDate(current.capturedAt))}</b></span><span>${timeline.length} SNAPSHOT${timeline.length === 1 ? "" : "S"} STORED</span></div>
+  </section>`;
+}
+
+async function loadRiskTrajectory(scan) {
+  const target = document.querySelector("#risk-trajectory");
+  if (!target || scan.mode === "DEMO" || !scan.contract?.address || !scan.network?.id) return;
+  try {
+    const params = new URLSearchParams({ network: scan.network.id, address: scan.contract.address });
+    const body = await apiJson(`/api/risk-timeline?${params.toString()}`);
+    target.outerHTML = renderRiskTrajectory(body.timeline || []);
+  } catch (error) {
+    target.innerHTML = `<div class="trajectory-heading"><div><span class="card-kicker">ADVANCED REPORT INTELLIGENCE</span><h3>Risk Trajectory</h3></div><span class="trajectory-state neutral">UNAVAILABLE</span></div><p class="trajectory-empty">${escapeHtml(error.message)}</p>`;
+  }
+}
+
 function renderDashboardReport(scan) {
   const risk = scan.risk || {};
   const score = risk.finalScore;
@@ -1519,6 +1592,7 @@ function renderDashboardReport(scan) {
         <div><span>Date</span><strong>${escapeHtml(formatDate(scan.timestamp))}</strong></div>
       </div>
       ${scan.mode === "DEMO" ? `<div class="dashboard-demo-note">Demo report shown with fixed sample data. Run a live scan to replace it with provider evidence.</div>` : ""}
+      ${scan.mode === "DEMO" ? "" : `<section id="risk-trajectory" class="trajectory-card"><div class="trajectory-heading"><div><span class="card-kicker">ADVANCED REPORT INTELLIGENCE</span><h3>Risk Trajectory</h3></div><span class="trajectory-state neutral">LOADING</span></div><p class="trajectory-empty">Loading the previous completed scan for comparison…</p></section>`}
       <div class="dashboard-report-grid">
         <section class="overview-card">
           <div class="overview-risk">
@@ -1686,6 +1760,7 @@ function renderReport(scan) {
   const dashboardReport = document.querySelector("#dashboard-report");
   dashboardReport.hidden = false;
   dashboardReport.innerHTML = renderDashboardReport(scan);
+  loadRiskTrajectory(scan);
   document.querySelector("#landing-title").textContent = "Private Scan Report";
   document.querySelector("#landing-description").textContent = "Your forensic report is available inside the authenticated workspace.";
   document.querySelector("#scan-mode-card").hidden = true;
