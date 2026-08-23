@@ -183,6 +183,7 @@ function normalizeHolderData({ tokenResponse, holdersResponse, retrievedAt, prov
       top10Percent: q(percentage(sumTop(10)), "BS-023"),
       liquidityRelatedAddresses: q(percentage(contractHolding), "BS-024"),
       holderDataScope: q("Non-burn, non-contract addresses; contract-held balances are reported separately.", "BS-025"),
+      dumpRiskThreshold: q(">10% non-LP, non-burn, non-contract wallet = MEDIUM; >20% = HIGH.", "BS-027"),
     },
   };
 }
@@ -215,6 +216,10 @@ function normalizeBlockscout({ response, tokenResponse, holdersResponse, rpcResp
     limitations.push("Holder count was not available from the shared block explorer source.");
   }
   const creatorAddress = response.creator_address_hash || response.creator_address?.hash || response.creator?.address_hash || null;
+  const deploymentDate = response.creation_tx?.timestamp
+    || response.creation_transaction?.timestamp
+    || response.created_at
+    || null;
   return normalizedResult({
     providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.VALID, retrievedAt,
     limitations,
@@ -227,6 +232,7 @@ function normalizeBlockscout({ response, tokenResponse, holdersResponse, rpcResp
       },
       deployer: {
         address: q(creatorAddress, "BS-026"),
+        deploymentDate: q(deploymentDate, "BS-028"),
       },
       ...holderEvidence,
       verification: {

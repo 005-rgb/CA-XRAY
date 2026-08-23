@@ -183,7 +183,10 @@ function createBaseScan({ mode, address, network, timestamp }) {
     liquidity: {},
     market: {},
     deployer: {},
-    project: {},
+    project: {
+      claimedContractAddress: unknown("No official source cross-check was returned"),
+      claimedNetwork: unknown("No official source cross-check was returned"),
+    },
     verification: {},
     risk: null,
     reliability: null,
@@ -583,6 +586,10 @@ function applyCapabilityVerification(scan) {
     canChangeTax: ["settax", "setbuytax", "setselltax"],
     canWithdraw: ["withdraw", "rescue"],
   };
+  const tradingCapabilityFunctions = {
+    maxTransactionRestriction: ["setmaxtx", "setmaxwallet", "setmaxtransaction"],
+    maxWalletRestriction: ["setmaxtx", "setmaxwallet", "setmaxtransaction"],
+  };
   const abiNames = new Set(verifiedAbi.map((name) => String(name).toLowerCase()));
   for (const [key, names] of Object.entries(capabilityFunctions)) {
     const dataPoint = scan.security[key];
@@ -595,6 +602,14 @@ function applyCapabilityVerification(scan) {
     } else {
       scan.security[key] = pointWithConfidence(dataPoint, "MEDIUM", STATUS.DETECTED);
     }
+  }
+  for (const [key, names] of Object.entries(tradingCapabilityFunctions)) {
+    const dataPoint = scan.trading?.[key];
+    if (!dataPoint || dataPoint.value !== true || !hasVerifiedAbi) continue;
+    const confirmed = names.some((name) => abiNames.has(name));
+    scan.trading[key] = confirmed
+      ? pointWithConfidence(dataPoint, "HIGH", STATUS.DETECTED)
+      : pointWithConfidence(dataPoint, "LOW", STATUS.UNVERIFIED_SIGNAL);
   }
   if (hasVerifiedAbi) {
     scan.security.sourceVerified = pointWithConfidence(sourcePoint, "HIGH", STATUS.VERIFIED);
@@ -666,6 +681,7 @@ function generateFindings(scan, risk) {
   if (Number.isFinite(buyTax) && buyTax >= TAX_THRESHOLDS.veryHighBuyTax) addFinding({ id: "trading-buy-tax", severity: "HIGH", title: "Very high buy tax observed", what: `The observed buy tax is ${formatValue(buyTax)}%.`, why: `The value meets the named ${TAX_THRESHOLDS.veryHighBuyTax}% high-tax threshold.`, dataPoint: t.buyTax, impact: 15 });
   addFinding({ id: "holder-top10", severity: "HIGH", title: "Top-10 holder concentration is elevated", what: `Top-10 holders account for ${formatValue(h.top10Percent && h.top10Percent.value)}%.`, why: "Concentrated holdings can increase the impact of a small number of wallets on supply and liquidity.", dataPoint: h.top10Percent, impact: risk.categories.holder.score || 0, when: (value) => Number(value.value) >= 40 });
   addFinding({ id: "holder-deployer", severity: "MEDIUM", title: "Deployer concentration is material", what: `The deployer concentration is ${formatValue(h.deployerPercent && h.deployerPercent.value)}%.`, why: "A concentrated deployer position can affect distribution risk.", dataPoint: h.deployerPercent, impact: 25, when: (value) => Number(value.value) >= 10 });
+  addFinding({ id: "holder-dump-risk", severity: "HIGH", title: "Dump risk: concentrated non-LP wallet", what: `A non-contract, non-burn wallet holds ${formatValue(h.top1Percent && h.top1Percent.value)}% of supply.`, why: "A private wallet with a large supply share can materially affect market price and liquidity if it sells.", dataPoint: h.top1Percent, impact: 40, when: (value) => Number(value.value) > 20 });
   const liquidityUsd = Number(l.liquidityUsd && l.liquidityUsd.value);
   if (Number.isFinite(liquidityUsd) && liquidityUsd < 100000) addFinding({ id: "liquidity-depth", severity: liquidityUsd < 10000 ? "HIGH" : "MEDIUM", title: "Liquidity depth is limited", what: `Primary-pair liquidity is ${formatCurrency(liquidityUsd)}.`, why: "Lower liquidity can increase execution impact and make market conditions more fragile.", dataPoint: l.liquidityUsd, impact: liquidityUsd < 10000 ? 60 : 20 });
   const volume = Number(l.volume24h && l.volume24h.value);
@@ -804,8 +820,10 @@ function buildIntelligence(scan, risk) {
     || s.ownerControl?.value === "RENOUNCED";
   const proxyAdminActive = s.proxyAdminActive?.value === true || s.adminControlFullyRemoved?.value === false;
   const activeOwner = proxyAdminActive || (!ownerRenounced && (trueSignal(scan, s.ownerControl) || Boolean(owner)));
-  const detectedCapabilities = capabilities.filter((capability) =>
-    capability.detected && (!ownerRenounced || proxyAdminActive || capability.key === "isUpgradeable"));
+   const detectedCapabilities = capabilities.filter((capability) =>
+     capability.detected
+       && capability.status !== STATUS.UNVERIFIED_SIGNAL
+       && (!ownerRenounced || proxyAdminActive || capability.key === "isUpgradeable"));
   const impactItems = scan.findings.filter((finding) => !finding.positive).slice(0, 8).map((finding) => ({
     id: finding.id,
     title: finding.title,
@@ -1161,12 +1179,18 @@ async function scanLive({
     }
   }
   applyCapabilityVerification(scan);
+  scan.evidenceSources = {
+    total: scan.providerResults.length,
+    successful: scan.providerResults.filter((result) => result.status === PROVIDER_RESULT_STATUS.VALID).length,
+    partial: scan.providerResults.filter((result) => result.status === PROVIDER_RESULT_STATUS.UNAVAILABLE).length,
+    failed: scan.providerResults.filter((result) => result.status === PROVIDER_RESULT_STATUS.PROVIDER_ERROR).length,
+  };
   const missing = {
     token: ["name", "symbol", "decimals", "totalSupply"],
     security: ["canMint", "canBlacklist", "canWhitelist", "canPause", "canChangeTax", "isUpgradeable", "canWithdraw", "sourceVerified", "ownerAddress", "ownerControl"],
     trading: ["buyTax", "sellTax", "transferTax", "sellRestriction", "buyRestriction", "maliciousTradingSignal", "taxChangeable", "maxTransactionRestriction", "maxWalletRestriction", "tradingPause", "hasPair"],
     holders: ["totalHolders", "top10Percent", "deployerPercent"],
-    deployer: ["address"],
+    deployer: ["address", "deploymentDate"],
     project: ["website", "socials", "addressConsistency", "auditClaim"],
   };
   for (const [section, fields] of Object.entries(missing)) {
@@ -1178,7 +1202,9 @@ async function scanLive({
         } else if (section === "token" && ["decimals", "totalSupply"].includes(field)) {
           scan[section][field] = notChecked(`DexScreener does not provide token ${field}; a token-metadata provider is not enabled`);
         } else if (section === "holders") {
-          scan[section][field] = notChecked("DexScreener does not provide holder concentration data; a holder provider is not enabled");
+          scan[section][field] = notChecked("Holder provider did not return this field; no safe zero-value was inferred");
+        } else if (section === "deployer" && field === "deploymentDate") {
+          scan[section][field] = notChecked("Block explorer did not return contract creation time");
         } else {
           scan[section][field] = unknown("No normalized provider evidence");
         }

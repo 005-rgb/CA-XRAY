@@ -193,6 +193,7 @@ test("public scan removes provider identities while retaining public evidence re
   assert.equal(publicScan.token.name.evidenceId, "E-001");
   assert.equal(publicScan.riskScore, publicScan.risk.finalScore);
   assert.equal(publicScan.reliabilityScore, publicScan.reliability.score);
+  assert.deepEqual(publicScan.evidenceSources, { total: 1, successful: 1, partial: 0, failed: 0 });
 });
 
 test("provider policy retries 5xx with bounded exponential jitter", async () => {

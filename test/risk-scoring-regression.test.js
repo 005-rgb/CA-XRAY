@@ -87,6 +87,37 @@ test("PEPE verified ABI downgrades unsupported GoPlus capability signals", () =>
   assert.equal(scan.security.proxyAdminActive.value, false);
 });
 
+test("holder normalization excludes burn and contract balances from wallet concentration", () => {
+  const result = normalizeBlockscout({
+    response: {
+      is_verified: true,
+      abi: [{ type: "function", name: "transfer" }],
+      creator_address_hash: "0x9999999999999999999999999999999999999999",
+    },
+    tokenResponse: { total_supply: "1000", holders_count: 4 },
+    holdersResponse: {
+      total_items: 4,
+      items: [
+        { address_hash: "0x1111111111111111111111111111111111111111", value: "250" },
+        { address_hash: "0x2222222222222222222222222222222222222222", value: "150" },
+        { address_hash: "0x000000000000000000000000000000000000dEaD", value: "500" },
+        { address_hash: "0x3333333333333333333333333333333333333333", value: "100", address: { is_contract: true } },
+      ],
+    },
+    rpcResponse: {
+      owner: { result: `0x${"0".repeat(64)}` },
+      admin: { result: `0x${"0".repeat(64)}` },
+    },
+    retrievedAt: "2026-08-23T00:00:00.000Z",
+    network: { id: "ethereum" },
+    providerId: "blockscout-abi",
+  });
+  assert.equal(result.evidence.deployer.address.value, "0x9999999999999999999999999999999999999999");
+  assert.equal(result.evidence.holders.top1Percent.value, 25);
+  assert.equal(result.evidence.holders.top5Percent.value, 40);
+  assert.match(result.evidence.holders.dumpRiskThreshold.value, />20%/);
+});
+
 test("verified ABI confirmation keeps a real capability detected at high confidence", () => {
   const result = normalizeBlockscout({
     response: {

@@ -1300,14 +1300,15 @@ function renderProjectContext(scan) {
     ? value
     : value === null || value === undefined || value === "" ? null : { status: "VALID", value };
   const identityStatus = project.addressConsistency?.value === true ? "VERIFIED" :
-    project.addressConsistency?.value === false ? "MISMATCH" : "UNKNOWN";
+    project.addressConsistency?.value === false ? "MISMATCH" :
+      website?.value || socials?.value ? "PARTIAL" : "UNKNOWN";
   return `<section class="report-section full model-context-section">${sectionHeading("02", "PROJECT CONTEXT", "02 / 16")}
     <div class="context-overview-grid">
       <div class="metric-grid">
         ${metric("Project name", scan.token?.name)}
         ${metric("Token / symbol", scan.token?.symbol)}
-        ${metric("Contract", scan.contract?.address, truncateAddress)}
-        ${metric("Network", scan.network?.name)}
+        ${metric("Contract address (per official source)", project.claimedContractAddress)}
+        ${metric("Network (per official source)", project.claimedNetwork)}
         ${metric("Official website", website)}
         ${metric("Official socials", asPoint(socials))}
       </div>
@@ -1318,7 +1319,9 @@ function renderProjectContext(scan) {
           ? "The available project evidence is consistent with the scanned contract."
           : identityStatus === "MISMATCH"
             ? "Available project evidence does not match the scanned contract."
-            : "There is insufficient evidence to determine the project-contract relationship."}</p>
+            : identityStatus === "PARTIAL"
+              ? "Official project links were found, but the scanned contract has not been cross-checked against an official address."
+              : "There is insufficient evidence to determine the project-contract relationship."}</p>
       </div>
     </div>
     <div class="context-market-strip">
@@ -1474,7 +1477,8 @@ function renderMarketDeployer(scan) {
         ${metric("Audit claim", p.auditClaim)}
       </div></div>
       <div><h3 class="subheading">DEPLOYER</h3><div class="metric-grid">
-        ${metric("Address", d.address, truncateAddress)}
+         ${metric("Contract Creator", d.address, truncateAddress)}
+         ${metric("Contract Owner", scan.security?.ownerAddress, truncateAddress)}
          ${metric("Pair age", scan.liquidity?.pairAge || d.deploymentDate)}
         ${metric("Suspicious behavior", d.suspiciousBehavior)}
         ${metric("Related contracts", d.relatedContracts)}
@@ -1489,7 +1493,7 @@ function renderMarketDeployer(scan) {
 function findingRow(finding) {
   const interpretation = finding.risk_interpretation_confidence || finding.confidence || "UNKNOWN";
   const retrieval = finding.data_retrieval_confidence || "UNKNOWN";
-  return `<tr><td>${statusPill({ status: finding.severity }, finding.severity)}</td><td><div class="finding-title">${escapeHtml(finding.title)}</div><div class="finding-why">${escapeHtml(finding.why)}</div></td><td><strong>${escapeHtml(interpretation)}</strong><small>Data retrieval: ${escapeHtml(retrieval)}</small></td><td>${escapeHtml(finding.evidence)}</td></tr>`;
+  return `<tr><td>${statusPill({ status: finding.severity }, finding.severity)}</td><td><div class="finding-title">${escapeHtml(finding.title)}</div><div class="finding-why">${escapeHtml(finding.why)}</div></td><td><strong>Risk confidence: ${escapeHtml(interpretation)}</strong><small>Data retrieval: ${escapeHtml(retrieval)}</small></td><td>${escapeHtml(finding.evidence)}</td></tr>`;
 }
 
 function renderFindings(scan) {
@@ -1634,14 +1638,37 @@ function renderDashboardReport(scan) {
   const tradingScore = categories.trading?.score;
   const reliabilityScore = scan.reliability?.score;
   const marketScore = categories.marketProject?.score;
-  const sourceCount = scan.evidence?.length || 0;
-  const partialCount = scan.errors?.length || 0;
+  const providerResults = scan.providerResults || [];
+  const sourceSummary = scan.evidenceSources || {
+    total: new Set(providerResults.map((result) => result.providerId).filter(Boolean)).size || (scan.mode === "DEMO" ? 1 : 0),
+    successful: providerResults.filter((result) => result.status === "valid").length,
+    partial: providerResults.filter((result) => result.status === "unavailable").length,
+    failed: providerResults.filter((result) => result.status === "provider_error").length,
+  };
+  const sourceCount = sourceSummary.total || 0;
+  const successfulCount = sourceSummary.successful || 0;
+  const partialCount = sourceSummary.partial || 0;
   const tokenName = dashboardValue(scan.token?.name);
   const tokenSymbol = dashboardValue(scan.token?.symbol);
+  let totalSupplyLabel = "Total Supply";
   const totalSupply = dashboardValue(scan.token?.totalSupply, (value) => {
     const numeric = Number(value);
-    return Number.isFinite(numeric) ? (numeric / 10 ** Number(dashboardValue(scan.token?.decimals, formatValue))).toLocaleString("en-US", { maximumFractionDigits: 0 }) : formatValue(value);
+    const decimals = Number(scan.token?.decimals?.value);
+    return Number.isFinite(numeric) && Number.isFinite(decimals)
+      ? (numeric / 10 ** decimals).toLocaleString("en-US", { maximumFractionDigits: 0 })
+      : "Tidak dapat dihitung dari sumber data saat ini";
   });
+  let displaySupply = totalSupply;
+  if (["UNKNOWN", "NOT_CHECKED", "UNAVAILABLE", "ERROR"].includes(scan.token?.totalSupply?.status)) {
+    const fdv = Number(scan.market?.fdv?.value);
+    const price = Number(scan.market?.price?.value);
+    if (Number.isFinite(fdv) && fdv > 0 && Number.isFinite(price) && price > 0) {
+      displaySupply = (fdv / price).toLocaleString("en-US", { maximumFractionDigits: 0 });
+      totalSupplyLabel = "Estimated (FDV ÷ price)";
+    } else {
+      displaySupply = "Tidak dapat dihitung dari sumber data saat ini";
+    }
+  }
   const contractAddress = scan.contract?.address || "UNKNOWN";
   const statusPoint = (point) => point || { status: scan.mode === "DEMO" ? "DEMO" : "VERIFIED", value: true };
   const topRiskRows = risks.length ? risks : [{ title: "No evidence-backed risk finding", severity: "UNKNOWN", why: "No material risk was established.", category: "—" }];
@@ -1651,8 +1678,17 @@ function renderDashboardReport(scan) {
     ["Liquidity Data", statusPoint(scan.liquidity?.liquidityUsd)],
     ["Holder Data", statusPoint(scan.holders?.totalHolders)],
     ["Market Data", statusPoint(scan.market?.price)],
-    ["Social Data", { status: "UNAVAILABLE", value: null }],
+    ["Social Data", scan.project?.website?.value || scan.project?.socials?.value
+      ? { status: "VERIFIED", value: true }
+      : scan.project?.website || scan.project?.socials],
   ];
+  const dataStatusLabel = (point) => {
+    const status = point?.status || "UNKNOWN";
+    if (status === "DEMO" || status === "VERIFIED") return "Valid";
+    if (status === "NOT_CHECKED") return "Not Checked";
+    if (status === "UNAVAILABLE") return "Not Available";
+    return status.replaceAll("_", " ");
+  };
   return `
     <div class="dashboard-report">
       <div class="report-heading">
@@ -1695,7 +1731,7 @@ function renderDashboardReport(scan) {
             <div class="summary-row"><span>Token Name</span><strong>${escapeHtml(tokenName)}</strong></div>
             <div class="summary-row"><span>Symbol</span><strong>${escapeHtml(tokenSymbol)}</strong></div>
             <div class="summary-row"><span>Decimals</span><strong>${escapeHtml(dashboardValue(scan.token?.decimals))}</strong></div>
-            <div class="summary-row"><span>Total Supply</span><strong>${escapeHtml(totalSupply)}</strong></div>
+             <div class="summary-row"><span>${escapeHtml(totalSupplyLabel)}</span><strong>${escapeHtml(displaySupply)}</strong></div>
             <div class="summary-row"><span>Holders</span><strong>${escapeHtml(dashboardValue(scan.holders?.totalHolders))}</strong></div>
             <div class="summary-row"><span>Contract Age</span><strong>${escapeHtml(dashboardValue(scan.deployer?.deploymentDate))}</strong></div>
           </section>
@@ -1728,9 +1764,9 @@ function renderDashboardReport(scan) {
             return `<tr><td><strong>${escapeHtml(finding.title)}</strong></td><td>${escapeHtml(category)}</td><td><span class="severity-chip ${statusClass(finding.severity)}">${escapeHtml(finding.severity || "UNKNOWN")}</span></td><td>${escapeHtml(impact)}</td><td><span class="detected-chip ${statusClass(evidenceStatus)}">${escapeHtml(statusLabel)}</span></td></tr>`;
           }).join("")}</tbody></table></div>
         </section>
-        <div class="report-side-column lower-side">
-          <section class="side-card"><div class="card-kicker">DATA STATUS</div>${dataRows.map(([label, point]) => `<div class="status-row"><span>${label}</span>${dashboardStatus(point, point.status === "UNAVAILABLE" ? "Unavailable" : point.status === "DEMO" ? "Valid" : "Valid")}</div>`).join("")}</section>
-          <section class="side-card"><div class="card-kicker">EVIDENCE SOURCES</div><div class="evidence-count"><strong>${sourceCount}</strong><span>Total Sources</span></div><div class="evidence-breakdown"><span><b class="green-text">${Math.max(0, sourceCount - partialCount)}</b> Successful</span><span><b class="orange-text">${partialCount}</b> Partial</span><span><b class="red-text">0</b> Failed</span></div><button type="button" class="side-link" id="open-evidence">View Evidence <span>→</span></button></section>
+         <div class="report-side-column lower-side">
+           <section class="side-card"><div class="card-kicker">DATA STATUS</div>${dataRows.map(([label, point]) => `<div class="status-row"><span>${label}</span>${dashboardStatus(point, dataStatusLabel(point))}</div>`).join("")}</section>
+           <section class="side-card"><div class="card-kicker">EVIDENCE SOURCES</div><div class="evidence-count"><strong>${sourceCount}</strong><span>Total Sources</span></div><div class="evidence-breakdown"><span><b class="green-text">${successfulCount}</b> Successful</span><span><b class="orange-text">${partialCount}</b> Partial</span><span><b class="red-text">${sourceSummary.failed || 0}</b> Failed</span></div><button type="button" class="side-link" id="open-evidence">View Evidence <span>→</span></button></section>
         </div>
       </div>
        <div id="dashboard-deep" class="dashboard-deep" hidden>
