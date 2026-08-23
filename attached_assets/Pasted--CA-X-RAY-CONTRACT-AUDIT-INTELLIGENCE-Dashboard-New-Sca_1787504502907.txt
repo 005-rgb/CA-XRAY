@@ -1,0 +1,640 @@
+◇
+CA X-RAY
+CONTRACT AUDIT INTELLIGENCE
+⌂
+Dashboard
+⌁
+New Scan
+◷
+Scan History
+♢
+Risk Passport
+◉
+Watchtower
+⌘
+API Access
+Soon
+⚙
+Settings
+Current Plan
+Free
+Scans this month
+3 / 5
+Upgrade Plan
+↪ Logout
+Workspace / Personal
+♧
+U
+zer2@smkn1wonogiri.sch.id
+⌄
+ACTIVE WORKSPACE
+
+personal · free
+Sign out
+CA X-RAY / CONTRACT INTELLIGENCE
+
+Private Scan Report
+Your forensic report is available inside the authenticated workspace.
+
+Network
+
+Base
+Contract Address
+0xB2000000000000000000004c27f6523082f41D01
+×
+
+Start Scan
+→
+♢ We never store your private keys. All scans are read-only.
+
+PHASE 6 / CONTINUOUS INTELLIGENCE
+Risk Passport & Watchtower
+Track evidence-backed change over time. Monitoring never changes the current risk score silently.
+
+Run due checks
+RISK PASSPORT
+Tracked contracts
+0 PASSPORTS
+NO RISK PASSPORTS YET. A completed live scan will create one.
+WATCHTOWER
+Scheduled monitoring
+0 ACTIVE
+Network
+
+Ethereum
+Contract address
+0x...
+Check every
+
+24 hours
+
+Add to Watchtower
+→
+WATCHTOWER IS EMPTY. Add a contract to begin scheduled checks.
+ALERTS
+Review queue
+0 OPEN
+NO ALERTS. Watchtower changes will appear here for review.
+Scan Report
+Evidence-backed forensic assessment for the selected contract.
+
+⇩ Download Report
+Contract
+0xB200...1D01 ▣
+Network
+◆ Base
+Scan Mode
+Live
+Scan ID
+live-b2000000-3165938288
+Date
+Aug 23, 2026, 4:59 PM UTC
+ADVANCED REPORT INTELLIGENCE
+Risk Trajectory
+INITIAL SNAPSHOT
+No prior scan is stored for this contract. A future scan will show evidence-backed changes here.
+
+OVERALL RISK
+INSUFFICIENT DATA/ 100
+UNKNOWN
+Risk Score
+Unknown
+Reliability Score
+39 / 100
+Confidence
+UNKNOWN
+Scan Mode
+Live Data
+WHY THIS SCORE?
+This score is primarily influenced by the contract's control surface, trading conditions, and available evidence quality.
+
+!
+Large 24-hour price movement
+High Impact
+View Full Analysis →
+QUICK SUMMARY
+Token Name
+Basecat
+Symbol
+Basecat
+Decimals
+Unknown
+Total Supply
+1,000,000,000
+Holders
+Unknown
+Contract Age
+Unknown
+RISK BREAKDOWN
+Security
+0 / 100
+Trading Safety
+0 / 100
+Reliability
+39 / 100
+Market
+0 / 100
+View All Categories →
+Overview
+Contract Forensics
+Trading Safety
+Liquidity
+Holder Analysis
+Market
+Evidence
+TOP RISKS
+View All Findings →
+RISK	CATEGORY	SEVERITY	IMPACT	STATUS
+Large 24-hour price movement	Market / Project	MEDIUM	+20	Detected
+DATA STATUS
+On-Chain Data
+UNKNOWN
+Contract Code
+DETECTED
+Liquidity Data
+Valid
+Holder Data
+Not Checked
+Market Data
+Valid
+Social Data
+Valid
+EVIDENCE SOURCES
+3
+Total Sources
+2 Successful
+1 Partial
+0 Failed
+View Evidence →
+EXECUTIVE SUMMARY
+01 / 08
+The available evidence does not support a reliable final risk score. Missing categories and data limitations are shown below; UNKNOWN is not treated as a healthy result.
+
+TOP 3 RISKS
+MEDIUM
+Large 24-hour price movement
+TOP 3 POSITIVE SIGNALS
+POSITIVE
+Primary-pair liquidity is substantial
+POSITIVE
+Contract source is verified
+IMPORTANT LIMITATIONS
+Capability confirmation requires a verified ABI; no verified ABI was available.
+Coverage is partial because not every provider returned usable normalized evidence.
+One or more providers returned an error; missing fields remain UNKNOWN and were not replaced.
+Insufficient category evidence for a reliable final risk score.
+PROJECT CONTEXT
+02 / 16
+Project name
+Basecat VERIFIED
+Token / symbol
+Basecat VERIFIED
+Contract address (per official source)
+UNKNOWN
+Network (per official source)
+UNKNOWN
+Official website
+https://basecatonbase.com/ VERIFIED
+Official socials
+https://x.com/BasecatOnBase,https://t.me/basecatonbase,https://discord.gg/WSRRKSsYf VERIFIED
+PROJECT IDENTITY STATUS
+PARTIAL
+Official project links were found, but the scanned contract has not been cross-checked against an official address.
+
+PRIMARY TRADING PAIR
+0x215b...30ba VERIFIED
+DEX / VENUE
+uniswap VERIFIED
+ACTIVE PAIRS
+UNKNOWN
+TRADING PAIR AGE
+2026-08-15T18:03:49.000Z VERIFIED
+Source: public market data. Trading-pair age reflects the indexed pair, not necessarily the age of the project.
+
+DATA CONSISTENCY
+03 / 16
+Token contract
+PASS
+Pair contract
+UNKNOWN
+Primary pair
+PASS
+DEX match
+PASS
+Pair ↔ market data
+UNKNOWN
+Price orientation
+PASS
+Market cap / FDV
+PASS
+NETWORK VALIDATION
+PASS
+Data consistency checks assess evidence integrity only. They are not a risk score and do not change the risk assessment.
+
+CONTRACT EVIDENCEVERIFIED
+RISK PROFILE
+02 / 16
+Explanatory dimensions derived from the canonical overall risk score. UNKNOWN means the available evidence is not sufficient for a category conclusion.
+
+Contract Control
+UNKNOWN
+UNKNOWN
+Insufficient evidence available.
+
+DATA COVERAGE
+10%
+Trading
+UNKNOWN
+UNKNOWN
+Insufficient evidence available.
+
+DATA COVERAGE
+36%
+Holder Concentration
+UNKNOWN
+UNKNOWN
+Insufficient evidence available.
+
+DATA COVERAGE
+0%
+Liquidity
+0 / 100
+LOW
+Primary-pair liquidity is $870,751.
+
+DATA COVERAGE
+100%
+Deployer
+UNKNOWN
+UNKNOWN
+Insufficient evidence available.
+
+DATA COVERAGE
+0%
+Market / Project
+0 / 100
+LOW
+Market and project context is based on available evidence.
+
+DATA COVERAGE
+58%
+WHAT CAN THIS CONTRACT DO?
+03 / 16
+Technical permissions are translated into potential user impact. UNVERIFIED_SIGNAL means a bytecode/provider signal was not confirmed by verified source or ABI.
+
+Mint new tokens
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+Pause transfers
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+Blacklist addresses
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+Whitelist addresses
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+Modify taxes
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+Modify anti-whale limits
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+Withdraw contract funds
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+Upgrade / proxy
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+Ownership control
+UNKNOWN
+MEANING
+This capability was not checked because the required provider is unavailable.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: UNKNOWN
+RISK CONFIDENCE: UNKNOWN
+CONTRACT POWER MAP
+04 / 16
+OWNER / ADMIN
+UNKNOWN
+UNKNOWN
+↓
+CAN CONTROL
+UNKNOWN
+↓
+POTENTIAL USER IMPACT
+Insufficient evidence available.
+CAN I EXIT?
+05 / 16
+Technical exitability assessment only. This is not investment advice and does not guarantee execution or safety.
+
+EXITABILITY
+UNKNOWN
+Insufficient evidence is available to assess practical exit conditions.
+
+SELL SIMULATION
+UNKNOWN
+SELL TAX
+0%
+SELL RESTRICTION
+UNKNOWN
+LIQUIDITY
+$870,751
+USER IMPACT
+06 / 16
+Each material finding is expressed as capability or signal → potential user impact → control → evidence confidence.
+
+Large 24-hour price movement
+HIGH
+WHAT
+The observed 24-hour change is 6.78%.
+WHY
+Large short-term movement is a market-risk signal, not a prediction of future performance.
+POTENTIAL IMPACT
+The signal may affect how the contract should be independently reviewed.
+CONTROL
+The relevant contract or market condition.
+EVIDENCE
+Contract Analysis · CONFIDENCE HIGH
+RISK BREAKDOWN
+02 / 08
+CATEGORY	SCORE	ORIGINAL WEIGHT	APPLIED WEIGHT	STATUS	COVERAGE
+Contract Control	UNKNOWN	30%	EXCLUDED	PARTIAL	
+10%
+Trading	UNKNOWN	20%	EXCLUDED	PARTIAL	
+36%
+Holder Concentration	UNKNOWN	15%	EXCLUDED	UNKNOWN	
+0%
+Liquidity	0 / 100	15%	0.00%	AVAILABLE	
+100%
+Deployer	UNKNOWN	10%	EXCLUDED	UNKNOWN	
+0%
+Market / Project	0 / 100	10%	0.00%	PARTIAL	
+58%
+This report is marked PARTIAL DATA. Unknown categories are not redistributed. Risk from available data: UNKNOWN–UNKNOWN / 100; unscored weight: 75%.
+
+HOW THE SCORE WAS CALCULATED
+Liquidity: 0 × 15% = 0.00 → applied 0.00%
+Market / Project: 0 × 10% = 0.00 → applied 0.00%
+Final: INSUFFICIENT DATA FOR RELIABLE SCORE
+RELIABILITY CALCULATION
+E: 31 × 35%
+S: 100 × 20%
+F: 100 × 15%
+C: 100 × 15%
+R: 100 × 10%
+I: 100 × 5%
+Reliability: 39 / 100
+CONTRACT & TRADING FORENSICS
+03 / 08
+CONTRACT CAPABILITIES
+CAPABILITY	STATUS	IMPACT	EVIDENCE	EVIDENCE TYPE	CONFIDENCE
+Mint additional tokens	UNKNOWN	No observed addition	GP-001	UNKNOWN	UNKNOWN
+Blacklist addresses	UNKNOWN	No observed addition	GP-002	UNKNOWN	UNKNOWN
+Whitelist restrictions	UNKNOWN	No observed addition	GP-003	UNKNOWN	UNKNOWN
+Pause transfers	UNKNOWN	No observed addition	GP-004	UNKNOWN	UNKNOWN
+Modify transaction tax	UNKNOWN	No observed addition	GP-005	UNKNOWN	UNKNOWN
+Upgradeable / proxy	UNKNOWN	No observed addition	GP-006	UNKNOWN	UNKNOWN
+Withdraw funds	UNKNOWN	No observed addition	GP-007	UNKNOWN	UNKNOWN
+Source verification	DETECTED DETECTED	Unverified +10	GP-011	Contract Analysis	HIGH
+TRADING SIGNALS
+SIGNAL	VALUE / STATUS	IMPACT	EVIDENCE	EVIDENCE TYPE	CONFIDENCE
+Buy tax	0% VERIFIED	≥15% adds +15	GP-012	Contract Analysis	HIGH
+Sell tax	0% VERIFIED	≥20% adds +20	GP-013	Contract Analysis	HIGH
+Transfer tax	0% VERIFIED	—	GP-014	Contract Analysis	HIGH
+Sell restriction	UNKNOWN	+30	GP-015	UNKNOWN	UNKNOWN
+Buy restriction	UNKNOWN	+20	GP-016	UNKNOWN	UNKNOWN
+Malicious-trading signal	UNKNOWN	+50	GP-017	UNKNOWN	UNKNOWN
+Max wallet / transaction	UNKNOWN	+10	GP-019	UNKNOWN	UNKNOWN
+Trading pause	UNKNOWN	+10	GP-004	UNKNOWN	UNKNOWN
+HOLDER & LIQUIDITY ANALYSIS
+04 / 08
+HOLDER SUMMARY
+Total holders
+Not available from current data source NOT CHECKED
+Top 1%
+UNKNOWN
+Top 5%
+UNKNOWN
+Top 10%
+Not available from current data source NOT CHECKED
+Deployer
+Not available from current data source NOT CHECKED
+Owner
+UNKNOWN
+Burn
+UNKNOWN
+Liquidity-related
+UNKNOWN
+PRIMARY LIQUIDITY PAIR
+Liquidity
+$870,751 VERIFIED
+24h volume
+$1,540,262 VERIFIED
+Pair
+0x215b...30ba VERIFIED
+DEX
+uniswap VERIFIED
+Price
+$0.03501 VERIFIED
+24h change
+6.78% VERIFIED
+Primary pair rule: Highest-evidence pair selection rule. Liquidity lock status is not claimed because no reliable lock source is configured.
+
+MARKET & DEPLOYER SIGNALS
+05 / 08
+MARKET & PROJECT
+Price
+$0.03501 VERIFIED
+24h volume
+$1,540,262 VERIFIED
+Liquidity
+$870,751 VERIFIED
+FDV
+$35,010,849 VERIFIED
+24h change
+6.78% VERIFIED
+7d change
+UNKNOWN
+Website
+https://basecatonbase.com/ VERIFIED
+Address consistency
+UNKNOWN
+Audit claim
+UNKNOWN
+DEPLOYER
+Contract Creator
+UNKNOWN
+Contract Owner
+UNKNOWN
+Pair age
+2026-08-15T18:03:49.000Z VERIFIED
+Suspicious behavior
+UNKNOWN
+Related contracts
+UNKNOWN
+Recent deployment
+UNKNOWN
+Token concentration
+UNKNOWN
+Malicious association
+UNKNOWN
+KEY FINDINGS
+06 / 08
+Findings are generated only when the normalized snapshot contains supporting evidence. They are ordered by severity, risk contribution, confidence, and stable finding ID.
+
+SEVERITY	FINDING / WHY IT MATTERS	CONFIDENCE	EVIDENCE
+MEDIUM	
+Large 24-hour price movement
+Large short-term movement is a market-risk signal, not a prediction of future performance.
+Risk confidence: HIGHData retrieval: HIGH	Large 24-hour price movement: 6.78
+POSITIVE	
+Primary-pair liquidity is substantial
+The observed liquidity is at or above the rubric's $100,000 lower-risk threshold.
+Risk confidence: HIGHData retrieval: HIGH	Primary-pair liquidity is substantial: 870,750.93
+POSITIVE	
+Contract source is verified
+Verified source improves inspectability, although it does not guarantee safety.
+Risk confidence: HIGHData retrieval: HIGH	Contract source is verified: DETECTED
+EVIDENCE REGISTER
+07 / 08
+Expand an item for WHAT, WHY, EVIDENCE, timestamp, status, confidence, and limitations.
+
+ID	FINDING	EVIDENCE TYPE	RETRIEVED AT	CONFIDENCE
+DS-006	Large 24-hour price movement
+VIEW EVIDENCE DETAIL
+Contract Analysis	Aug 23, 2026, 4:59 PM UTC	HIGH
+DATA COVERAGE & LIMITATIONS
+15 / 16
+OVERALL EVIDENCE COVERAGE
+34%
+SCAN LIMITATION
+Some evidence was unavailable for this scan.
+
+Contract Control
+10%
+PARTIAL
+Trading
+36%
+PARTIAL
+Holder Concentration
+0%
+UNKNOWN
+Liquidity
+100%
+FULL
+Deployer
+0%
+UNKNOWN
+Market / Project
+58%
+PARTIAL
+TOKEN TIMELINE
+DEPLOYED
+UNKNOWN
+OWNERSHIP
+UNKNOWN
+LIQUIDITY
+$870,751
+CURRENT
+Aug 23... UTC
+ADDRESS RELATIONSHIPS
+NO VERIFIED RELATIONSHIP FOUND
+WHAT CHANGED?
+NO PREVIOUS SCAN
+Historical comparison is not available because no prior scan is stored in this application.
+
+FINAL ASSESSMENT
+08 / 08
+Overall risk
+UNKNOWN
+Risk level
+UNKNOWN
+Reliability
+39 / 100 VERIFIED
+Confidence
+UNKNOWN UNKNOWN
+Data coverage
+34% VERIFIED
+PRIMARY RISKS
+Large 24-hour price movement
+POSITIVE SIGNALS
+Primary-pair liquidity is substantial
+Contract source is verified
+WHAT TO VERIFY BEFORE TRUSTING THIS TOKEN
+Verify contract address
+Review owner permissions
+Review holder concentration
+Review liquidity
+Review trading restrictions
+Review audit claims
+Review deployer activity
+This is not financial advice. This assessment does not guarantee safety and does not establish that a token is a scam. CA X-RAY does not provide BUY, SELL, LONG, or SHORT recommendations.

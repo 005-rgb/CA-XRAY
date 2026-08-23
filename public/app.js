@@ -1009,6 +1009,21 @@ async function loadScanHistory({ reset = true } = {}) {
   }
 }
 
+async function cancelScan(jobId) {
+  if (!jobId) return;
+  try {
+    await apiJson(`/api/scan/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+    await loadScanHistory();
+  } catch (error) {
+    if (scanHistoryList) {
+      scanHistoryList.insertAdjacentHTML(
+        "afterbegin",
+        `<div class="field-error" role="alert">${escapeHtml(error.message)}</div>`,
+      );
+    }
+  }
+}
+
 function renderPassportList(passports) {
   passportCount.textContent = `${passports.length} PASSPORT${passports.length === 1 ? "" : "S"}`;
   passportList.innerHTML = passports.length ? passports.map((passport) => {
