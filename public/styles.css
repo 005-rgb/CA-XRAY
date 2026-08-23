@@ -546,6 +546,14 @@ body { background: var(--dashboard-bg); color: #17191c; }
 .dashboard-deep { margin-top: 15px; }
 .dashboard-deep .report-section { box-shadow: none; }
 .dashboard-deep[hidden] { display: none; }
+.context-overview-grid, .consistency-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, .75fr); gap: 25px; align-items: start; }
+.context-status-card, .consistency-note { border: 1px solid var(--line); background: #fafafa; padding: 16px; min-width: 0; }
+.context-status-card p, .consistency-note p { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 12px 0 0; }
+.context-market-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; border-top: 1px solid var(--line); margin-top: 22px; padding-top: 16px; }
+.context-market-strip > div { min-width: 0; }
+.context-market-strip .data-value { overflow-wrap: anywhere; }
+.consistency-value { min-height: 22px; }
+.consistency-note .status-pill + .data-label { display: block; margin-top: 17px; }
 .loading-page { min-height: calc(100vh - 62px); background: var(--dashboard-bg); }
 .intelligence-dashboard { margin-top: 18px; }
 .intelligence-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 25px 0 12px; }

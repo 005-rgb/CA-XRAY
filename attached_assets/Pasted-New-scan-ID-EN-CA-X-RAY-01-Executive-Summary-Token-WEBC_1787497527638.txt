@@ -1,0 +1,380 @@
+New scan
+🇮🇩 ID
+🇬🇧 EN
+CA X-RAY
+01
+Executive Summary
+Token	WEBCAT (WEBCAT)
+Network	Ethereum chain 1
+Contract	
+0x7c5B...2f0C
+
+Scan mode	LIVE
+Scan time	Aug 23, 2026, 10:05 PM UTC
+PROJECT CONTEXT
+Project Name
+WEBCAT
+Token / Symbol
+WEBCAT
+Contract
+0x7c5B...2f0C
+
+Network
+Ethereum
+Official Website
+UNKNOWN — Not available in the available market data.
+Official Socials
+UNKNOWN — Not available in the available market data.
+Contract ↔ Project Match
+UNKNOWN
+There is insufficient evidence to determine the project-contract relationship.
+
+Project Identity Status
+UNKNOWN
+There is insufficient evidence to determine the project-contract relationship.
+
+Primary Trading Pair
+UNKNOWN
+DEX / Venue
+UNKNOWN
+Pair Contract
+UNKNOWN
+Active Pairs
+UNKNOWN
+Trading Pair Age
+UNKNOWN
+Trading pair age reflects the age of the indexed trading pair, not necessarily the age of the project.
+
+Source
+Public market data
+Scan Timestamp
+Aug 23, 2026, 10:05 PM UTC
+DATA CONSISTENCY
+Token Contract
+PASS
+Pair Contract
+UNKNOWN
+Primary Pair
+UNKNOWN
+DEX Match
+UNKNOWN
+Pair ↔ Market Data
+UNKNOWN
+Price Orientation
+UNKNOWN
+Market Cap / FDV
+UNKNOWN
+Data consistency checks assess evidence integrity only. They are not a risk score and do not change the risk assessment.
+
+OVERALL RISK
+31
+/ 100
+MODERATE
+CONFIDENCE
+MEDIUM
+Confidence reflects how much relevant evidence was available for this scan. A low-confidence result does not mean the token is safe or unsafe; it means important evidence was unavailable.
+
+Risk score is not the same as safety. The score reflects detected risk based on the available evidence.
+
+WEBCAT (WEBCAT) on Ethereum carries a MODERATE contract risk assessment of 31/100 with MEDIUM confidence. The most significant concerns are trading tax can be changed, owner can blacklist addresses, whitelist controls present. On the positive side: source code verified, ownership renounced, no honeypot signal. This is a risk assessment based on available public data, not a definitive scam verdict — review the evidence and verify independently before trusting this token.
+
+TOP RISKS
+HIGH
+Trading tax can be changed
+HIGH
+Owner can blacklist addresses
+MEDIUM
+Whitelist controls present
+TOP POSITIVE SIGNALS
+POSITIVE
+Source code verified
+POSITIVE
+Ownership renounced
+POSITIVE
+No honeypot signal
+Positive signals only indicate that certain risks were not detected in the available evidence. They do not mean that the token is safe or risk-free.
+
+Risk Profile
+Six dimensions, explanatory only
+Contract Control
+ELEVATED
+Privileged control capabilities were detected in the contract.
+
+Trading
+MODERATE
+Trading restrictions or elevated tax signals were detected.
+
+Holder Concentration
+LOW
+Holdings appear reasonably distributed in available evidence.
+
+Liquidity
+UNKNOWN
+Insufficient evidence available.
+
+Deployer
+LOW
+No elevated deployer concentration was detected in available evidence.
+
+Market / Project
+UNKNOWN
+Insufficient evidence available.
+
+What Can This Contract Do?
+Capabilities translated into plain language
+Capability	Status	Meaning & potential impact	Control	CONFIDENCE
+Mint new tokens	NOT DETECTED	Not detected in available evidence.
+Evidence: Contract Analysis
+RENOUNCED	HIGH
+Pause transfers	NOT DETECTED	Not detected in available evidence.
+Evidence: Contract Analysis
+RENOUNCED	HIGH
+Blacklist addresses	DETECTED	
+A privileged address may be able to block specific wallets.
+Selected holders could be prevented from buying or selling.
+Evidence: Contract Analysis
+RENOUNCED	HIGH
+Whitelist addresses	DETECTED	
+A privileged address may be able to grant special trading privileges.
+Unequal trading conditions could exist between wallets.
+Evidence: Contract Analysis
+RENOUNCED	HIGH
+Modify taxes	DETECTED	
+A privileged address may be able to change buy/sell tax.
+Taxes could be increased, which may impair or block exits.
+Evidence: Contract Analysis
+RENOUNCED	HIGH
+Modify anti-whale limits	DETECTED	
+A maximum wallet / anti-whale limit was detected.
+Holdings and transfer sizes may be constrained by the contract.
+Evidence: Trading Analysis
+RENOUNCED	HIGH
+Modify balances	NOT DETECTED	Not detected in available evidence.
+Evidence: Contract Analysis
+RENOUNCED	HIGH
+Upgrade / proxy	NOT DETECTED	Not detected in available evidence.
+Evidence: Contract Analysis
+RENOUNCED	HIGH
+Ownership control	NOT DETECTED	Not detected in available evidence.
+Evidence: Contract Verification
+RENOUNCED	HIGH
+Contract Power Map
+Who controls what
+OWNER / ADMIN
+0x0000...0000
+
+RENOUNCED
+Mint new tokens
+NOT DETECTED
+Pause transfers
+NOT DETECTED
+Blacklist addresses
+DETECTED
+HIGH IMPACT
+Whitelist addresses
+DETECTED
+MEDIUM IMPACT
+Modify taxes
+DETECTED
+MEDIUM IMPACT
+Modify anti-whale limits
+DETECTED
+LOW IMPACT
+Modify balances
+NOT DETECTED
+Upgrade / proxy
+NOT DETECTED
+Can I Exit?
+Technical exit assessment — not investment advice
+EXIT RISK
+MODERATE
+Sell simulation
+PASS
+Sell tax
+0.0%
+Sell restriction
+NOT DETECTED
+Buy restriction
+NOT DETECTED
+Liquidity
+UNKNOWN
+Max wallet limit
+DETECTED
+The sell simulation passed, so no sell failure was observed in the available simulation. However, the simulation does not guarantee that every real transaction will succeed. Liquidity, tax and concentration conditions may still affect practical exit.
+
+Compound Risk
+Reinforcing combinations of signals
+No reinforcing risk combinations were detected in the available evidence.
+
+DEEP INVESTIGATION
+Full forensic breakdown, evidence and score calculation.
+
+Hide details
+02
+Risk Breakdown
+Category	Score	Weight	Status
+Contract	50	30%	SCORED
+Trading	25	20%	SCORED
+Holder	20	15%	SCORED
+Liquidity	UNKNOWN	15%	UNKNOWN
+Deployer	0	10%	SCORED
+Market / Project	UNKNOWN	10%	UNKNOWN
+HOW THE SCORE WAS CALCULATED
+Contract: 50 × 40%
+20
+Trading: 25 × 26.7%
+6.67
+Holder: 20 × 20%
+4
+Deployer: 0 × 13.3%
+0
+FINAL SCORE
+31 / 100
+Categories with insufficient data (liquidity, market) were excluded and their weight redistributed proportionally across the 4 scored categories.
+
+Unknown categories are not treated as safe. They are excluded from the current calculation because sufficient evidence is unavailable. This reduces analytical confidence.
+
+Why This Score?
+Per-category contribution
+Contract: 50 × 40%
+20
+Trading: 25 × 26.7%
+6.67
+Holder: 20 × 20%
+4
+Deployer: 0 × 13.3%
+0
+FINAL SCORE
+31 / 100
+MAIN SCORE DRIVER  Contract contributes the largest share of the current risk score, at 20 points.
+
+Risk score reflects assessed risk from scored evidence; confidence reflects how complete that evidence is. A low or moderate score with low confidence must not be read as 'safe'.
+
+03
+Contract & Trading Forensics
+CONTRACT CAPABILITIES
+Capability	Status	Impact	Evidence
+Mint new tokens	NOT DETECTED	No such capability detected	Contract Analysis
+Blacklist addresses	DETECTED	Wallets can be blocked from trading	Contract Analysis
+Whitelist controls	DETECTED	Special trading privileges can be granted	Contract Analysis
+Pause transfers	NOT DETECTED	No such capability detected	Contract Analysis
+Modify trading tax	DETECTED	Tax can be raised after launch	Contract Analysis
+Upgradeable / proxy	NOT DETECTED	No such capability detected	Contract Analysis
+Owner modify balances	NOT DETECTED	No such capability detected	Contract Analysis
+Source verification	VERIFIED	Verified	Contract Verification
+Owner address	NOT DETECTED	Ownership renounced (zero/dead address)	
+0x0000...0000
+
+TRADING SIGNALS
+Signal	Status	Value	Evidence
+Honeypot signal	NOT DETECTED	Not flagged	Trading Analysis
+Buy tax	DETECTED	0.0%	Trading Analysis
+Sell tax	DETECTED	0.0%	Trading Analysis
+Transfer tax	UNKNOWN	UNKNOWN	—
+Sell restriction	NOT DETECTED	None detected	Trading Analysis
+Buy restriction	NOT DETECTED	None detected	Trading Analysis
+Max wallet limit	DETECTED	Enforced	Trading Analysis
+Max transaction limit	UNKNOWN	UNKNOWN	—
+04
+Holder & Liquidity Analysis
+HOLDER SUMMARY
+Total holders	626
+Top 1 holder	6.3%
+Top 5 holders	17.8%
+Top 10 holders	26.8%
+Owner / deployer holdings	0.0%
+Burned supply	UNKNOWN
+Liquidity holder addresses	2
+Holder Concentration — Interpretation
+WHAT  The top 10 holders control 26.8% of the detected supply.
+WHY  High concentration means a large share of the detected supply is held by a small number of addresses, which may give those addresses greater influence over circulating supply.
+HOW  Check whether major addresses are liquidity pools, exchanges, burn addresses, contracts, treasuries, or individual wallets before drawing a risk conclusion.
+LIQUIDITY
+LIQUIDITY DATA UNAVAILABLE — no active trading pair found.
+05
+Market & Deployer Signals
+MARKET
+MARKET DATA UNAVAILABLE.
+DEPLOYER
+Deployer address	
+0xddc3...c2b9
+
+Deployment date	UNKNOWN
+Token concentration	0.0%
+Address Relationships
+Verified relationships only
+DEPLOYER
+0xddc3...c2b9
+
+↓
+TOKEN CONTRACT
+0x7c5B...2f0C
+
+06
+Key Findings
+Status	Finding	Why it matters	CONFIDENCE
+HIGH	Trading tax can be changed	Tax could be increased by a privileged address, which may impair or block sells after buyers enter.	HIGH
+HIGH	Owner can blacklist addresses	Selected holders can be frozen out of buying or selling.	HIGH
+MEDIUM	Whitelist controls present	Whitelisting can create unfair trading conditions between wallets.	MEDIUM
+LOW	Max wallet limit	Anti-whale limits are common but can also restrict normal holders.	MEDIUM
+POSITIVE	Source code verified	Verified code can be independently reviewed by anyone.	HIGH
+View all 10 findings
+07
+Evidence Register
+ID	Finding	Source	CONFIDENCE	
+E-001	Trading tax can be changed	Security Analysis	HIGH	
+E-002	Owner can blacklist addresses	Security Analysis	HIGH	
+E-003	Whitelist controls present	Security Analysis	MEDIUM	
+E-004	Max wallet limit	Security Analysis	MEDIUM	
+Data Coverage & Limitations
+How much evidence supports this report
+OVERALL EVIDENCE COVERAGE
+67% PARTIAL
+Contract
+100% · FULL
+Trading
+100% · FULL
+Holder
+100% · FULL
+Liquidity
+0% · UNKNOWN
+Deployer
+100% · FULL
+Market / Project
+0% · UNKNOWN
+08
+Final Assessment
+OVERALL RISK
+MODERATE
+Score
+31 / 100
+CONFIDENCE
+MEDIUM
+PRIMARY RISKS
+Trading tax can be changed
+Owner can blacklist addresses
+Whitelist controls present
+POSITIVE SIGNALS
+Source code verified
+Ownership renounced
+No honeypot signal
+DATA LIMITATIONS
+LIQUIDITY DATA UNAVAILABLE — no active trading pair found.
+Categories with insufficient data (liquidity, market) were excluded and their weight redistributed proportionally across the 4 scored categories.
+Unknown categories are not treated as safe. They are excluded from the current calculation because sufficient evidence is unavailable. This reduces analytical confidence.
+WHAT TO VERIFY BEFORE TRUSTING THIS TOKEN
+[ ]
+Verify the contract address against the official project source
+[ ]
+Review owner permissions (mint, pause, blacklist, tax)
+[ ]
+Review holder concentration and deployer holdings
+[ ]
+Review liquidity depth and lock status
+[ ]
+Review trading restrictions and taxes
+[ ]
+Verify any audit claims independently
+[ ]
+Review deployer activity and history
+This is a contract risk assessment based on available public data, not a definitive scam verdict and not financial advice. It does not provide buy, sell, long, or short recommendations. Always do your own research.

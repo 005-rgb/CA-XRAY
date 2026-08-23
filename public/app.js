@@ -1287,6 +1287,79 @@ function renderExecutiveSummary(scan) {
   </section>`;
 }
 
+function renderProjectContext(scan) {
+  const project = scan.project || {};
+  const liquidity = scan.liquidity || {};
+  const pair = liquidity.pair;
+  const website = project.website;
+  const socials = project.socials || project.socialLinks;
+  const asPoint = (value) => value && typeof value === "object" && "value" in value
+    ? value
+    : value === null || value === undefined || value === "" ? null : { status: "VALID", value };
+  const identityStatus = project.addressConsistency?.value === true ? "VERIFIED" :
+    project.addressConsistency?.value === false ? "MISMATCH" : "UNKNOWN";
+  return `<section class="report-section full model-context-section">${sectionHeading("02", "PROJECT CONTEXT", "02 / 16")}
+    <div class="context-overview-grid">
+      <div class="metric-grid">
+        ${metric("Project name", scan.token?.name)}
+        ${metric("Token / symbol", scan.token?.symbol)}
+        ${metric("Contract", scan.contract?.address, truncateAddress)}
+        ${metric("Network", scan.network?.name)}
+        ${metric("Official website", website)}
+        ${metric("Official socials", asPoint(socials))}
+      </div>
+      <div class="context-status-card">
+        <div class="data-label">PROJECT IDENTITY STATUS</div>
+        ${statusPill({ status: identityStatus }, identityStatus)}
+        <p>${identityStatus === "VERIFIED"
+          ? "The available project evidence is consistent with the scanned contract."
+          : identityStatus === "MISMATCH"
+            ? "Available project evidence does not match the scanned contract."
+            : "There is insufficient evidence to determine the project-contract relationship."}</p>
+      </div>
+    </div>
+    <div class="context-market-strip">
+      <div><span class="data-label">PRIMARY TRADING PAIR</span>${metaValue(pair, truncateAddress)}</div>
+      <div><span class="data-label">DEX / VENUE</span>${metaValue(liquidity.dex)}</div>
+      <div><span class="data-label">ACTIVE PAIRS</span>${metaValue(asPoint(liquidity.activePairs))}</div>
+      <div><span class="data-label">TRADING PAIR AGE</span>${metaValue(asPoint(liquidity.pairAge))}</div>
+    </div>
+    <p class="pair-note">Source: public market data. Trading-pair age reflects the indexed pair, not necessarily the age of the project.</p>
+  </section>`;
+}
+
+function renderDataConsistency(scan) {
+  const contract = scan.contract || {};
+  const network = scan.network || {};
+  const security = scan.security || {};
+  const liquidity = scan.liquidity || {};
+  const asPoint = (value) => value && typeof value === "object" && "status" in value
+    ? value
+    : value === true ? { status: "VALID", value: true } : null;
+  const checks = [
+    ["Token contract", asPoint(contract.validated), contract.validated === true ? "PASS" : "UNKNOWN"],
+    ["Pair contract", asPoint(liquidity.pair), liquidity.pair?.status === "VALID" ? "PASS" : "UNKNOWN"],
+    ["Primary pair", asPoint(liquidity.pair), liquidity.pair ? "PASS" : "UNKNOWN"],
+    ["DEX match", asPoint(liquidity.dex), liquidity.dex ? "PASS" : "UNKNOWN"],
+    ["Pair ↔ market data", asPoint(liquidity.liquidityUsd), liquidity.liquidityUsd?.status === "VALID" ? "PASS" : "UNKNOWN"],
+    ["Price orientation", asPoint(liquidity.price), liquidity.price ? "PASS" : "UNKNOWN"],
+    ["Market cap / FDV", asPoint(scan.market?.fdv), scan.market?.fdv ? "PASS" : "UNKNOWN"],
+  ];
+  return `<section class="report-section full model-context-section">${sectionHeading("03", "DATA CONSISTENCY", "03 / 16")}
+    <div class="consistency-grid">
+      <div class="metric-grid">
+        ${checks.map(([label, point, fallback]) => `<div class="metric"><div class="data-label">${escapeHtml(label)}</div><div class="consistency-value">${statusPill(point || { status: fallback }, point?.status === "VALID" || point?.value === true ? "PASS" : fallback)}</div></div>`).join("")}
+      </div>
+      <div class="consistency-note">
+        <div class="data-label">NETWORK VALIDATION</div>
+        ${statusPill({ status: network.validated ? "VERIFIED" : "UNKNOWN" }, network.validated ? "PASS" : "UNKNOWN")}
+        <p>Data consistency checks assess evidence integrity only. They are not a risk score and do not change the risk assessment.</p>
+        ${security.sourceVerified ? `<span class="data-label">CONTRACT EVIDENCE</span>${statusPill(security.sourceVerified, security.sourceVerified.value === true ? "VERIFIED" : "UNKNOWN")}` : ""}
+      </div>
+    </div>
+  </section>`;
+}
+
 function renderRiskBreakdown(scan) {
   const categories = scan.risk?.categories || {};
   const rows = Object.entries(categoryLabels).map(([key, label]) => {
@@ -1643,7 +1716,24 @@ function renderDashboardReport(scan) {
           <section class="side-card"><div class="card-kicker">EVIDENCE SOURCES</div><div class="evidence-count"><strong>${sourceCount}</strong><span>Total Sources</span></div><div class="evidence-breakdown"><span><b class="green-text">${Math.max(0, sourceCount - partialCount)}</b> Successful</span><span><b class="orange-text">${partialCount}</b> Partial</span><span><b class="red-text">0</b> Failed</span></div><button type="button" class="side-link" id="open-evidence">View Evidence <span>→</span></button></section>
         </div>
       </div>
-      <div id="dashboard-deep" class="dashboard-deep" hidden>${renderUserImpacts(scan)}${renderRiskBreakdown(scan)}${renderForensics(scan)}${renderHolderLiquidity(scan)}${renderMarketDeployer(scan)}${renderFindings(scan)}${renderEvidence(scan)}${renderFinalAssessment(scan)}</div>
+       <div id="dashboard-deep" class="dashboard-deep" hidden>
+         ${renderExecutiveSummary(scan)}
+         ${renderProjectContext(scan)}
+         ${renderDataConsistency(scan)}
+         ${renderRiskProfile(scan)}
+         ${renderCapabilities(scan)}
+         ${renderPowerMap(scan)}
+         ${renderExitability(scan)}
+         ${renderUserImpacts(scan)}
+         ${renderRiskBreakdown(scan)}
+         ${renderForensics(scan)}
+         ${renderHolderLiquidity(scan)}
+         ${renderMarketDeployer(scan)}
+         ${renderFindings(scan)}
+         ${renderEvidence(scan)}
+         ${renderCoverage(scan)}
+         ${renderFinalAssessment(scan)}
+       </div>
     </div>`;
 }
 
