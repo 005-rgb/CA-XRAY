@@ -64,6 +64,24 @@ function normalizedPoint({
   };
 }
 
+function unverifiedSignalPoint({
+  value,
+  providerId,
+  adapterVersion,
+  retrievedAt,
+  evidenceReference = null,
+} = {}) {
+  return normalizedPoint({
+    value,
+    providerId,
+    adapterVersion,
+    retrievedAt,
+    evidenceReference,
+    confidence: "LOW",
+    status: "UNVERIFIED_SIGNAL",
+  });
+}
+
 function normalizedResult({
   providerId,
   adapterVersion,
@@ -96,5 +114,6 @@ module.exports = {
   EVIDENCE_SCHEMA_VERSION,
   PROVIDER_RESULT_STATUS,
   normalizedPoint,
+  unverifiedSignalPoint,
   normalizedResult,
 };

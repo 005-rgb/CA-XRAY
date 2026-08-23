@@ -13,6 +13,8 @@ const STATUS = Object.freeze({
   UNAVAILABLE: "UNAVAILABLE",
   DEMO: "DEMO",
   ERROR: "ERROR",
+  NOT_CHECKED: "NOT_CHECKED",
+  UNVERIFIED_SIGNAL: "UNVERIFIED_SIGNAL",
 });
 
 const CATEGORY_WEIGHTS = Object.freeze({
@@ -82,6 +84,10 @@ function unknown(source = "No provider evidence") {
   return point(null, STATUS.UNKNOWN, source, "UNKNOWN", null, null, false, PROVIDER_RESULT_STATUS.UNKNOWN);
 }
 
+function notChecked(source = "Provider for this field is not enabled") {
+  return point(null, STATUS.NOT_CHECKED, source, "LOW", null, null, false, PROVIDER_RESULT_STATUS.UNKNOWN);
+}
+
 function errorPoint(source, message) {
   return {
     ...point(null, STATUS.ERROR, source, "UNKNOWN", null, null, false, PROVIDER_RESULT_STATUS.PROVIDER_ERROR),
@@ -98,7 +104,8 @@ function hasEvidence(dataPoint, mode) {
       && dataPoint.status !== STATUS.ERROR
       && (dataPoint.evidenceStatus === PROVIDER_RESULT_STATUS.VALID
         || dataPoint.status === STATUS.VERIFIED
-        || dataPoint.status === STATUS.DETECTED);
+         || dataPoint.status === STATUS.DETECTED
+         || dataPoint.status === STATUS.UNVERIFIED_SIGNAL);
 }
 
 function statusForValue(value, source, retrievedAt, mode = "LIVE", confidence = "HIGH", derived = false) {
@@ -294,7 +301,11 @@ function calculateCategoryScores(scan) {
   const m = scan.market;
   const p = scan.project;
   const scored = (dataPoint) => hasEvidence(dataPoint, mode);
-  const add = (dataPoint, value) => (scored(dataPoint) && dataPoint.value === true ? value : 0);
+  const signalWeight = (dataPoint, value) => {
+    if (!scored(dataPoint) || dataPoint.value !== true) return 0;
+    return value * (dataPoint.status === STATUS.UNVERIFIED_SIGNAL ? 0.3 : 1);
+  };
+  const add = (dataPoint, value) => signalWeight(dataPoint, value);
   const numeric = (dataPoint) => scored(dataPoint) && Number.isFinite(Number(dataPoint.value)) ? Number(dataPoint.value) : null;
 
   let contract = 0;
@@ -306,6 +317,9 @@ function calculateCategoryScores(scan) {
   contract += add(s.isUpgradeable, 15);
   contract += add(s.canWithdraw, 15);
   if (scored(s.sourceVerified) && s.sourceVerified.value === false) contract += 10;
+  if (s.ownerControl?.value === "RENOUNCED" && s.isUpgradeable?.value !== true) {
+    contract *= 0.1;
+  }
   contract = clamp(contract);
 
   let trading = 0;
@@ -397,6 +411,7 @@ function calculateCategoryScores(scan) {
 
   const eligible = Object.entries(categories).filter(([, value]) => value.score !== null);
   const availableWeight = eligible.reduce((sum, [, value]) => sum + value.originalWeight, 0);
+  const unscoredWeight = Math.max(0, 1 - availableWeight);
   let finalScore = null;
   if (
     scan.contract.validated &&
@@ -406,8 +421,8 @@ function calculateCategoryScores(scan) {
     availableWeight >= 0.6
   ) {
     const weighted = eligible.reduce((sum, [, value]) => sum + value.score * value.originalWeight, 0);
-    finalScore = clamp(weighted / availableWeight);
-    for (const [, value] of eligible) value.appliedWeight = value.originalWeight / availableWeight;
+    finalScore = clamp(weighted);
+    for (const [, value] of eligible) value.appliedWeight = value.originalWeight;
   }
   const partialData = Object.values(categories).some((category) => category.score === null || category.status === "PARTIAL");
   const confidence = finalScore === null ? "UNKNOWN" : reliabilityConfidence(scan, categories);
@@ -425,6 +440,12 @@ function calculateCategoryScores(scan) {
       contribution: value.score * value.originalWeight,
     })),
     availableWeight,
+    unscoredWeight,
+    unscoredWeightPct: Math.round(unscoredWeight * 100),
+    scoreRange: finalScore === null ? { min: null, max: null } : {
+      min: Math.round(finalScore * 100) / 100,
+      max: Math.round((finalScore + unscoredWeight * 100) * 100) / 100,
+    },
   };
 }
 
@@ -504,10 +525,31 @@ function freshnessScore(scan) {
 }
 
 function findingConfidence(scan, dataPoint) {
+  if (dataPoint?.status === STATUS.UNVERIFIED_SIGNAL || dataPoint?.status === STATUS.NOT_CHECKED) return "LOW";
   if (!dataPoint || dataPoint.status === STATUS.UNKNOWN || dataPoint.status === STATUS.UNAVAILABLE || dataPoint.status === STATUS.ERROR) return "UNKNOWN";
   if (scan.mode === "DEMO") return "HIGH";
   if (dataPoint.confidence === "HIGH" && dataPoint.retrievedAt) return "HIGH";
   return "MEDIUM";
+}
+
+function verifyCapabilitySignals(capabilities, { verifiedAbi = [], sourceVerified = false } = {}) {
+  const names = new Set((verifiedAbi || [])
+    .map((item) => typeof item === "string" ? item : item?.name)
+    .filter(Boolean)
+    .map((name) => String(name).toLowerCase()));
+  const functions = {
+    canMint: ["mint", "_mint"],
+    canBlacklist: ["blacklist", "setblacklist"],
+    canPause: ["pause", "unpause"],
+    canWhitelist: ["whitelist", "setwhitelist"],
+    canChangeTax: ["settax", "setbuytax", "setselltax"],
+    maxTransactionRestriction: ["setmaxtx", "setmaxwallet", "setmaxtransaction"],
+    canWithdraw: ["withdraw", "rescue"],
+  };
+  return Object.fromEntries(Object.entries(capabilities || {}).map(([key, value]) => [
+    key,
+    value === true && sourceVerified ? (functions[key] || []).some((name) => names.has(name)) : value,
+  ]));
 }
 
 function generateFindings(scan, risk) {
@@ -532,6 +574,8 @@ function generateFindings(scan, risk) {
       id, severity, title, what, why, evidence, source,
       category: categoryForFinding(id),
       confidence: findingConfidence(scan, dataPoint),
+      risk_interpretation_confidence: findingConfidence(scan, dataPoint),
+      data_retrieval_confidence: dataPoint.confidence || "UNKNOWN",
       evidenceId, status: dataPoint.status, impact, positive,
       retrievedAt: dataPoint.retrievedAt,
     });
@@ -596,7 +640,7 @@ function evidencePoint(scan, dataPoint) {
 }
 
 function trueSignal(scan, dataPoint) {
-  return evidencePoint(scan, dataPoint) && dataPoint.value === true;
+  return evidencePoint(scan, dataPoint) && dataPoint.value === true && dataPoint.status !== STATUS.UNVERIFIED_SIGNAL;
 }
 
 function falseSignal(scan, dataPoint) {
@@ -619,7 +663,11 @@ function intelligenceConfidence(scan, dataPoints) {
 function capabilityControl(scan, dataPoint) {
   const ownerControl = scan.security?.ownerControl;
   if (!evidencePoint(scan, dataPoint)) return "UNKNOWN";
-  if (evidencePoint(scan, ownerControl)) return ownerControl.value || "UNKNOWN";
+  if (evidencePoint(scan, ownerControl)) {
+    return ownerControl.value === "RENOUNCED"
+      ? "NO ACTIVE CONTROL — OWNERSHIP RENOUNCED"
+      : ownerControl.value || "UNKNOWN";
+  }
   return "UNKNOWN";
 }
 
@@ -670,9 +718,13 @@ function buildIntelligence(scan, risk) {
   ];
   const capabilities = capabilityDefinitions.map(([key, label, meaning, impact, severity]) => {
     const dataPoint = key === "ownerControl" ? s.ownerControl : key === "maxTransactionRestriction" ? t.maxTransactionRestriction : s[key];
-    const detected = key === "ownerControl" ? dataPoint?.value === "ACTIVE" : trueSignal(scan, dataPoint);
+    const detected = key === "ownerControl"
+      ? dataPoint?.value === "ACTIVE"
+      : trueSignal(scan, dataPoint) || dataPoint?.status === STATUS.UNVERIFIED_SIGNAL;
     const notDetected = key !== "ownerControl" && falseSignal(scan, dataPoint);
-    const status = !evidencePoint(scan, dataPoint) ? "UNKNOWN" : detected ? "DETECTED" : notDetected ? "NOT_DETECTED" : formatValue(dataPoint.value);
+    const status = dataPoint?.status === STATUS.UNVERIFIED_SIGNAL
+      ? STATUS.UNVERIFIED_SIGNAL
+      : !evidencePoint(scan, dataPoint) ? (dataPoint?.status || "UNKNOWN") : detected ? "DETECTED" : notDetected ? "NOT_DETECTED" : formatValue(dataPoint.value);
     return {
       key, label, status, detected, meaning, impact: detected ? impact : "No observed addition.",
       control: detected ? capabilityControl(scan, dataPoint) : "—",
@@ -682,9 +734,13 @@ function buildIntelligence(scan, risk) {
       owner: detected ? (valueForPoint(s.ownerAddress) || null) : null,
     };
   });
-  const detectedCapabilities = capabilities.filter((capability) => capability.detected);
   const owner = valueForPoint(s.ownerAddress) || (evidencePoint(scan, d.address) ? d.address.value : null);
-  const activeOwner = trueSignal(scan, s.ownerControl) || (owner && owner !== "0x0000000000000000000000000000000000000000");
+  const ownerRenounced = String(owner || "").toLowerCase() === "0x0000000000000000000000000000000000000000"
+    || s.ownerControl?.value === "RENOUNCED";
+  const proxyAdminActive = s.proxyAdminActive?.value === true || s.adminControlFullyRemoved?.value === false;
+  const activeOwner = proxyAdminActive || (!ownerRenounced && (trueSignal(scan, s.ownerControl) || Boolean(owner)));
+  const detectedCapabilities = capabilities.filter((capability) =>
+    capability.detected && (!ownerRenounced || proxyAdminActive || capability.key === "isUpgradeable"));
   const impactItems = scan.findings.filter((finding) => !finding.positive).slice(0, 8).map((finding) => ({
     id: finding.id,
     title: finding.title,
@@ -743,7 +799,7 @@ function buildIntelligence(scan, risk) {
     powerMap: {
       owner: owner ? truncateAddress(owner) : "UNKNOWN",
       ownerFull: owner,
-      control: activeOwner ? "ACTIVE" : evidencePoint(scan, s.ownerControl) ? s.ownerControl.value : "UNKNOWN",
+       control: activeOwner ? "ACTIVE" : ownerRenounced ? "NO ACTIVE CONTROL — OWNERSHIP RENOUNCED" : evidencePoint(scan, s.ownerControl) ? s.ownerControl.value : "UNKNOWN",
       capabilities: detectedCapabilities.map((capability) => capability.label),
       impacts: detectedCapabilities.map((capability) => capability.impact),
     },
@@ -806,6 +862,13 @@ function finalizeScan(scan) {
   scan.reliability = calculateReliability(scan, risk);
   scan.reliabilityScore = scan.reliability.score;
   scan.findings = generateFindings(scan, risk);
+  scan.findings.forEach((finding) => {
+    finding.riskInterpretationConfidence = finding.risk_interpretation_confidence;
+    finding.dataRetrievalConfidence = finding.data_retrieval_confidence;
+  });
+  if (scan.findings.some((finding) => !finding.positive && finding.risk_interpretation_confidence === "LOW")) {
+    scan.risk.confidence = "LOW";
+  }
   scan.intelligence = buildIntelligence(scan, risk);
   if (risk.partialData) scan.stages.push("PARTIAL DATA");
   else scan.stages.push("COMPLETE");
@@ -1038,11 +1101,17 @@ async function scanLive({
     trading: ["buyTax", "sellTax", "transferTax", "sellRestriction", "buyRestriction", "maliciousTradingSignal", "taxChangeable", "maxTransactionRestriction", "maxWalletRestriction", "tradingPause", "hasPair"],
     holders: ["totalHolders", "top10Percent", "deployerPercent"],
     deployer: ["address"],
-    project: ["website", "addressConsistency", "auditClaim"],
+    project: ["website", "socials", "addressConsistency", "auditClaim"],
   };
   for (const [section, fields] of Object.entries(missing)) {
     for (const field of fields) {
-      if (!scan[section][field]) scan[section][field] = unknown("No normalized provider evidence");
+      if (!scan[section][field]) {
+        const notCheckedCapability = section === "security"
+          && ["canMint", "canBlacklist", "canWhitelist", "canPause", "canChangeTax", "isUpgradeable", "canWithdraw", "ownerAddress", "ownerControl"].includes(field);
+        scan[section][field] = notCheckedCapability
+          ? notChecked("Capability or ownership provider is not enabled")
+          : unknown("No normalized provider evidence");
+      }
     }
   }
   scan.stages.push(successes ? "COMPLETE" : "ERROR");
@@ -1093,4 +1162,5 @@ module.exports = {
   scanLive,
   formatValue,
   formatCurrency,
+  verifyCapabilitySignals,
 };

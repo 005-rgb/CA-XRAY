@@ -417,6 +417,7 @@ function statusPill(dataPoint, valueOverride = null) {
 
 function pointText(dataPoint, formatter = formatValue) {
   if (!dataPoint || dataPoint.value === null || dataPoint.value === undefined || dataPoint.value === "") {
+    if (dataPoint?.status === "NOT_CHECKED") return `Not available from current data source ${statusPill(dataPoint)}`;
     return statusPill(dataPoint);
   }
   return `${escapeHtml(formatter(dataPoint.value))} ${statusPill(dataPoint)}`;
@@ -428,7 +429,7 @@ function pointEvidence(dataPoint) {
 }
 
 function evidenceLabel(dataPoint) {
-  if (!dataPoint || dataPoint.status === "UNKNOWN" || dataPoint.status === "UNAVAILABLE" || dataPoint.status === "ERROR") return "UNKNOWN";
+  if (!dataPoint || ["UNKNOWN", "NOT_CHECKED", "UNAVAILABLE", "ERROR"].includes(dataPoint.status)) return "UNKNOWN";
   return currentScan?.mode === "DEMO" ? "Contract Analysis (Demo)" : "Contract Analysis";
 }
 
@@ -1370,11 +1371,11 @@ function renderRiskBreakdown(scan) {
   }).join("");
   const calculations = scan.risk?.calculation || [];
   const calcLines = calculations.map((item) => `<div><strong>${escapeHtml(categoryLabels[item.name])}:</strong> ${Math.round(item.score)} × ${(item.originalWeight * 100).toFixed(0)}% = ${(item.contribution).toFixed(2)} <span>→ applied ${(item.appliedWeight * 100).toFixed(2)}%</span></div>`).join("");
-  const finalLine = scan.risk?.finalScore === null ? "Final: INSUFFICIENT DATA FOR RELIABLE SCORE" : `Final: ${calculations.reduce((sum, item) => sum + item.contribution, 0).toFixed(2)} ÷ ${(scan.risk.availableWeight * 100).toFixed(2)}% = ${scan.risk.finalScore.toFixed(2)}`;
+   const finalLine = scan.risk?.finalScore === null ? "Final: INSUFFICIENT DATA FOR RELIABLE SCORE" : `Final: ${calculations.reduce((sum, item) => sum + item.contribution, 0).toFixed(2)} / 100 = ${scan.risk.finalScore.toFixed(2)} (range ${scan.risk.scoreRange?.min ?? "UNKNOWN"}–${scan.risk.scoreRange?.max ?? "UNKNOWN"})`;
   const r = scan.reliability?.components || {};
   return `<section class="report-section full">${sectionHeading("02", "RISK BREAKDOWN", "02 / 08")}
     <div class="table-wrap"><table><thead><tr><th>CATEGORY</th><th>SCORE</th><th>ORIGINAL WEIGHT</th><th>APPLIED WEIGHT</th><th>STATUS</th><th>COVERAGE</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="breakdown-note">${scan.risk?.partialData ? "This report is marked PARTIAL DATA. UNKNOWN and UNAVAILABLE categories are omitted from the numerator; their original weights are redistributed only across eligible categories." : "All original category weights are applied because each category has sufficient evidence in this snapshot."}</p>
+     <p class="breakdown-note">${scan.risk?.partialData ? `This report is marked PARTIAL DATA. Unknown categories are not redistributed. Risk from available data: ${scan.risk.scoreRange?.min ?? "UNKNOWN"}–${scan.risk.scoreRange?.max ?? "UNKNOWN"} / 100; unscored weight: ${scan.risk.unscoredWeightPct ?? "UNKNOWN"}%.` : "All original category weights are applied because each category has sufficient evidence in this snapshot."}</p>
     <div class="calculation"><div><strong>HOW THE SCORE WAS CALCULATED</strong></div>${calcLines || "<div>Category scores are not eligible for a final calculation.</div>"}<div class="calc-total">${escapeHtml(finalLine)}</div></div>
     <div class="calculation"><div><strong>RELIABILITY CALCULATION</strong></div><div>E: ${r.E ?? 0} × 35%</div><div>S: ${r.S ?? 0} × 20%</div><div>F: ${r.F ?? 0} × 15%</div><div>C: ${r.C ?? 0} × 15%</div><div>R: ${r.R ?? 0} × 10%</div><div>I: ${r.I ?? 0} × 5%</div><div class="calc-total">Reliability: ${scan.reliability ? Math.round(scan.reliability.score) : "UNKNOWN"} / 100</div></div>
   </section>`;
@@ -1766,12 +1767,12 @@ function renderCapabilities(scan) {
   const intelligence = scan.intelligence || {};
   const capabilities = intelligence.capabilities || [];
   return `<section class="report-section full intelligence-section">${sectionHeading("03", "WHAT CAN THIS CONTRACT DO?", "03 / 16")}
-    <p class="section-intro">Technical permissions are translated into potential user impact. A detected capability is a risk signal, not proof of malicious behavior.</p>
+     <p class="section-intro">Technical permissions are translated into potential user impact. UNVERIFIED_SIGNAL means a bytecode/provider signal was not confirmed by verified source or ABI.</p>
     <div class="capability-grid">${capabilities.map((capability) => `<article class="capability-card ${capability.detected ? "detected" : ""}">
       <div class="capability-head"><h3>${escapeHtml(capability.label)}</h3>${statusPill({ status: capability.status }, capability.status)}</div>
-      <div class="data-label">MEANING</div><p>${escapeHtml(capability.detected ? capability.meaning : capability.status === "UNKNOWN" ? "Not enough evidence to determine this capability." : "The capability was not detected in available evidence.")}</p>
+       <div class="data-label">MEANING</div><p>${escapeHtml(capability.status === "UNVERIFIED_SIGNAL" ? "Provider reported a bytecode pattern, but verified source/ABI confirmation is unavailable." : capability.detected ? capability.meaning : capability.status === "UNKNOWN" || capability.status === "NOT_CHECKED" ? "This capability was not checked because the required provider is unavailable." : "The capability was not detected in available evidence.")}</p>
       <div class="capability-meta"><div><span class="data-label">POTENTIAL IMPACT</span><strong>${escapeHtml(capability.impact)}</strong></div><div><span class="data-label">CONTROL</span><strong>${escapeHtml(capability.control)}</strong></div></div>
-      <div class="capability-foot"><span>EVIDENCE: ${escapeHtml(capability.detected || capability.status === "NOT_DETECTED" ? evidenceLabel({ status: capability.status }) : "UNKNOWN")}</span><span>CONFIDENCE: ${escapeHtml(capability.confidence)}</span></div>
+       <div class="capability-foot"><span>EVIDENCE: ${escapeHtml(capability.detected || capability.status === "NOT_DETECTED" || capability.status === "UNVERIFIED_SIGNAL" ? evidenceLabel({ status: capability.status }) : "UNKNOWN")}</span><span>RISK CONFIDENCE: ${escapeHtml(capability.confidence)}</span></div>
     </article>`).join("")}</div>
   </section>`;
 }

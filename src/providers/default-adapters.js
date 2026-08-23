@@ -6,6 +6,7 @@ const {
 const { CircuitBreaker, withProviderPolicy } = require("../security/controls");
 const {
   normalizedPoint,
+  unverifiedSignalPoint,
   normalizedResult,
   PROVIDER_RESULT_STATUS,
 } = require("./contracts");
@@ -49,6 +50,19 @@ function makePoint(value, context, evidenceReference = null, transform = null) {
   });
 }
 
+function makeCapabilityPoint(value, context, evidenceReference, verified = false) {
+  if (value === true && !verified) {
+    return unverifiedSignalPoint({
+      value,
+      providerId: context.providerId,
+      adapterVersion: ADAPTER_VERSION,
+      retrievedAt: context.retrievedAt,
+      evidenceReference,
+    });
+  }
+  return makePoint(value, context, evidenceReference);
+}
+
 async function fetchJson(url, provider, timeout = 12_000, retries = 1) {
   assertControlledProviderUrl(url, CONTROLLED_PROVIDER_ORIGINS);
   if (!fetchJson.breakers) fetchJson.breakers = new Map();
@@ -86,7 +100,7 @@ async function fetchJson(url, provider, timeout = 12_000, retries = 1) {
   });
 }
 
-function normalizeGoPlus({ response, retrievedAt, network, providerId }) {
+function normalizeGoPlus({ response, retrievedAt, network, providerId, verifiedCapabilities = {} }) {
   const sourceContext = { providerId, retrievedAt };
   if (!isProviderObject(response) || ![1, "1"].includes(response.code) || !isProviderObject(response.result)) {
     return normalizedResult({
@@ -122,7 +136,7 @@ function normalizeGoPlus({ response, retrievedAt, network, providerId }) {
   };
   const security = Object.fromEntries(Object.entries(boolMap).map(([name, keyName], index) => [
     name,
-    makePoint(providerBoolean(data, keyName), sourceContext, `GP-${String(index + 1).padStart(3, "0")}`),
+     makeCapabilityPoint(providerBoolean(data, keyName), sourceContext, `GP-${String(index + 1).padStart(3, "0")}`, verifiedCapabilities[name] === true),
   ]));
   const explicitTaxChange = providerBoolean(data, "can_set_tax");
   security.canChangeTax = explicitTaxChange === null
@@ -145,8 +159,8 @@ function normalizeGoPlus({ response, retrievedAt, network, providerId }) {
     buyRestriction: makePoint(providerBoolean(data, "cannot_buy"), sourceContext, "GP-016"),
     maliciousTradingSignal: makePoint(providerBoolean(data, "is_honeypot"), sourceContext, "GP-017"),
     taxChangeable: security.canChangeTax,
-    maxTransactionRestriction: makePoint(providerBoolean(data, "anti_whale_modifiable"), sourceContext, "GP-018"),
-    maxWalletRestriction: makePoint(providerBoolean(data, "anti_whale_modifiable"), sourceContext, "GP-019"),
+    maxTransactionRestriction: makeCapabilityPoint(providerBoolean(data, "anti_whale_modifiable"), sourceContext, "GP-018", verifiedCapabilities.maxTransactionRestriction === true),
+    maxWalletRestriction: makeCapabilityPoint(providerBoolean(data, "anti_whale_modifiable"), sourceContext, "GP-019", verifiedCapabilities.maxWalletRestriction === true),
     tradingPause: security.canPause,
     hasPair: makePoint(null, sourceContext, "GP-020"),
   };
@@ -226,18 +240,32 @@ function normalizeDexScreener({ response, retrievedAt, network, address, provide
     change24h: liquidity.change24h,
     change7d: q(null, "DS-008"),
   };
+  const info = isProviderObject(pair.info) ? pair.info : {};
+  const websites = Array.isArray(info.websites) ? info.websites : [];
+  const socials = Array.isArray(info.socials) ? info.socials : [];
+  const website = websites.find((item) => typeof item === "string") || websites.find((item) => item?.url)?.url || null;
+  const socialLinks = socials.map((item) => typeof item === "string" ? item : item?.url || item?.handle).filter(Boolean);
+  const pairTimestamp = Number(pair.pairCreatedAt);
+  const pairAge = Number.isFinite(pairTimestamp) ? new Date(pairTimestamp).toISOString() : null;
   return normalizedResult({
     providerId,
     adapterVersion: ADAPTER_VERSION,
     status: PROVIDER_RESULT_STATUS.VALID,
     retrievedAt,
     evidence: {
-      liquidity,
+      liquidity: {
+        ...liquidity,
+        pairAge: q(pairAge, "DS-012"),
+      },
       market,
+      project: {
+        website: q(website, "DS-010"),
+        socials: q(socialLinks.length ? socialLinks : null, "DS-011"),
+      },
       trading: { hasPair: q(true, "DS-009") },
       token: {
-        name: q(pair.baseToken?.name, "DS-010"),
-        symbol: q(pair.baseToken?.symbol, "DS-011"),
+        name: q(pair.baseToken?.name, "DS-013"),
+        symbol: q(pair.baseToken?.symbol, "DS-014"),
       },
     },
   });

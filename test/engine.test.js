@@ -35,13 +35,15 @@ test("demo scenarios produce ordered risk outcomes", () => {
   assert.ok(moderate > low);
 });
 
-test("category weights and transparent redistribution are deterministic", () => {
+test("category weights are not redistributed when a category is unknown", () => {
   const scan = createDemoScan("high");
   for (const key of Object.keys(scan.holders)) scan.holders[key].status = "UNKNOWN";
   const risk = calculateCategoryScores(scan);
   assert.equal(risk.categories.holder.score, null);
   assert.ok(risk.availableWeight < 1);
-  assert.equal(risk.categories.contract.appliedWeight, CATEGORY_WEIGHTS.contract / risk.availableWeight);
+  assert.equal(risk.categories.contract.appliedWeight, CATEGORY_WEIGHTS.contract);
+  assert.equal(risk.unscoredWeightPct, 15);
+  assert.deepEqual(risk.scoreRange, { min: risk.finalScore, max: risk.finalScore + 15 });
   assert.equal(Number.isFinite(risk.finalScore), true);
 });
 

@@ -20,6 +20,9 @@ npm test
 - Unknown, unavailable, and provider-error values remain explicitly labeled and are never converted to zero.
 - Demo fixtures never mix with live provider data.
 - Risk score and reliability score are separate calculations.
+- Risk scoring never redistributes unknown category weight. Reports expose `score_range` and `unscored_weight_pct`; available-data risk is separated from coverage.
+- GoPlus Security is the active capability/ownership provider; DexScreener is the active market-pair provider. DexScreener does not provide holders, decimals, ABI/source verification, or ownership. GoPlus capability positives without independent verified ABI confirmation are `UNVERIFIED_SIGNAL` with LOW interpretation confidence.
+- `pairCreatedAt` is displayed as Pair Age, never Contract Age. Missing decimals/holders/capabilities use explicit unavailable/not-checked semantics rather than guessed defaults.
 - Phase 0 targets 100,000 MAU, 2,000 concurrent users, 300 scans/minute, RPO 15 minutes, RTO 1 hour, and 99.9% availability.
 - Live scans use an asynchronous job contract; the development queue is local only and production requires a shared durable queue.
 - Clerk is provisioned for authentication. Stripe is the planned billing provider, but paid checkout remains disabled until its connection is authorized.
