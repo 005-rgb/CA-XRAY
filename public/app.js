@@ -1857,12 +1857,24 @@ function renderReport(scan) {
   scanHistory.hidden = true;
   document.querySelector("#new-scan").classList.add("report-route");
   document.querySelector("#dashboard").classList.add("private-heading");
-  document.querySelector("#download-report")?.addEventListener("click", () => window.print());
+  const deep = document.querySelector("#dashboard-deep");
+  let restoreDeepAfterPrint = false;
+  document.querySelector("#download-report")?.addEventListener("click", () => {
+    if (deep?.hidden) {
+      deep.hidden = false;
+      restoreDeepAfterPrint = true;
+    }
+    window.requestAnimationFrame(() => window.print());
+  });
+  window.addEventListener("afterprint", () => {
+    if (!restoreDeepAfterPrint || !deep) return;
+    deep.hidden = true;
+    restoreDeepAfterPrint = false;
+  }, { once: true });
   document.querySelector("#back-home")?.addEventListener("click", () => {
     window.history.pushState({}, "", "/dashboard");
     showLanding({ privateView: true });
   });
-  const deep = document.querySelector("#dashboard-deep");
   const openDeep = () => {
     if (!deep) return;
     deep.hidden = false;

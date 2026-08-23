@@ -650,6 +650,11 @@ body { background: var(--dashboard-bg); color: #17191c; }
   .sidebar, .topbar, .scan-workbench, .dashboard-heading, .report-tabs, .download-button { display: none !important; }
   .dashboard-page { padding: 0; }
   .dashboard-report { border: 0; }
+  .dashboard-deep { display: block !important; margin-top: 0; }
+  .dashboard-deep .report-section { break-inside: avoid; page-break-inside: avoid; }
+  .dashboard-deep .section-heading { break-after: avoid; page-break-after: avoid; }
+  .dashboard-deep .table-wrap { overflow: visible; }
+  .dashboard-deep table { min-width: 0; }
 }
 
 /* Public entry boundary: the analyzer is public; workspace navigation and
