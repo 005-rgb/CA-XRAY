@@ -923,14 +923,24 @@ function updateLoading(scan) {
 
 function validateForm() {
   const address = addressInput.value.trim();
+  const selectedNetwork = networkInput.options[networkInput.selectedIndex];
+  const networkName = selectedNetwork?.textContent?.trim() || "selected network";
+  const isSolana = networkInput.value === "solana";
+  const isEvm = ["ethereum", "bsc", "base", "arbitrum", "polygon"].includes(networkInput.value);
   let valid = true;
   addressError.textContent = "";
   networkError.textContent = "";
   if (!address) {
     addressError.textContent = "Paste a contract address to begin.";
     valid = false;
-  } else if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-    addressError.textContent = "Enter a valid 42-character EVM contract address.";
+  } else if (isEvm && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    addressError.textContent = `Enter a valid ${networkName} contract address (0x followed by 40 hexadecimal characters).`;
+    valid = false;
+  } else if (isSolana && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+    addressError.textContent = "Enter a valid Solana contract address.";
+    valid = false;
+  } else if (!isEvm && !isSolana && /^0x[a-fA-F0-9]{40}$/.test(address)) {
+    addressError.textContent = `${networkName} does not use EVM contract addresses. Enter an address native to ${networkName}, or check the selected network.`;
     valid = false;
   }
   if (!networkInput.value) {
@@ -949,7 +959,11 @@ async function waitForScan(jobId) {
     if (!jobResponse.ok) throw new Error(jobBody.message || "The scan job could not be read.");
     job = jobBody.job;
     if (job.status === "SUCCEEDED") return job;
-    if (job.status === "FAILED") throw new Error(job.error?.message || "The scan failed.");
+    if (job.status === "FAILED") {
+      const error = new Error(job.error?.message || "The scan failed.");
+      error.code = job.error?.code;
+      throw error;
+    }
     if (job.status === "CANCELLED") throw new Error(job.error?.message || "The scan was cancelled.");
     updateLoading({ stages: job.status === "RUNNING"
       ? ["VALIDATING", "FETCHING DATA", "ANALYZING CONTRACT"]
@@ -1124,7 +1138,11 @@ async function scanLive() {
       window.location.assign(`/login?returnTo=${encodeURIComponent("/")}`);
       return;
     }
-    if (!response.ok) throw new Error(body.message || "The scan failed.");
+    if (!response.ok) {
+      const error = new Error(body.message || "The scan failed.");
+      error.code = body.error;
+      throw error;
+    }
     if (!body.job?.id) throw new Error("The scan job could not be created.");
     activeScanJobId = body.job.id;
     const job = await waitForScan(body.job.id);
@@ -1135,7 +1153,9 @@ async function scanLive() {
     renderReport(currentScan);
   } catch (error) {
     showLanding({ privateView: true });
-    addressError.textContent = error.message;
+    addressError.textContent = error.code === "CONTRACT_NOT_DEPLOYED_ON_NETWORK"
+      ? `${error.message} Detected network: unavailable.`
+      : error.message;
   } finally {
     activeScanJobId = null;
     if (cancelScanButton) cancelScanButton.disabled = false;
@@ -1978,7 +1998,11 @@ clearAddress.addEventListener("click", () => {
   clearAddress.hidden = true;
   addressInput.focus();
 });
-networkInput.addEventListener("change", () => { networkError.textContent = ""; });
+networkInput.addEventListener("change", () => {
+  networkError.textContent = "";
+  addressError.textContent = "";
+  addressInput.placeholder = networkInput.value === "solana" ? "Solana contract address..." : "Contract address...";
+});
 document.querySelectorAll("[data-demo]").forEach((button) => button.addEventListener("click", () => scanDemo(button.dataset.demo)));
 document.querySelector("#mobile-menu")?.addEventListener("click", (event) => {
   const open = sidebar.classList.toggle("open");

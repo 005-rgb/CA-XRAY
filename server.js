@@ -1277,10 +1277,18 @@ async function handleApiUnsafe(req, res, url, context) {
         return true;
       }
       const known = error && error.message === "REQUEST_TOO_LARGE";
+      const targetValidation = [
+        "CONTRACT_NOT_DEPLOYED_ON_NETWORK",
+        "NETWORK_NOT_SUPPORTED",
+        "INVALID_ADDRESS",
+        "EMPTY_ADDRESS",
+      ].includes(error?.code);
       sendJson(res, known ? 413 : 500, {
-        error: known ? "REQUEST_TOO_LARGE" : "SCAN_FAILED",
+        error: known ? "REQUEST_TOO_LARGE" : targetValidation ? error.code : "SCAN_FAILED",
         message: known
           ? "The request was too large."
+          : targetValidation
+            ? (error.validationMessage || error.message)
           : "The scan could not be queued.",
       }, { context });
     }

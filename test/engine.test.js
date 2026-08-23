@@ -8,6 +8,7 @@ const {
   calculateReliability,
   CATEGORY_WEIGHTS,
 } = require("../src/engine");
+const { normalizeBlockscout } = require("../src/providers/default-adapters");
 
 const valid = "0x1234567890123456789012345678901234567890";
 
@@ -17,6 +18,21 @@ test("validates empty and malformed addresses before provider calls", () => {
   assert.equal(validateAddress(valid).valid, true);
   assert.equal(validateScanTarget("So11111111111111111111111111111111111111112", "solana").valid, true);
   assert.equal(validateScanTarget("0x123", "solana").code, "INVALID_ADDRESS");
+});
+
+test("block explorer rejects an address with no deployed code on the selected network", () => {
+  const result = normalizeBlockscout({
+    response: { is_verified: false, abi: [] },
+    tokenResponse: null,
+    holdersResponse: null,
+    rpcResponse: { contractCode: { result: "0x" } },
+    retrievedAt: "2026-08-23T00:00:00.000Z",
+    network: { name: "Ethereum" },
+    providerId: "blockscout-abi",
+  });
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.errorCode, "CONTRACT_NOT_DEPLOYED_ON_NETWORK");
+  assert.match(result.message, /Ethereum/);
 });
 
 test("all three demos are deterministic and clearly marked", () => {

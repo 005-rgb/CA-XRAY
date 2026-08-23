@@ -1206,8 +1206,15 @@ async function scanLive({
           retrievedAt: result.value.retrievedAt,
           ...context,
         });
+        if (normalized.errorCode === "CONTRACT_NOT_DEPLOYED_ON_NETWORK") {
+          const validationError = new Error(normalized.errorCode);
+          validationError.code = normalized.errorCode;
+          validationError.validationMessage = normalized.message;
+          throw validationError;
+        }
         if (applyProviderResult(scan, normalized)) successes += 1;
       } catch (error) {
+        if (error.code === "CONTRACT_NOT_DEPLOYED_ON_NETWORK") throw error;
         applyProviderResult(scan, {
           providerId: provider.id,
           adapterVersion: provider.version,

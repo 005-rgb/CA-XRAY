@@ -113,13 +113,21 @@ async function fetchRpc(url, provider, address, timeout = 12_000, retries = 1) {
       body: JSON.stringify([
         { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: address, data: "0x8da5cb5b" }, "latest"] },
         { jsonrpc: "2.0", id: 2, method: "eth_getStorageAt", params: [address, "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103", "latest"] },
+        { jsonrpc: "2.0", id: 3, method: "eth_getCode", params: [address, "latest"] },
       ]),
     });
     const json = await response.json();
     if (!response.ok || !Array.isArray(json) || json.some((item) => !isProviderObject(item) || item.jsonrpc !== "2.0")) {
       throw Object.assign(new Error("MALFORMED_RESPONSE"), { code: "MALFORMED_RESPONSE", provider });
     }
-    return { json: { owner: json.find((item) => item.id === 1), admin: json.find((item) => item.id === 2) }, retrievedAt };
+    return {
+      json: {
+        owner: json.find((item) => item.id === 1),
+        admin: json.find((item) => item.id === 2),
+        contractCode: json.find((item) => item.id === 3),
+      },
+      retrievedAt,
+    };
   }, { provider, breaker: fetchRpc.breakers.get(provider), timeoutMs: timeout, retries });
 }
 
@@ -191,6 +199,29 @@ function normalizeHolderData({ tokenResponse, holdersResponse, retrievedAt, prov
 function normalizeBlockscout({ response, tokenResponse, holdersResponse, rpcResponse, retrievedAt, network, providerId }) {
   if (!isProviderObject(response)) {
     return normalizedResult({ providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR, retrievedAt, errorCode: "MALFORMED_RESPONSE", message: "Block explorer response failed schema validation." });
+  }
+  if (response.notFound === true) {
+    return normalizedResult({
+      providerId,
+      adapterVersion: BLOCKSCOUT_ADAPTER_VERSION,
+      status: PROVIDER_RESULT_STATUS.UNAVAILABLE,
+      retrievedAt,
+      errorCode: "CONTRACT_NOT_DEPLOYED_ON_NETWORK",
+      message: `No contract record was found on ${network.name}. Check the selected network and address.`,
+      limitations: [`The block explorer has no contract record for this address on ${network.name}.`],
+    });
+  }
+  const contractCode = rpcResponse?.contractCode?.result;
+  if (typeof contractCode === "string" && /^0x0*$/i.test(contractCode)) {
+    return normalizedResult({
+      providerId,
+      adapterVersion: BLOCKSCOUT_ADAPTER_VERSION,
+      status: PROVIDER_RESULT_STATUS.UNAVAILABLE,
+      retrievedAt,
+      errorCode: "CONTRACT_NOT_DEPLOYED_ON_NETWORK",
+      message: `No contract code was found at this address on ${network.name}. Check the selected network.`,
+      limitations: [`The address is not a deployed contract on ${network.name}.`],
+    });
   }
   const verified = response.is_verified === true || response.is_verified === "true";
   const abi = Array.isArray(response.abi) ? response.abi : [];
@@ -459,12 +490,21 @@ function createDefaultProviderRegistry(options = {}) {
           ? true
           : { code: "MALFORMED_RESPONSE", message: "Block explorer response failed schema validation." },
       fetch: async ({ address, network, providerPolicy = {} }) => {
-        const explorer = await fetchJson(
-          `https://${network.blockscoutHost}/api/v2/smart-contracts/${encodeURIComponent(address)}`,
-          "Blockscout ABI",
-          providerPolicy.timeoutMs,
-          providerPolicy.retries,
-        );
+        let explorer;
+        try {
+          explorer = await fetchJson(
+            `https://${network.blockscoutHost}/api/v2/smart-contracts/${encodeURIComponent(address)}`,
+            "Blockscout ABI",
+            providerPolicy.timeoutMs,
+            providerPolicy.retries,
+          );
+        } catch (error) {
+          if (error.status === 404) {
+            explorer = { json: { notFound: true }, retrievedAt: new Date().toISOString() };
+          } else {
+            throw error;
+          }
+        }
         const [rpc, token, holders] = await Promise.all([
           fetchRpc(network.rpcUrl, "Public JSON-RPC", address, providerPolicy.timeoutMs, providerPolicy.retries),
           fetchOptionalJson(`https://${network.blockscoutHost}/api/v2/tokens/${encodeURIComponent(address)}`, "Blockscout token metadata", providerPolicy.timeoutMs, providerPolicy.retries),
