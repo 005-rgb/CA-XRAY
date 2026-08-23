@@ -5,8 +5,9 @@ const {
   createDemoScan,
   calculateCategoryScores,
   verifyCapabilitySignals,
+  applyCapabilityVerification,
 } = require("../src/engine");
-const { normalizeGoPlus, normalizeDexScreener } = require("../src/providers/default-adapters");
+const { normalizeGoPlus, normalizeDexScreener, normalizeBlockscout } = require("../src/providers/default-adapters");
 
 const pepe = "0x6982508145454Ce325dDbE47a25d4ec3d2311933";
 const zero = "0x0000000000000000000000000000000000000000";
@@ -39,6 +40,71 @@ test("PEPE-style bytecode signal without ABI confirmation is unverified and low 
     verifyCapabilitySignals({ canBlacklist: true }, { verifiedAbi: ["transfer", "approve"], sourceVerified: true }),
     { canBlacklist: false },
   );
+});
+
+test("PEPE verified ABI downgrades unsupported GoPlus capability signals", () => {
+  const goPlus = normalizeGoPlus({
+    response: {
+      code: 1,
+      result: {
+        [pepe]: {
+          is_blacklisted: "1",
+          transfer_pausable: "1",
+          anti_whale_modifiable: "1",
+          owner_address: zero,
+        },
+      },
+    },
+    retrievedAt: "2026-08-23T00:00:00.000Z",
+    network: { goplusChainId: "1" },
+    providerId: "goplus-security",
+  });
+  const blockscout = normalizeBlockscout({
+    response: {
+      is_verified: true,
+      abi: [
+        { type: "function", name: "transfer" },
+        { type: "function", name: "approve" },
+      ],
+    },
+    rpcResponse: {
+      owner: { result: `0x${"0".repeat(64)}` },
+      admin: { result: `0x${"0".repeat(64)}` },
+    },
+    retrievedAt: "2026-08-23T00:00:00.000Z",
+    network: { id: "ethereum" },
+    providerId: "blockscout-abi",
+  });
+  const scan = {
+    mode: "LIVE",
+    security: { ...blockscout.evidence.security, ...goPlus.evidence.security },
+    verification: { ...blockscout.evidence.verification },
+  };
+  applyCapabilityVerification(scan);
+  assert.equal(scan.security.canBlacklist.status, STATUS.UNVERIFIED_SIGNAL);
+  assert.equal(scan.security.canBlacklist.confidence, "LOW");
+  assert.equal(scan.security.canPause.status, STATUS.UNVERIFIED_SIGNAL);
+  assert.equal(scan.security.proxyAdminActive.value, false);
+});
+
+test("verified ABI confirmation keeps a real capability detected at high confidence", () => {
+  const result = normalizeBlockscout({
+    response: {
+      is_verified: true,
+      abi: [{ type: "function", name: "pause" }],
+    },
+    rpcResponse: {
+      owner: { result: `0x${"1".repeat(64)}` },
+      admin: { result: `0x${"2".repeat(64)}` },
+    },
+    retrievedAt: "2026-08-23T00:00:00.000Z",
+    network: { id: "ethereum" },
+    providerId: "blockscout-abi",
+  });
+  assert.equal(result.evidence.security.ownerControl.value, "ACTIVE");
+  assert.equal(result.evidence.security.proxyAdminActive.value, true);
+  assert.equal(result.evidence.security.adminControlFullyRemoved.value, false);
+  assert.equal(result.evidence.verification.verifiedAbi.status, "VERIFIED");
 });
 
 test("renounced ownership reduces owner-only control but active proxy admin remains risky", () => {

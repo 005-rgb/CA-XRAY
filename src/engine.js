@@ -552,6 +552,71 @@ function verifyCapabilitySignals(capabilities, { verifiedAbi = [], sourceVerifie
   ]));
 }
 
+function pointWithConfidence(dataPoint, confidence, status = dataPoint?.status) {
+  if (!dataPoint) return dataPoint;
+  return point(
+    dataPoint.value,
+    status,
+    dataPoint.source || "Provider evidence",
+    confidence,
+    dataPoint.evidenceId,
+    dataPoint.retrievedAt,
+    dataPoint.derived,
+    dataPoint.evidenceStatus,
+    dataPoint.provenance,
+  );
+}
+
+function applyCapabilityVerification(scan) {
+  if (scan.mode !== "LIVE") return;
+  const verification = scan.verification || {};
+  const verifiedAbiPoint = verification.verifiedAbi;
+  const sourcePoint = verification.sourceCode;
+  const hasVerifiedAbi = evidencePoint(scan, verifiedAbiPoint)
+    && Array.isArray(verifiedAbiPoint.value);
+  const verifiedAbi = hasVerifiedAbi ? verifiedAbiPoint.value : [];
+  const capabilityFunctions = {
+    canMint: ["mint", "_mint"],
+    canBlacklist: ["blacklist", "setblacklist"],
+    canWhitelist: ["whitelist", "setwhitelist"],
+    canPause: ["pause", "unpause"],
+    canChangeTax: ["settax", "setbuytax", "setselltax"],
+    canWithdraw: ["withdraw", "rescue"],
+  };
+  const abiNames = new Set(verifiedAbi.map((name) => String(name).toLowerCase()));
+  for (const [key, names] of Object.entries(capabilityFunctions)) {
+    const dataPoint = scan.security[key];
+    if (!dataPoint || dataPoint.value !== true) continue;
+    if (hasVerifiedAbi) {
+      const confirmed = names.some((name) => abiNames.has(name));
+      scan.security[key] = confirmed
+        ? pointWithConfidence(dataPoint, "HIGH", STATUS.DETECTED)
+        : pointWithConfidence(dataPoint, "LOW", STATUS.UNVERIFIED_SIGNAL);
+    } else {
+      scan.security[key] = pointWithConfidence(dataPoint, "MEDIUM", STATUS.DETECTED);
+    }
+  }
+  if (hasVerifiedAbi) {
+    scan.security.sourceVerified = pointWithConfidence(sourcePoint, "HIGH", STATUS.VERIFIED);
+  }
+  const adminSlot = verification.adminSlot;
+  if (evidencePoint(scan, adminSlot) && adminSlot.value) {
+    scan.security.proxyAdminActive = pointWithConfidence(scan.security.proxyAdminActive, "HIGH", STATUS.DETECTED);
+    scan.security.adminControlFullyRemoved = pointWithConfidence(scan.security.adminControlFullyRemoved, "HIGH", STATUS.NOT_DETECTED);
+    scan.security.isUpgradeable = point(
+      true,
+      STATUS.DETECTED,
+      adminSlot.source || "Block explorer evidence",
+      "HIGH",
+      adminSlot.evidenceId,
+      adminSlot.retrievedAt,
+      false,
+      adminSlot.evidenceStatus,
+      adminSlot.provenance,
+    );
+  }
+}
+
 function generateFindings(scan, risk) {
   const findings = [];
   const categoryForFinding = (id) => {
@@ -1095,6 +1160,7 @@ async function scanLive({
       });
     }
   }
+  applyCapabilityVerification(scan);
   const missing = {
     token: ["name", "symbol", "decimals", "totalSupply"],
     security: ["canMint", "canBlacklist", "canWhitelist", "canPause", "canChangeTax", "isUpgradeable", "canWithdraw", "sourceVerified", "ownerAddress", "ownerControl"],
@@ -1106,11 +1172,16 @@ async function scanLive({
   for (const [section, fields] of Object.entries(missing)) {
     for (const field of fields) {
       if (!scan[section][field]) {
-        const notCheckedCapability = section === "security"
-          && ["canMint", "canBlacklist", "canWhitelist", "canPause", "canChangeTax", "isUpgradeable", "canWithdraw", "ownerAddress", "ownerControl"].includes(field);
-        scan[section][field] = notCheckedCapability
-          ? notChecked("Capability or ownership provider is not enabled")
-          : unknown("No normalized provider evidence");
+        const capabilityFields = ["canMint", "canBlacklist", "canWhitelist", "canPause", "canChangeTax", "isUpgradeable", "canWithdraw", "ownerAddress", "ownerControl"];
+        if (section === "security" && capabilityFields.includes(field)) {
+          scan[section][field] = notChecked("Provider for capability or ownership evidence is not enabled");
+        } else if (section === "token" && ["decimals", "totalSupply"].includes(field)) {
+          scan[section][field] = notChecked(`DexScreener does not provide token ${field}; a token-metadata provider is not enabled`);
+        } else if (section === "holders") {
+          scan[section][field] = notChecked("DexScreener does not provide holder concentration data; a holder provider is not enabled");
+        } else {
+          scan[section][field] = unknown("No normalized provider evidence");
+        }
       }
     }
   }
@@ -1163,4 +1234,5 @@ module.exports = {
   formatValue,
   formatCurrency,
   verifyCapabilitySignals,
+  applyCapabilityVerification,
 };

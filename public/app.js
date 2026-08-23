@@ -1258,9 +1258,11 @@ function renderHero(scan) {
         <div class="score-label">OVERALL RISK</div>
         ${scoreMarkup}
         ${levelMarkup}
-        <div class="score-facts">
+         <div class="score-facts">
           <div><div class="data-label">RELIABILITY</div><div class="data-value">${scan.reliability ? `${Math.round(scan.reliability.score)} / 100` : "UNKNOWN"}</div></div>
           <div><div class="data-label">CONFIDENCE</div><div class="data-value">${escapeHtml(scanConfidence(scan))}</div></div>
+           <div><div class="data-label">RISK RANGE</div><div class="data-value">${scan.risk?.scoreRange?.min ?? "UNKNOWN"}–${scan.risk?.scoreRange?.max ?? "UNKNOWN"} / 100</div></div>
+           <div><div class="data-label">UNSCORED WEIGHT</div><div class="data-value">${scan.risk?.unscoredWeightPct ?? "UNKNOWN"}%</div></div>
         </div>
       </div>
     </div>`;
@@ -1442,7 +1444,7 @@ function renderHolderLiquidity(scan) {
         ${metric("Burn", h.burnPercent, formatPercent)}
         ${metric("Liquidity-related", h.liquidityRelatedAddresses)}
       </div>`}</div>
-      <div id="report-liquidity"><h3 class="subheading">PRIMARY LIQUIDITY PAIR</h3>${!l.pair || l.pair.status === "UNKNOWN" ? `<div class="unknown-message">LIQUIDITY DATA UNKNOWN</div>` : `<div class="metric-grid">
+     <div id="report-liquidity"><h3 class="subheading">PRIMARY LIQUIDITY PAIR</h3>${!l.pair || ["UNKNOWN", "NOT_CHECKED", "UNAVAILABLE", "ERROR"].includes(l.pair.status) ? `<div class="unknown-message">LIQUIDITY DATA UNKNOWN</div>` : `<div class="metric-grid">
         ${metric("Liquidity", l.liquidityUsd, formatCurrency)}
         ${metric("24h volume", l.volume24h, formatCurrency)}
         ${metric("Pair", l.pair, truncateAddress)}
@@ -1473,7 +1475,7 @@ function renderMarketDeployer(scan) {
       </div></div>
       <div><h3 class="subheading">DEPLOYER</h3><div class="metric-grid">
         ${metric("Address", d.address, truncateAddress)}
-        ${metric("Deployment date", d.deploymentDate)}
+         ${metric("Pair age", scan.liquidity?.pairAge || d.deploymentDate)}
         ${metric("Suspicious behavior", d.suspiciousBehavior)}
         ${metric("Related contracts", d.relatedContracts)}
         ${metric("Recent deployment", d.veryRecentDeployment)}
@@ -1485,7 +1487,9 @@ function renderMarketDeployer(scan) {
 }
 
 function findingRow(finding) {
-  return `<tr><td>${statusPill({ status: finding.severity }, finding.severity)}</td><td><div class="finding-title">${escapeHtml(finding.title)}</div><div class="finding-why">${escapeHtml(finding.why)}</div></td><td>${escapeHtml(finding.confidence)}</td><td>${escapeHtml(finding.evidence)}</td></tr>`;
+  const interpretation = finding.risk_interpretation_confidence || finding.confidence || "UNKNOWN";
+  const retrieval = finding.data_retrieval_confidence || "UNKNOWN";
+  return `<tr><td>${statusPill({ status: finding.severity }, finding.severity)}</td><td><div class="finding-title">${escapeHtml(finding.title)}</div><div class="finding-why">${escapeHtml(finding.why)}</div></td><td><strong>${escapeHtml(interpretation)}</strong><small>Data retrieval: ${escapeHtml(retrieval)}</small></td><td>${escapeHtml(finding.evidence)}</td></tr>`;
 }
 
 function renderFindings(scan) {

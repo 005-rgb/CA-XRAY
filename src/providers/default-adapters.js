@@ -155,7 +155,6 @@ function normalizeBlockscout({ response, rpcResponse, retrievedAt, network, prov
   const adminSlot = /^0x0{64}$/i.test(rawAdminSlot || "") ? null : rawAdminSlot || null;
   const context = { providerId, retrievedAt };
   const q = (value, ref) => makePoint(value, context, ref);
-  const capability = (value, ref) => makePoint(value, context, ref);
   const limitations = [];
   if (!ownerAddress) limitations.push("owner() did not return a decodable address from the public RPC.");
   return normalizedResult({
@@ -163,18 +162,16 @@ function normalizeBlockscout({ response, rpcResponse, retrievedAt, network, prov
     limitations,
     evidence: {
       security: {
-        canMint: capability(has("mint") || has("_mint"), "BS-010"),
-        canBlacklist: capability(has("blacklist") || has("setblacklist"), "BS-011"),
-        canWhitelist: capability(has("whitelist") || has("setwhitelist"), "BS-012"),
-        canPause: capability(has("pause") || has("unpause"), "BS-013"),
-        canChangeTax: capability(has("settax") || has("setbuytax") || has("setselltax"), "BS-014"),
-        isUpgradeable: capability(Boolean(adminSlot), "BS-015"),
-        canWithdraw: capability(has("withdraw") || has("rescue"), "BS-016"),
         ownerAddress: q(ownerAddress, "BS-017"),
         ownerControl: q(ownerAddress ? (/^0x0{40}$/i.test(ownerAddress) ? "RENOUNCED" : "ACTIVE") : null, "BS-018"),
-        sourceVerified: q(true, "BS-001"),
+        proxyAdminActive: q(Boolean(adminSlot), "BS-003"),
+        adminControlFullyRemoved: q(adminSlot ? false : null, "BS-003"),
       },
-      verification: { sourceCode: q(true, "BS-001"), verifiedAbi: q([...names], "BS-002"), adminSlot: q(adminSlot, "BS-003") },
+      verification: {
+        sourceCode: q(true, "BS-001"),
+        verifiedAbi: q([...names], "BS-002"),
+        adminSlot: q(adminSlot, "BS-003"),
+      },
     },
   });
 }

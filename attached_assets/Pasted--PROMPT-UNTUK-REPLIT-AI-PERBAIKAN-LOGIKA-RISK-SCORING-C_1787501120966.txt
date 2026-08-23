@@ -1,0 +1,152 @@
+# PROMPT UNTUK REPLIT AI — PERBAIKAN LOGIKA RISK SCORING CA X-RAY
+### (Revisi: sumber data saat ini = DexScreener API, akan ditambah provider lain nanti)
+
+> Copy-paste seluruh isi di bawah ini ke Replit AI / Agent. Jangan dipotong — setiap bagian saling bergantung.
+
+---
+
+## KONTEKS SISTEM (WAJIB DIBACA SEBELUM MENGUBAH KODE APA PUN)
+
+Kamu sedang memperbaiki backend scoring engine aplikasi **CA X-RAY** (Contract Audit Intelligence) — aplikasi yang men-scan contract address token kripto dan menghasilkan risk score 0–100 berdasarkan capability detection (mint, blacklist, pause, anti-whale, dll), trading safety, liquidity, holder concentration, dan market signal.
+
+**Sumber data saat ini: DexScreener API.** Arsitektur data provider akan berkembang ke provider lain di masa depan (kemungkinan block explorer API untuk data on-chain/security, dan aggregator security seperti GoPlus untuk capability detection). Perbaikan di bawah ini HARUS dirancang modular — jangan hardcode asumsi "semua data dari satu API", karena provider akan bertambah.
+
+**Bug yang ditemukan dari audit independen (kasus nyata, jadikan regression test):**
+
+- CA `0x6982508145454Ce325dDbE47a25d4ec3d2311933` (token **PEPE**, ownership renounced ke `0x0000000000000000000000000000000000000000`) diberi skor **22/100 "MODERATE"** dengan finding `Blacklist addresses: DETECTED (+20, HIGH)`, `Pause transfers: DETECTED (+15, MEDIUM)`, `Modify anti-whale limits: DETECTED`, semua dengan `CONFIDENCE: HIGH`.
+- Source code PEPE yang terverifikasi di Etherscan (ABI publik) **hanya** berisi OpenZeppelin `ERC20` + `Ownable` + `ERC20Burnable` standar. **Tidak ada fungsi blacklist/pause/anti-whale sama sekali di kontrak ini.**
+- Laporan aplikasi **sendiri** menampilkan "Contract Power Map: OWNER/ADMIN 0x000...000 — RENOUNCED" tapi di baris yang sama menulis "CAN CONTROL: Pause transfers, Blacklist addresses, Modify anti-whale limits" — kontradiksi logis internal.
+- Field `Total Supply` menampilkan `NaN`, sementara `Decimals`, `Holders`, `Official website`, `Official socials`, `Contract Age` menampilkan `Unknown` — untuk token yang datanya sangat lengkap tersedia publik.
+
+---
+
+## BAGIAN 0 — ATURAN WAJIB TENTANG SUMBER DATA (BERLAKU UNTUK SEMUA FIX DI BAWAH)
+
+Ini aturan paling penting di seluruh prompt ini. Pelanggaran terhadap bagian ini sama fatalnya dengan bug skoring itu sendiri.
+
+1. **Petakan dulu, secara eksplisit, field mana yang benar-benar disediakan DexScreener API dan mana yang tidak**, sebelum menyentuh logika scoring. Berdasarkan dokumentasi publik DexScreener, field yang tersedia kurang lebih:
+   - `pairAddress`, `dexId`, `chainId`, `url`
+   - `baseToken` / `quoteToken`: `address`, `name`, `symbol` (TIDAK termasuk `decimals`)
+   - `priceUsd`, `priceNative`
+   - `liquidity`: `usd`, `base`, `quote`
+   - `volume`: `h24`, `h6`, `h1`, `m5`
+   - `priceChange`: `h24`, `h6`, `h1`, `m5`
+   - `txns`: jumlah buys/sells per timeframe
+   - `fdv`, `marketCap`
+   - `pairCreatedAt` (timestamp — ini umur **pair/pool**, BUKAN umur kontrak token; jangan disamakan)
+   - `info`: kadang berisi `imageUrl`, `websites`, `socials` (tapi **tidak selalu ada** — banyak token tanpa data ini di DexScreener meskipun proyeknya punya website resmi)
+   - **DexScreener TIDAK menyediakan**: `decimals`, jumlah `holders`, source code verification status, ABI, ataupun deteksi kapabilitas kontrak (mint/blacklist/pause/anti-whale/dll), status ownership/renounced.
+2. **Field yang secara struktural tidak disediakan DexScreener (decimals, holders, contract capability, ownership status, source verification) TIDAK BOLEH dipaksakan tampil dari API ini.** Kalau field itu memang wajib ada di laporan, itu artinya butuh provider tambahan (lihat Bagian P0-1 di bawah) — bukan hasil kalkulasi/tebakan dari data DexScreener.
+3. **Larangan keras — DILARANG melakukan hal berikut dengan alasan apa pun** (termasuk demi mengurangi tampilan "Unknown"):
+   - Mengisi field kosong dengan nilai default/placeholder yang terlihat seperti data asli (mis. `decimals: 18` sebagai asumsi default tanpa verifikasi — banyak token memang BUKAN 18 desimal).
+   - Menghitung `Total Supply` dari `fdv / priceUsd` lalu menampilkannya sebagai "Total Supply" tanpa disclaimer, padahal itu **derivasi/estimasi**, bukan data on-chain langsung (decimals tidak diketahui dari DexScreener, jadi hasil pembagian ini adalah *implied supply*, bukan `totalSupply()` on-chain yang sebenarnya — bisa meleset kalau ada token burn terus-menerus, rebasing, dsb).
+   - Menampilkan status kapabilitas kontrak (blacklist/pause/mint/dll) sebagai `NOT_DETECTED` hanya karena DexScreener tidak melaporkan apa-apa soal itu — `NOT_DETECTED` HARUS berarti "sudah dicek dan terbukti tidak ada", bukan "tidak dicek". Kalau memang belum dicek (karena belum ada provider capability-detection yang aktif), status yang benar adalah `NOT_CHECKED` / `DATA_UNAVAILABLE`, bukan `NOT_DETECTED`.
+   - Menandai `Confidence: HIGH` untuk field mana pun yang sebenarnya berasal dari derivasi/estimasi, bukan data langsung dari provider.
+4. **Cara yang benar untuk "meminimalisir Unknown" (sesuai instruksi produk) TANPA membuat data palsu:**
+   - Untuk field yang memang tersedia dari DexScreener tapi saat ini salah muncul sebagai "Unknown" (bug pipeline, contoh: kadang `info.websites`/`info.socials` ada di response API tapi tidak ke-parse) → **ini yang harus diperbaiki di P2**, karena datanya sebenarnya ADA tapi hilang karena bug, bukan karena tidak tersedia.
+   - Untuk field yang memang tidak pernah ada di DexScreener (decimals, holders, capability kontrak) → jangan dipaksa hilangkan "Unknown"-nya lewat estimasi. Yang benar: (a) tambahkan provider baru yang memang punya data itu (lihat Bagian P0-1 & catatan roadmap di akhir dokumen ini), ATAU (b) kalau provider belum ada, tampilkan status yang jujur: `"Data tidak tersedia dari sumber saat ini (DexScreener)"` — beda label dari `"Unknown"` generik supaya user paham ini keterbatasan sumber data, bukan token yang mencurigakan/tidak terlacak.
+5. **Setiap angka yang ditampilkan di laporan WAJIB bisa ditelusuri ke satu response field API yang nyata, atau ditandai eksplisit sebagai "derived/estimated" dengan formula yang ditampilkan ke user.** Tidak ada angka "misterius" yang tidak jelas asalnya.
+
+---
+
+## P0-1 — FIX FALSE POSITIVE PADA DETEKSI KAPABILITAS KONTRAK (blacklist/pause/anti-whale/dll)
+
+### Requirement
+1. **Klarifikasi arsitektur dulu**: karena DexScreener tidak menyediakan data capability kontrak sama sekali, cari tahu di codebase saat ini **dari mana sebenarnya field `Blacklist addresses: DETECTED`, `Pause transfers: DETECTED`, dst. berasal** (evidence ID berpola `GP-XXX` di laporan mengindikasikan ada provider lain yang sudah terintegrasi, kemungkinan GoPlus Security API atau sejenis — cek konfigurasi/kode yang sudah ada, jangan asumsikan tanpa verifikasi langsung ke source).
+2. Untuk **setiap** kapabilitas privileged yang dilaporkan provider capability-detection sebagai `DETECTED`, tambahkan verification layer independen sebelum status itu ditampilkan ke user:
+   - Ambil **verified source code / ABI** dari block explorer API (Etherscan/Blockscout, sesuai chain) — ini provider terpisah dari DexScreener, harus ditambahkan/dipastikan aktif khusus untuk keperluan ini.
+   - Kalau source code terverifikasi tersedia: cek keberadaan fungsi terkait secara eksplisit di ABI.
+   - Kalau fungsi **tidak ditemukan** di ABI/source code terverifikasi, TAPI provider capability-detection bilang `DETECTED` dari analisis bytecode → downgrade status jadi `UNVERIFIED_SIGNAL`, `CONFIDENCE: LOW`, dengan catatan: *"Provider [X] mendeteksi pola ini di bytecode, namun tidak terkonfirmasi di source code terverifikasi. Kemungkinan false positive."*
+   - Kalau source code TIDAK terverifikasi (kontrak tidak open-source): status boleh tetap `DETECTED` dari bytecode analysis apa adanya, confidence maksimal `MEDIUM`, tidak boleh `HIGH`.
+   - Kalau source code terverifikasi DAN fungsi memang ditemukan: status `DETECTED`, confidence `HIGH`.
+   - **Kalau provider capability-detection ini belum/tidak aktif sama sekali di environment saat ini** (mis. baru DexScreener yang jalan): field ini WAJIB tampil sebagai `NOT_CHECKED — provider belum tersedia`, bukan `NOT_DETECTED` (lihat Bagian 0 poin 3) dan bukan didiamkan kosong tanpa penjelasan.
+3. `UNVERIFIED_SIGNAL` tidak boleh ikut dihitung penuh di scoring numerik seperti `DETECTED`. Bobot kontribusi maksimum 30% dari bobot normal `DETECTED`, dan wajib ditampilkan terpisah di UI.
+4. Tambahkan unit test/fixture berbasis kasus PEPE: input = bytecode-heuristic provider bilang `blacklist: true`, tapi ABI terverifikasi tidak punya fungsi blacklist → output harus `UNVERIFIED_SIGNAL`, bukan `DETECTED`.
+
+### Acceptance Criteria
+- Re-scan CA `0x6982508145454Ce325dDbE47a25d4ec3d2311933` (PEPE) setelah fix HARUS tidak lagi menampilkan blacklist/pause/anti-whale sebagai `DETECTED` + `CONFIDENCE: HIGH`.
+- Overall risk score PEPE turun signifikan dari 22/100.
+- Kalau provider capability-detection ternyata belum aktif di environment produksi saat ini (hanya DexScreener yang jalan), laporkan ini secara eksplisit sebagai temuan tersendiri ke saya (bukan di-skip diam-diam) — karena artinya seluruh bagian "Contract Control" dan "What Can This Contract Do?" di laporan saat ini berpotensi menampilkan data yang sumbernya tidak jelas/tidak konsisten dengan "data hanya dari DexScreener" yang disebutkan di awal task ini. Jelaskan provider apa yang sebenarnya dipakai untuk field-field itu sebelum melanjutkan fix.
+
+---
+
+## P0-2 — FIX KONTRADIKSI LOGIS "RENOUNCED" TAPI TETAP DIHITUNG "CAN CONTROL"
+
+### Requirement
+1. Pisahkan dua konsep: **capability existence** (fungsi ada di kode) vs **capability exploitability** (masih bisa dipanggil siapa pun sekarang).
+2. Status ownership (`owner()`, renounced atau tidak) **juga bukan data DexScreener** — pastikan ini diambil dari block explorer API/on-chain call langsung (`eth_call` ke fungsi `owner()`), bukan dari DexScreener maupun asumsi.
+3. Untuk kontrak dengan `owner() == 0x000...000` (renounced) DAN implementasi access control standar tanpa backdoor:
+   - Field `"CAN CONTROL"` wajib kosong/null atau eksplisit: *"Tidak ada — ownership telah dilepas secara permanen."*
+   - Skor `Contract Control` untuk kapabilitas yang hanya bisa dipicu lewat `onlyOwner` yang sudah renounced → nol-kan atau bobot maksimum 10% dari normal.
+   - Tetap tampilkan capability sebagai historical/informational finding, dipisah dari "risiko aktif".
+4. **Wajib cek mekanisme "un-renounce"**: cek apakah kontrak proxy/upgradeable (kalau ya, renounced di implementation contract tidak berarti aman kalau proxy admin masih aktif). Field terpisah: `ownership_renounced` (boolean) vs `admin_control_fully_removed` (boolean).
+5. Kalau data ownership status ini juga belum bisa diambil karena hanya DexScreener yang aktif (DexScreener tidak punya field ini) → field ini juga wajib berstatus `NOT_CHECKED — provider belum tersedia`, bukan diasumsikan renounced ataupun diasumsikan berisiko. Jangan menebak ke arah mana pun.
+
+### Acceptance Criteria
+- Field "CAN CONTROL" untuk PEPE menjadi kosong/null.
+- Skor `Contract Control` PEPE turun mendekati 0.
+- Test case kedua: kontrak proxy/upgradeable dengan admin masih aktif meski `owner()` renounced → skor tetap tinggi (pastikan tidak overcorrect).
+- Laporkan eksplisit ke saya provider apa yang dipakai untuk ambil status ownership ini.
+
+---
+
+## P1-1 — FIX REDISTRIBUSI BOBOT SAAT KATEGORI UNKNOWN
+
+### Requirement
+1. Bobot kategori yang `UNKNOWN` **tidak boleh dialihkan 100% ke kategori lain**. Simpan `risk_score_from_available_data` terpisah dari `data_coverage_percentage`.
+2. Sarankan overall risk score ditampilkan sebagai **rentang** (mis. "7–32/100"), bukan angka tunggal presisi tinggi, kecuali data coverage di atas ambang tertentu (mis. >85%).
+3. **Perbanyak kategori yang benar-benar `AVAILABLE`** dengan menambahkan provider baru sesuai roadmap (bukan cuma DexScreener) — tapi sampai provider itu aktif, kategori yang datanya memang belum ada (Holder Concentration, Deployer, Contract Control detail) **wajib tetap `UNKNOWN`/`NOT_CHECKED`**, jangan dipaksa `AVAILABLE` dengan data kosong/nol sebagai pengganti.
+4. Kategori `UNKNOWN`/`EXCLUDED` wajib menampilkan alasan spesifik: *"Provider untuk data ini belum diaktifkan"* vs *"API call gagal"* vs *"Data memang tidak tersedia on-chain untuk token ini"* — tiga alasan ini berbeda dan harus dibedakan di response, bukan disamakan jadi satu label generik.
+
+### Acceptance Criteria
+- Skor PEPE setelah fix tidak lagi menghitung Contract Control di applied weight 40% dengan data yang sebenarnya belum terverifikasi.
+- Tambahkan field baru di response API: `score_range: {min, max}` dan `unscored_weight_pct`, dan pastikan field ini dikonsumsi di frontend.
+
+---
+
+## P1-2 — FIX INKONSISTENSI "CONFIDENCE: HIGH" PER-FINDING VS "CONFIDENCE: LOW" DI SCAN-LEVEL
+
+### Requirement
+1. Pisahkan **`data_retrieval_confidence`** (API call berhasil & lengkap) dari **`risk_interpretation_confidence`** (seberapa yakin interpretasi risikonya benar).
+2. Semua finding di UI menampilkan `risk_interpretation_confidence` sebagai badge utama, `data_retrieval_confidence` sebagai info sekunder.
+3. Finding yang statusnya `UNVERIFIED_SIGNAL` (dari P0-1) atau `NOT_CHECKED` (dari Bagian 0) otomatis `risk_interpretation_confidence: LOW`, berapa pun tingkat keyakinan provider terhadap datanya sendiri.
+4. `overall scan confidence` = agregat dari `risk_interpretation_confidence` semua finding yang berkontribusi ke skor — satu sumber kebenaran, bukan dua sistem confidence terpisah seperti sekarang.
+
+### Acceptance Criteria
+- Tidak ada lagi kombinasi "finding badge: CONFIDENCE HIGH" + "scan summary: Confidence LOW" tanpa penjelasan eksplisit.
+- Untuk PEPE, badge blacklist/pause/anti-whale (kalau masih tampil sebagai `UNVERIFIED_SIGNAL`/`NOT_CHECKED`) harus `LOW` di kedua level.
+
+---
+
+## P2 — FIX BUG METADATA DASAR (NaN / Unknown) — KHUSUS FIELD YANG SEBENARNYA TERSEDIA DI DEXSCREENER
+
+**Catatan penting: bagian ini HANYA berlaku untuk field yang memang ada di response DexScreener tapi gagal tampil. Untuk field yang memang tidak disediakan DexScreener (decimals, holders), JANGAN "diperbaiki" dengan estimasi — itu pelanggaran terhadap Bagian 0.**
+
+### Requirement
+1. **`Total Supply` menampilkan `NaN`**: telusuri kenapa. Kemungkinan besar kode mencoba `fdv / priceUsd` atau field lain yang undefined/null dari response DexScreener lalu tidak ada null-check sebelum operasi matematika. Perbaiki dengan:
+   - Null-check eksplisit sebelum kalkulasi apa pun.
+   - Kalau hasil kalkulasi memang tidak bisa dilakukan (priceUsd = 0, fdv tidak ada, dll) → tampilkan `"Tidak dapat dihitung"`, JANGAN literal `NaN` yang bocor ke UI.
+   - Kalau ditampilkan sebagai *implied supply* dari `fdv / priceUsd`, WAJIB diberi label jelas "Estimasi (fdv ÷ harga), bukan totalSupply() on-chain" — sesuai Bagian 0 poin 3.
+2. **`Website` / `Socials`**: DexScreener API kadang mengembalikan field `info.websites` dan `info.socials` di response pair — cek apakah field ini benar-benar diparsing dari response, atau terlewat di mapping. Kalau field ini memang kosong di response DexScreener untuk token tertentu (banyak token memang tidak isi data ini di DexScreener), maka `"Unknown"` dari DexScreener itu valid dan boleh tetap ditampilkan — TAPI beri label yang membedakan "kosong dari sumbernya" vs "gagal di-parse padahal ada". Jangan coba mengisi field ini dengan hasil googling/tebakan otomatis dari nama token.
+3. **`Contract Age`**: DexScreener hanya punya `pairCreatedAt` (umur pool/pair, bukan umur kontrak token). Ganti label jadi **"Pair Age"** kalau memang sumbernya `pairCreatedAt`, JANGAN dilabel "Contract Age" seolah itu tanggal deploy kontrak — ini dua hal berbeda dan bisa menyesatkan (kontrak bisa dideploy jauh lebih dulu dari pair-nya, atau ada pair baru untuk kontrak lama).
+4. **`Decimals`, `Holders`**: sesuai Bagian 0, field ini TIDAK ADA di DexScreener. Jangan "diperbaiki" jadi terisi tanpa provider baru. Yang benar: ubah status field ini dari `Unknown` (generik, terkesan seperti kegagalan sistem) menjadi `"Tidak tersedia dari sumber data saat ini"` (jujur tentang keterbatasan arsitektur), sambil dicatat sebagai item roadmap untuk provider berikutnya.
+
+### Acceptance Criteria
+- `Total Supply` tidak pernah lagi menampilkan literal `NaN` — baik tampil sebagai angka valid dengan sumber jelas, angka estimasi berlabel jelas, atau pesan "tidak dapat dihitung".
+- Field yang genuinely tidak tersedia di DexScreener (decimals, holders) tetap kosong/tidak terisi setelah fix ini — TAPI dengan label yang jujur ("tidak tersedia dari sumber saat ini"), bukan estimasi/tebakan.
+- Field yang sebenarnya ada di response DexScreener (website, socials — kalau tersedia untuk token tsb) HARUS berhasil tampil setelah fix parsing.
+
+---
+
+## FORMAT OUTPUT YANG DIMINTA DARI REPLIT AI
+
+1. **Sebelum mengubah kode apa pun**, tampilkan dulu:
+   - Rencana implementasi (file/module mana yang terdampak).
+   - **Peta lengkap: field apa saja di response DexScreener API yang benar-benar dipakai codebase saat ini vs field mana yang di laporan ternyata datang dari sumber lain (kalau ada) vs field mana yang sebenarnya tidak dari mana pun / hardcoded / hasil kalkulasi tanpa sumber jelas.** Ini WAJIB ditampilkan sebelum lanjut ke fix apa pun, karena ini akan menentukan mana bug yang bisa langsung diperbaiki (P2, murni bug parsing) vs mana yang butuh keputusan produk (tambah provider baru untuk P0-1/P0-2).
+2. Untuk setiap fix, sertakan unit test/regression test baru yang memakai kasus PEPE (`0x6982508145454Ce325dDbE47a25d4ec3d2311933`) sebagai fixture wajib — harus FAIL di kode lama, PASS setelah fix.
+3. Jangan ubah struktur skema database/response API secara breaking tanpa migration plan. Field baru (`score_range`, `data_retrieval_confidence`, `risk_interpretation_confidence`, `NOT_CHECKED` status, dll.) ditambahkan dengan flag deprecation untuk field lama.
+4. Setelah semua fix P0 diimplementasi, tunjukkan before/after comparison JSON secara eksplisit untuk PEPE (skor lama vs baru, finding lama vs baru).
+5. Sertakan test case kontrak proxy/upgradeable yang admin-nya masih aktif meski `owner()` renounced, untuk membuktikan sistem baru tetap menangkap risiko sungguhan (tidak overcorrect jadi terlalu longgar).
+6. **Larangan mutlak selama seluruh proses ini**: jangan pernah mengisi field kosong dengan data yang terlihat meyakinkan tapi sebenarnya tidak berasal dari API manapun (no hardcoded defaults, no silent fallback ke angka tebakan, no confidence level yang dinaikkan tanpa dasar). Kalau ragu antara "tampilkan Unknown yang jujur" vs "isi dengan estimasi supaya terlihat lengkap" — **selalu pilih yang pertama.**
+
+**Prioritas pengerjaan: Bagian 0 (pemetaan sumber data) → P0-1 & P0-2 → P1-1 & P1-2 → P2.**
