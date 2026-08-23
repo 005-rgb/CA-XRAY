@@ -106,3 +106,14 @@ test("boolean findings respect detected and positive states", () => {
   assert.ok(lowIds.includes("positive-no-mint"));
   assert.ok(lowIds.includes("positive-source"));
 });
+
+test("findings preserve their originating risk category", () => {
+  const scan = createDemoScan("high");
+  const categories = new Map(scan.findings.map((finding) => [finding.id, finding.category]));
+  assert.equal(categories.get("contract-mint"), "contract");
+  assert.equal(categories.get("trading-malicious"), "trading");
+  assert.equal(categories.get("holder-top10"), "holder");
+  assert.equal(categories.get("liquidity-depth"), "liquidity");
+  assert.equal(categories.get("deployer-suspicious"), "deployer");
+  assert.equal(categories.get("market-volatility"), "marketProject");
+});

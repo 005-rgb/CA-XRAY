@@ -1709,7 +1709,13 @@ function renderDashboardReport(scan) {
       <div class="dashboard-lower-grid">
         <section class="report-table-card">
           <div class="card-heading"><div class="card-kicker">TOP RISKS</div><button type="button" class="side-link" id="open-findings">View All Findings <span>→</span></button></div>
-          <div class="responsive-table"><table><thead><tr><th>RISK</th><th>CATEGORY</th><th>SEVERITY</th><th>IMPACT</th><th>STATUS</th></tr></thead><tbody>${topRiskRows.map((finding) => `<tr><td><strong>${escapeHtml(finding.title)}</strong></td><td>${escapeHtml(categoryLabels[finding.category] || finding.category || "Security")}</td><td><span class="severity-chip ${statusClass(finding.severity)}">${escapeHtml(finding.severity || "UNKNOWN")}</span></td><td>${escapeHtml(finding.impact ? `+${finding.impact}` : finding.severity === "UNKNOWN" ? "—" : "High")}</td><td><span class="detected-chip">${finding.severity === "UNKNOWN" ? "Unknown" : "Detected"}</span></td></tr>`).join("")}</tbody></table></div>
+          <div class="responsive-table"><table><thead><tr><th>RISK</th><th>CATEGORY</th><th>SEVERITY</th><th>IMPACT</th><th>STATUS</th></tr></thead><tbody>${topRiskRows.map((finding) => {
+            const category = categoryLabels[finding.category] || (finding.category && finding.category !== "UNKNOWN" ? finding.category : "Unknown");
+            const impact = finding.impact === null || finding.impact === undefined ? "—" : `+${finding.impact}`;
+            const evidenceStatus = finding.status || (finding.severity === "UNKNOWN" ? "UNKNOWN" : "VALID");
+            const statusLabel = evidenceStatus === "VALID" || evidenceStatus === "VERIFIED" ? "Detected" : evidenceStatus.replaceAll("_", " ");
+            return `<tr><td><strong>${escapeHtml(finding.title)}</strong></td><td>${escapeHtml(category)}</td><td><span class="severity-chip ${statusClass(finding.severity)}">${escapeHtml(finding.severity || "UNKNOWN")}</span></td><td>${escapeHtml(impact)}</td><td><span class="detected-chip ${statusClass(evidenceStatus)}">${escapeHtml(statusLabel)}</span></td></tr>`;
+          }).join("")}</tbody></table></div>
         </section>
         <div class="report-side-column lower-side">
           <section class="side-card"><div class="card-kicker">DATA STATUS</div>${dataRows.map(([label, point]) => `<div class="status-row"><span>${label}</span>${dashboardStatus(point, point.status === "UNAVAILABLE" ? "Unavailable" : point.status === "DEMO" ? "Valid" : "Valid")}</div>`).join("")}</section>

@@ -512,6 +512,15 @@ function findingConfidence(scan, dataPoint) {
 
 function generateFindings(scan, risk) {
   const findings = [];
+  const categoryForFinding = (id) => {
+    if (id.startsWith("contract-")) return "contract";
+    if (id.startsWith("trading-")) return "trading";
+    if (id.startsWith("holder-")) return "holder";
+    if (id.startsWith("liquidity-")) return "liquidity";
+    if (id.startsWith("deployer-")) return "deployer";
+    if (id.startsWith("market-") || id.startsWith("project-")) return "marketProject";
+    return "UNKNOWN";
+  };
   const addFinding = ({ id, severity, title, what, why, dataPoint, impact = 0, positive = false, when = () => true }) => {
     if (!dataPoint || !hasEvidence(dataPoint, scan.mode)) return;
     if (!when(dataPoint)) return;
@@ -521,6 +530,7 @@ function generateFindings(scan, risk) {
     const evidence = dataPoint.value === null ? "Provider did not return a value." : `${title}: ${formatValue(dataPoint.value)}`;
     findings.push({
       id, severity, title, what, why, evidence, source,
+      category: categoryForFinding(id),
       confidence: findingConfidence(scan, dataPoint),
       evidenceId, status: dataPoint.status, impact, positive,
       retrievedAt: dataPoint.retrievedAt,
