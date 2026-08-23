@@ -36,12 +36,40 @@ const LIQUIDITY_THRESHOLDS = Object.freeze({
   veryLowVolume24h: 1000,
 });
 
+const EVM_NETWORKS = [
+  ["ethereum", "Ethereum", "1", "ethereum", "eth.blockscout.com", "https://ethereum-rpc.publicnode.com", "https://etherscan.io/address/"],
+  ["bsc", "BNB Chain", "56", "bsc", "bsc.blockscout.com", "https://bsc-rpc.publicnode.com", "https://bscscan.com/address/"],
+  ["base", "Base", "8453", "base", "base.blockscout.com", "https://base-rpc.publicnode.com", "https://basescan.org/address/"],
+  ["arbitrum", "Arbitrum", "42161", "arbitrum", "arbitrum.blockscout.com", "https://arbitrum-one-rpc.publicnode.com", "https://arbiscan.io/address/"],
+  ["polygon", "Polygon", "137", "polygon", "polygon.blockscout.com", "https://polygon-bor-rpc.publicnode.com", "https://polygonscan.com/address/"],
+];
+
+const DEX_ONLY_NETWORKS = [
+  ["solana", "Solana", "solana"], ["avalanche", "Avalanche", "avalanche"], ["optimism", "Optimism", "optimism"],
+  ["ton", "TON", "ton"], ["sui", "Sui", "sui"], ["aptos", "Aptos", "aptos"], ["sei", "Sei", "sei"],
+  ["near", "Near", "near"], ["injective", "Injective", "injective"], ["starknet", "Starknet", "starknet"],
+  ["blast", "Blast", "blast"], ["linea", "Linea", "linea"], ["scroll", "Scroll", "scroll"], ["manta", "Manta", "manta"],
+  ["mode", "Mode", "mode"], ["zksync-era", "ZkSync Era", "zksync"], ["taiko", "Taiko", "taiko"],
+  ["mantle", "Mantle", "mantle"], ["metis", "Metis", "metis"], ["opbnb", "opBNB", "opbnb"], ["zora", "Zora", "zora"],
+  ["hyperliquid", "Hyperliquid", "hyperevm"], ["ink", "Ink", "ink"], ["monad", "Monad", "monad"],
+  ["berachain", "Berachain", "berachain"], ["celestia", "Celestia", "celestia"], ["dymension", "Dymension", "dymension"],
+  ["fantom-sonic", "Fantom/Sonic", "sonic"], ["celo", "Celo", "celo"], ["cronos", "Cronos", "cronos"],
+  ["stable", "Stable", "stable"], ["xrpl", "XRPL", "xrpl"], ["tron", "Tron", "tron"], ["cardano", "Cardano", "cardano"],
+  ["gnosis", "Gnosis", "gnosis"], ["kava", "Kava", "kava"], ["core", "Core", "core"], ["rootstock", "Rootstock", "rootstock"],
+  ["moonbeam", "Moonbeam", "moonbeam"], ["astar", "Astar", "astar"], ["moonriver", "Moonriver", "moonriver"],
+  ["oasis-sapphire", "Oasis Sapphire", "oasis-sapphire"], ["telos", "Telos", "telos"], ["velas", "Velas", "velas"],
+  ["fuse", "Fuse", "fuse"], ["neon-evm", "Neon EVM", "neon"], ["shimmer", "Shimmer", "shimmer"], ["karura", "Karura", "karura"],
+].map(([id, name, dexChainId]) => ({ id, name, dexChainId, evm: false }));
+
 const NETWORKS = Object.freeze([
-  { id: "ethereum", name: "Ethereum", goplusChainId: "1", dexChainId: "ethereum", blockscoutHost: "eth.blockscout.com", rpcUrl: "https://ethereum-rpc.publicnode.com", explorer: "https://etherscan.io/address/" },
-  { id: "bsc", name: "BNB Chain", goplusChainId: "56", dexChainId: "bsc", blockscoutHost: "bsc.blockscout.com", rpcUrl: "https://bsc-rpc.publicnode.com", explorer: "https://bscscan.com/address/" },
-  { id: "base", name: "Base", goplusChainId: "8453", dexChainId: "base", blockscoutHost: "base.blockscout.com", rpcUrl: "https://base-rpc.publicnode.com", explorer: "https://basescan.org/address/" },
-  { id: "arbitrum", name: "Arbitrum", goplusChainId: "42161", dexChainId: "arbitrum", blockscoutHost: "arbitrum.blockscout.com", rpcUrl: "https://arbitrum-one-rpc.publicnode.com", explorer: "https://arbiscan.io/address/" },
-  { id: "polygon", name: "Polygon", goplusChainId: "137", dexChainId: "polygon", blockscoutHost: "polygon.blockscout.com", rpcUrl: "https://polygon-bor-rpc.publicnode.com", explorer: "https://polygonscan.com/address/" },
+  ...EVM_NETWORKS.map(([id, name, goplusChainId, dexChainId, blockscoutHost, rpcUrl, explorer]) => ({
+    id, name, goplusChainId, dexChainId, blockscoutHost, rpcUrl, explorer, evm: true,
+    providerSupport: { "goplus-security": true, dexscreener: true, "blockscout-abi": true },
+  })),
+  ...DEX_ONLY_NETWORKS.map((network) => ({
+    ...network,
+    providerSupport: { "goplus-security": false, dexscreener: true, "blockscout-abi": false },
+  })),
 ]);
 
 const FIXED_DEMO_TIMESTAMP = "2026-01-15T12:00:00.000Z";
@@ -117,11 +145,20 @@ function statusForValue(value, source, retrievedAt, mode = "LIVE", confidence = 
   return point(value, STATUS.VERIFIED, source, confidence, null, retrievedAt, derived);
 }
 
-function validateAddress(value) {
+function validateAddress(value, network = null) {
   const address = typeof value === "string" ? value.trim() : "";
   if (!address) return { valid: false, code: "EMPTY_ADDRESS", message: "Paste a contract address to begin." };
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-    return { valid: false, code: "INVALID_ADDRESS", message: "Enter a valid 42-character EVM contract address." };
+  if ((network ? network.evm : true) && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    return { valid: false, code: "INVALID_ADDRESS", message: `Enter a valid ${network?.name || "EVM"} contract address.` };
+  }
+  if (network?.id === "solana" && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+    return { valid: false, code: "INVALID_ADDRESS", message: "Enter a valid Solana address." };
+  }
+  if (network && !network.evm && /^0x[a-fA-F0-9]{40}$/.test(address)) {
+    return { valid: false, code: "INVALID_ADDRESS", message: `Enter a valid ${network.name} contract address.` };
+  }
+  if (address.length > 256 || /\s/.test(address)) {
+    return { valid: false, code: "INVALID_ADDRESS", message: `Enter a valid ${network?.name || "network"} contract address.` };
   }
   return { valid: true, normalized: address };
 }
@@ -1092,10 +1129,10 @@ function applyProviderResult(scan, result) {
 }
 
 function validateScanTarget(address, networkId) {
-  const addressValidation = validateAddress(address);
-  if (!addressValidation.valid) return addressValidation;
   const network = networkById(networkId);
   if (!network) return { valid: false, code: "UNSUPPORTED_NETWORK", message: "Select a supported network." };
+  const addressValidation = validateAddress(address, network);
+  if (!addressValidation.valid) return addressValidation;
   return { valid: true, normalized: addressValidation.normalized, network };
 }
 
@@ -1124,6 +1161,22 @@ async function scanLive({
     if (policy && (policy.state !== "ACTIVE" || policy.killSwitch)) {
       return Promise.resolve({ disabled: true, policy });
     }
+    if (validation.network.providerSupport?.[provider.id] === false) {
+      return {
+        unsupported: true,
+        result: {
+          status: PROVIDER_RESULT_STATUS.UNAVAILABLE,
+          providerId: provider.id,
+          adapterVersion: provider.version,
+          retrievedAt: null,
+          confidence: "UNKNOWN",
+          errorCode: "NETWORK_NOT_SUPPORTED",
+          message: `${provider.source} does not support ${validation.network.name}.`,
+          limitations: [`${provider.source} is not enabled for this network.`],
+          evidence: {},
+        },
+      };
+    }
     return providerRegistry.fetch(provider.id, {
       ...context,
       providerPolicy: policy,
@@ -1132,7 +1185,9 @@ async function scanLive({
   let successes = 0;
   for (const [index, result] of results.entries()) {
     const provider = providers[index];
-    if (result.status === "fulfilled" && result.value?.disabled) {
+    if (result.status === "fulfilled" && result.value?.unsupported) {
+      applyProviderResult(scan, result.value.result);
+    } else if (result.status === "fulfilled" && result.value?.disabled) {
       applyProviderResult(scan, {
         providerId: provider.id,
         adapterVersion: provider.version,

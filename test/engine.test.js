@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const {
   createDemoScan,
   validateAddress,
+  validateScanTarget,
   calculateCategoryScores,
   calculateReliability,
   CATEGORY_WEIGHTS,
@@ -14,6 +15,8 @@ test("validates empty and malformed addresses before provider calls", () => {
   assert.equal(validateAddress("").code, "EMPTY_ADDRESS");
   assert.equal(validateAddress("0x123").code, "INVALID_ADDRESS");
   assert.equal(validateAddress(valid).valid, true);
+  assert.equal(validateScanTarget("So11111111111111111111111111111111111111112", "solana").valid, true);
+  assert.equal(validateScanTarget("0x123", "solana").code, "INVALID_ADDRESS");
 });
 
 test("all three demos are deterministic and clearly marked", () => {
