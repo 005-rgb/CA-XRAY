@@ -1273,7 +1273,7 @@ function renderExecutiveSummary(scan) {
   const risks = scan.findings.filter((finding) => !finding.positive).slice(0, 3);
   const positives = scan.findings.filter((finding) => finding.positive).slice(0, 3);
   const limitations = scan.limitations.length ? scan.limitations : ["No additional limitations were generated for this snapshot."];
-  return `<section class="report-section full">${sectionHeading("01", "EXECUTIVE SUMMARY", "01 / 08")}
+  return `<section id="report-overview-details" class="report-section full">${sectionHeading("01", "EXECUTIVE SUMMARY", "01 / 08")}
     <div class="summary-grid">
       <div>
         <p class="section-intro">${escapeHtml(summaryParagraph(scan))}</p>
@@ -1394,9 +1394,9 @@ function tradingRow(label, dataPoint, formatter = formatValue, impact = "—") {
 function renderForensics(scan) {
   const s = scan.security || {};
   const t = scan.trading || {};
-  return `<section class="report-section full">${sectionHeading("03", "CONTRACT & TRADING FORENSICS", "03 / 08")}
+  return `<section id="report-contract-forensics" class="report-section full">${sectionHeading("03", "CONTRACT & TRADING FORENSICS", "03 / 08")}
      <div class="forensic-grid">
-       <div><h3 class="subheading">CONTRACT CAPABILITIES</h3><div class="table-wrap"><table><thead><tr><th>CAPABILITY</th><th>STATUS</th><th>IMPACT</th><th>EVIDENCE</th><th>EVIDENCE TYPE</th><th>CONFIDENCE</th></tr></thead><tbody>
+       <div id="report-contract"><h3 class="subheading">CONTRACT CAPABILITIES</h3><div class="table-wrap"><table><thead><tr><th>CAPABILITY</th><th>STATUS</th><th>IMPACT</th><th>EVIDENCE</th><th>EVIDENCE TYPE</th><th>CONFIDENCE</th></tr></thead><tbody>
         ${capabilityRow("Mint additional tokens", s.canMint, "+30")}
         ${capabilityRow("Blacklist addresses", s.canBlacklist, "+20")}
         ${capabilityRow("Whitelist restrictions", s.canWhitelist, "+10")}
@@ -1406,7 +1406,7 @@ function renderForensics(scan) {
         ${capabilityRow("Withdraw funds", s.canWithdraw, "+15")}
         ${capabilityRow("Source verification", s.sourceVerified, "Unverified +10")}
       </tbody></table></div></div>
-       <div><h3 class="subheading">TRADING SIGNALS</h3><div class="table-wrap"><table><thead><tr><th>SIGNAL</th><th>VALUE / STATUS</th><th>IMPACT</th><th>EVIDENCE</th><th>EVIDENCE TYPE</th><th>CONFIDENCE</th></tr></thead><tbody>
+       <div id="report-trading"><h3 class="subheading">TRADING SIGNALS</h3><div class="table-wrap"><table><thead><tr><th>SIGNAL</th><th>VALUE / STATUS</th><th>IMPACT</th><th>EVIDENCE</th><th>EVIDENCE TYPE</th><th>CONFIDENCE</th></tr></thead><tbody>
         ${tradingRow("Buy tax", t.buyTax, formatPercent, "≥15% adds +15")}
         ${tradingRow("Sell tax", t.sellTax, formatPercent, "≥20% adds +20")}
         ${tradingRow("Transfer tax", t.transferTax, formatPercent)}
@@ -1429,9 +1429,9 @@ function renderHolderLiquidity(scan) {
   const l = scan.liquidity || {};
   const holderFields = [h.totalHolders, h.top1Percent, h.top5Percent, h.top10Percent, h.deployerPercent, h.ownerPercent, h.burnPercent, h.liquidityRelatedAddresses];
   const holderUnavailable = holderFields.every((field) => !field || field.status === "UNKNOWN" || field.status === "UNAVAILABLE" || field.status === "ERROR");
-  return `<section class="report-section full">${sectionHeading("04", "HOLDER & LIQUIDITY ANALYSIS", "04 / 08")}
+  return `<section id="report-holder-liquidity" class="report-section full">${sectionHeading("04", "HOLDER & LIQUIDITY ANALYSIS", "04 / 08")}
     <div class="forensic-grid">
-      <div><h3 class="subheading">HOLDER SUMMARY</h3>${holderUnavailable ? `<div class="unknown-message">HOLDER DATA UNAVAILABLE</div>` : `<div class="metric-grid">
+      <div id="report-holder"><h3 class="subheading">HOLDER SUMMARY</h3>${holderUnavailable ? `<div class="unknown-message">HOLDER DATA UNAVAILABLE</div>` : `<div class="metric-grid">
         ${metric("Total holders", h.totalHolders)}
         ${metric("Top 1%", h.top1Percent, formatPercent)}
         ${metric("Top 5%", h.top5Percent, formatPercent)}
@@ -1441,7 +1441,7 @@ function renderHolderLiquidity(scan) {
         ${metric("Burn", h.burnPercent, formatPercent)}
         ${metric("Liquidity-related", h.liquidityRelatedAddresses)}
       </div>`}</div>
-      <div><h3 class="subheading">PRIMARY LIQUIDITY PAIR</h3>${!l.pair || l.pair.status === "UNKNOWN" ? `<div class="unknown-message">LIQUIDITY DATA UNKNOWN</div>` : `<div class="metric-grid">
+      <div id="report-liquidity"><h3 class="subheading">PRIMARY LIQUIDITY PAIR</h3>${!l.pair || l.pair.status === "UNKNOWN" ? `<div class="unknown-message">LIQUIDITY DATA UNKNOWN</div>` : `<div class="metric-grid">
         ${metric("Liquidity", l.liquidityUsd, formatCurrency)}
         ${metric("24h volume", l.volume24h, formatCurrency)}
         ${metric("Pair", l.pair, truncateAddress)}
@@ -1457,9 +1457,9 @@ function renderMarketDeployer(scan) {
   const m = scan.market || {};
   const d = scan.deployer || {};
   const p = scan.project || {};
-  return `<section class="report-section full">${sectionHeading("05", "MARKET & DEPLOYER SIGNALS", "05 / 08")}
+  return `<section id="report-market" class="report-section full">${sectionHeading("05", "MARKET & DEPLOYER SIGNALS", "05 / 08")}
     <div class="forensic-grid">
-      <div><h3 class="subheading">MARKET & PROJECT</h3><div class="metric-grid">
+       <div id="report-market-data"><h3 class="subheading">MARKET & PROJECT</h3><div class="metric-grid">
         ${metric("Price", m.price, (value) => `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 8 })}`)}
         ${metric("24h volume", m.volume24h, formatCurrency)}
         ${metric("Liquidity", m.liquidityUsd, formatCurrency)}
@@ -1499,7 +1499,7 @@ function renderFindings(scan) {
 }
 
 function renderEvidence(scan) {
-  return `<section class="report-section full">${sectionHeading("07", "EVIDENCE REGISTER", "07 / 08")}
+  return `<section id="report-evidence" class="report-section full">${sectionHeading("07", "EVIDENCE REGISTER", "07 / 08")}
     <p class="section-intro">Expand an item for WHAT, WHY, EVIDENCE, timestamp, status, confidence, and limitations.</p>
     ${scan.evidence?.length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>FINDING</th><th>EVIDENCE TYPE</th><th>RETRIEVED AT</th><th>CONFIDENCE</th></tr></thead><tbody>${scan.evidence.map((evidence) => `<tr><td><span class="evidence-id">${escapeHtml(evidence.id)}</span></td><td>${escapeHtml(evidence.finding)}<details class="evidence-detail"><summary>VIEW EVIDENCE DETAIL</summary><div class="detail-grid"><strong>WHAT</strong><span>${escapeHtml(evidence.what)}</span><strong>WHY</strong><span>${escapeHtml(evidence.why)}</span><strong>EVIDENCE</strong><span>${escapeHtml(evidence.evidence)}</span><strong>EVIDENCE TYPE</strong><span>${escapeHtml(evidenceLabel(evidence))}</span><strong>RETRIEVED AT</strong><span>${escapeHtml(formatDate(evidence.retrievedAt))}</span><strong>STATUS</strong><span>${statusPill(evidence, evidence.status)}</span><strong>CONFIDENCE</strong><span>${escapeHtml(evidence.confidence)}</span>${evidence.limitations ? `<strong>LIMITATIONS</strong><span>${escapeHtml(evidence.limitations)}</span>` : ""}</div></details></td><td>${escapeHtml(evidenceLabel(evidence))}</td><td>${escapeHtml(formatDate(evidence.retrievedAt))}</td><td>${escapeHtml(evidence.confidence)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="unknown-message">NO MATERIAL EVIDENCE REGISTERED</div>`}
   </section>`;
@@ -1667,7 +1667,7 @@ function renderDashboardReport(scan) {
       ${scan.mode === "DEMO" ? `<div class="dashboard-demo-note">Demo report shown with fixed sample data. Run a live scan to replace it with provider evidence.</div>` : ""}
       ${scan.mode === "DEMO" ? "" : `<section id="risk-trajectory" class="trajectory-card"><div class="trajectory-heading"><div><span class="card-kicker">ADVANCED REPORT INTELLIGENCE</span><h3>Risk Trajectory</h3></div><span class="trajectory-state neutral">LOADING</span></div><p class="trajectory-empty">Loading the previous completed scan for comparison…</p></section>`}
       <div class="dashboard-report-grid">
-        <section class="overview-card">
+        <section id="report-overview" class="overview-card">
           <div class="overview-risk">
             <span class="card-kicker">OVERALL RISK</span>
             <div class="dashboard-score ${scoreTone(score)}">${escapeHtml(String(scoreLabel))}<small>/ 100</small></div>
@@ -1703,8 +1703,14 @@ function renderDashboardReport(scan) {
           </section>
         </aside>
       </div>
-      <div class="report-tabs" role="tablist" aria-label="Report sections">
-        <button class="active" type="button">Overview</button><button type="button">Contract Forensics</button><button type="button">Trading Safety</button><button type="button">Liquidity</button><button type="button">Holder Analysis</button><button type="button">Market</button><button type="button">Evidence</button>
+       <div class="report-tabs" role="tablist" aria-label="Report sections">
+         <button class="active" type="button" role="tab" aria-selected="true" data-report-target="report-overview">Overview</button>
+         <button type="button" role="tab" aria-selected="false" data-report-target="report-contract">Contract Forensics</button>
+         <button type="button" role="tab" aria-selected="false" data-report-target="report-trading">Trading Safety</button>
+         <button type="button" role="tab" aria-selected="false" data-report-target="report-liquidity">Liquidity</button>
+         <button type="button" role="tab" aria-selected="false" data-report-target="report-holder">Holder Analysis</button>
+         <button type="button" role="tab" aria-selected="false" data-report-target="report-market-data">Market</button>
+         <button type="button" role="tab" aria-selected="false" data-report-target="report-evidence">Evidence</button>
       </div>
       <div class="dashboard-lower-grid">
         <section class="report-table-card">
@@ -1880,6 +1886,19 @@ function renderReport(scan) {
   document.querySelector("#back-home")?.addEventListener("click", () => {
     window.history.pushState({}, "", "/dashboard");
     showLanding({ privateView: true });
+  });
+  document.querySelectorAll("[data-report-target]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const target = document.getElementById(tab.dataset.reportTarget);
+      if (!target) return;
+      if (deep) deep.hidden = false;
+      document.querySelectorAll("[data-report-target]").forEach((item) => {
+        const selected = item === tab;
+        item.classList.toggle("active", selected);
+        item.setAttribute("aria-selected", String(selected));
+      });
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   });
   const openDeep = () => {
     if (!deep) return;

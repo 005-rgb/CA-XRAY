@@ -521,6 +521,7 @@ body { background: var(--dashboard-bg); color: #17191c; }
 .report-tabs { display: flex; gap: 20px; overflow-x: auto; margin-top: 15px; border-bottom: 1px solid #dfe2e4; white-space: nowrap; scrollbar-width: thin; }
 .report-tabs button { flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent; padding: 8px 1px 10px; color: #81878c; background: transparent; font-size: 8px; }
 .report-tabs button:hover, .report-tabs button.active { color: #282d31; border-bottom-color: #25282b; }
+#report-overview, #report-overview-details, #report-contract, #report-trading, #report-liquidity, #report-holder, #report-market-data, #report-evidence { scroll-margin-top: 20px; }
 .dashboard-lower-grid { display: grid; grid-template-columns: minmax(0, 1fr) 218px; gap: 14px; margin-top: 14px; }
 .report-table-card { min-width: 0; padding: 14px 13px 7px; }
 .card-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
