@@ -1,6 +1,16 @@
 const CONTROLLED_PROVIDER_ORIGINS = Object.freeze([
   "https://api.gopluslabs.io",
   "https://api.dexscreener.com",
+  "https://eth.blockscout.com",
+  "https://bsc.blockscout.com",
+  "https://base.blockscout.com",
+  "https://arbitrum.blockscout.com",
+  "https://polygon.blockscout.com",
+  "https://ethereum-rpc.publicnode.com",
+  "https://bsc-rpc.publicnode.com",
+  "https://base-rpc.publicnode.com",
+  "https://arbitrum-one-rpc.publicnode.com",
+  "https://polygon-bor-rpc.publicnode.com",
 ]);
 
 function assertControlledProviderUrl(value, allowedOrigins = CONTROLLED_PROVIDER_ORIGINS) {

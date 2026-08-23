@@ -37,11 +37,11 @@ const LIQUIDITY_THRESHOLDS = Object.freeze({
 });
 
 const NETWORKS = Object.freeze([
-  { id: "ethereum", name: "Ethereum", goplusChainId: "1", dexChainId: "ethereum", explorer: "https://etherscan.io/address/" },
-  { id: "bsc", name: "BNB Chain", goplusChainId: "56", dexChainId: "bsc", explorer: "https://bscscan.com/address/" },
-  { id: "base", name: "Base", goplusChainId: "8453", dexChainId: "base", explorer: "https://basescan.org/address/" },
-  { id: "arbitrum", name: "Arbitrum", goplusChainId: "42161", dexChainId: "arbitrum", explorer: "https://arbiscan.io/address/" },
-  { id: "polygon", name: "Polygon", goplusChainId: "137", dexChainId: "polygon", explorer: "https://polygonscan.com/address/" },
+  { id: "ethereum", name: "Ethereum", goplusChainId: "1", dexChainId: "ethereum", blockscoutHost: "eth.blockscout.com", rpcUrl: "https://ethereum-rpc.publicnode.com", explorer: "https://etherscan.io/address/" },
+  { id: "bsc", name: "BNB Chain", goplusChainId: "56", dexChainId: "bsc", blockscoutHost: "bsc.blockscout.com", rpcUrl: "https://bsc-rpc.publicnode.com", explorer: "https://bscscan.com/address/" },
+  { id: "base", name: "Base", goplusChainId: "8453", dexChainId: "base", blockscoutHost: "base.blockscout.com", rpcUrl: "https://base-rpc.publicnode.com", explorer: "https://basescan.org/address/" },
+  { id: "arbitrum", name: "Arbitrum", goplusChainId: "42161", dexChainId: "arbitrum", blockscoutHost: "arbitrum.blockscout.com", rpcUrl: "https://arbitrum-one-rpc.publicnode.com", explorer: "https://arbiscan.io/address/" },
+  { id: "polygon", name: "Polygon", goplusChainId: "137", dexChainId: "polygon", blockscoutHost: "polygon.blockscout.com", rpcUrl: "https://polygon-bor-rpc.publicnode.com", explorer: "https://polygonscan.com/address/" },
 ]);
 
 const FIXED_DEMO_TIMESTAMP = "2026-01-15T12:00:00.000Z";

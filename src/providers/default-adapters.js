@@ -12,6 +12,7 @@ const {
 } = require("./contracts");
 
 const ADAPTER_VERSION = "1.0.0";
+const BLOCKSCOUT_ADAPTER_VERSION = "1.0.0";
 
 function isProviderObject(value) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -97,6 +98,84 @@ async function fetchJson(url, provider, timeout = 12_000, retries = 1) {
     breaker: fetchJson.breakers.get(provider),
     timeoutMs: timeout,
     retries,
+  });
+}
+
+async function fetchRpc(url, provider, address, timeout = 12_000, retries = 1) {
+  assertControlledProviderUrl(url, CONTROLLED_PROVIDER_ORIGINS);
+  if (!fetchRpc.breakers) fetchRpc.breakers = new Map();
+  if (!fetchRpc.breakers.has(provider)) fetchRpc.breakers.set(provider, new CircuitBreaker());
+  return withProviderPolicy(async ({ signal }) => {
+    const retrievedAt = new Date().toISOString();
+    const response = await fetch(url, {
+      method: "POST", signal,
+      headers: { Accept: "application/json", "Content-Type": "application/json", "User-Agent": "CA-XRAY/2.0" },
+      body: JSON.stringify([
+        { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: address, data: "0x8da5cb5b" }, "latest"] },
+        { jsonrpc: "2.0", id: 2, method: "eth_getStorageAt", params: [address, "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103", "latest"] },
+      ]),
+    });
+    const json = await response.json();
+    if (!response.ok || !Array.isArray(json) || json.some((item) => !isProviderObject(item) || item.jsonrpc !== "2.0")) {
+      throw Object.assign(new Error("MALFORMED_RESPONSE"), { code: "MALFORMED_RESPONSE", provider });
+    }
+    return { json: { owner: json.find((item) => item.id === 1), admin: json.find((item) => item.id === 2) }, retrievedAt };
+  }, { provider, breaker: fetchRpc.breakers.get(provider), timeoutMs: timeout, retries });
+}
+
+function abiFunctionNames(abi) {
+  return new Set((Array.isArray(abi) ? abi : [])
+    .filter((item) => item && item.type === "function" && typeof item.name === "string")
+    .map((item) => item.name.toLowerCase()));
+}
+
+function decodeAddress(value) {
+  if (typeof value !== "string" || !/^0x[0-9a-f]{64}$/i.test(value)) return null;
+  return `0x${value.slice(-40)}`;
+}
+
+function normalizeBlockscout({ response, rpcResponse, retrievedAt, network, providerId }) {
+  if (!isProviderObject(response)) {
+    return normalizedResult({ providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR, retrievedAt, errorCode: "MALFORMED_RESPONSE", message: "Block explorer response failed schema validation." });
+  }
+  const verified = response.is_verified === true || response.is_verified === "true";
+  const abi = Array.isArray(response.abi) ? response.abi : [];
+  if (!verified || !abi.length) {
+    return normalizedResult({
+      providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.UNAVAILABLE, retrievedAt,
+      errorCode: "SOURCE_NOT_VERIFIED", message: "No verified ABI was returned by the block explorer.",
+      limitations: ["Capability confirmation requires a verified ABI; no verified ABI was available."],
+      evidence: { verification: { sourceCode: makePoint(false, { providerId, retrievedAt }, "BS-001") } },
+    });
+  }
+  const names = abiFunctionNames(abi);
+  const has = (name) => names.has(name);
+  const ownerAddress = decodeAddress(rpcResponse?.owner?.result);
+  const rawAdminSlot = rpcResponse?.admin?.result;
+  const adminSlot = /^0x0{64}$/i.test(rawAdminSlot || "") ? null : rawAdminSlot || null;
+  const context = { providerId, retrievedAt };
+  const q = (value, ref) => makePoint(value, context, ref);
+  const capability = (value, ref) => makePoint(value, context, ref);
+  const limitations = [];
+  if (!ownerAddress) limitations.push("owner() did not return a decodable address from the public RPC.");
+  return normalizedResult({
+    providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.VALID, retrievedAt,
+    limitations,
+    evidence: {
+      security: {
+        canMint: capability(has("mint") || has("_mint"), "BS-010"),
+        canBlacklist: capability(has("blacklist") || has("setblacklist"), "BS-011"),
+        canWhitelist: capability(has("whitelist") || has("setwhitelist"), "BS-012"),
+        canPause: capability(has("pause") || has("unpause"), "BS-013"),
+        canChangeTax: capability(has("settax") || has("setbuytax") || has("setselltax"), "BS-014"),
+        isUpgradeable: capability(Boolean(adminSlot), "BS-015"),
+        canWithdraw: capability(has("withdraw") || has("rescue"), "BS-016"),
+        ownerAddress: q(ownerAddress, "BS-017"),
+        ownerControl: q(ownerAddress ? (/^0x0{40}$/i.test(ownerAddress) ? "RENOUNCED" : "ACTIVE") : null, "BS-018"),
+        sourceVerified: q(true, "BS-001"),
+      },
+      verification: { sourceCode: q(true, "BS-001"), verifiedAbi: q([...names], "BS-002"), adminSlot: q(adminSlot, "BS-003") },
+    },
   });
 }
 
@@ -305,6 +384,34 @@ function createDefaultProviderRegistry(options = {}) {
       normalizeResponse: ({ response, retrievedAt, network, address, providerId }) =>
         normalizeDexScreener({ response, retrievedAt, network, address, providerId }),
     },
+    {
+      id: "blockscout-abi",
+      source: "Blockscout verified ABI + public JSON-RPC",
+      version: BLOCKSCOUT_ADAPTER_VERSION,
+      capabilities: Object.freeze(["verified-abi", "ownership", "proxy-admin"]),
+      validateResponse: (response) =>
+        isProviderObject(response) && isProviderObject(response.explorer) && isProviderObject(response.rpc)
+          ? true
+          : { code: "MALFORMED_RESPONSE", message: "Block explorer response failed schema validation." },
+      fetch: async ({ address, network, providerPolicy = {} }) => {
+        const explorer = await fetchJson(
+          `https://${network.blockscoutHost}/api/v2/smart-contracts/${encodeURIComponent(address)}`,
+          "Blockscout ABI",
+          providerPolicy.timeoutMs,
+          providerPolicy.retries,
+        );
+        const rpc = await fetchRpc(network.rpcUrl, "Public JSON-RPC", address, providerPolicy.timeoutMs, providerPolicy.retries);
+        return { json: { explorer: explorer.json, rpc: rpc.json }, retrievedAt: explorer.retrievedAt };
+      },
+      normalizeResponse: ({ response, retrievedAt, network, providerId }) =>
+        normalizeBlockscout({
+          response: response.explorer,
+          rpcResponse: response.rpc,
+          retrievedAt,
+          network,
+          providerId,
+        }),
+    },
   ], options);
 }
 
@@ -313,4 +420,5 @@ module.exports = {
   createDefaultProviderRegistry,
   normalizeDexScreener,
   normalizeGoPlus,
+  normalizeBlockscout,
 };
