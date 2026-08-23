@@ -123,6 +123,14 @@ async function fetchRpc(url, provider, address, timeout = 12_000, retries = 1) {
   }, { provider, breaker: fetchRpc.breakers.get(provider), timeoutMs: timeout, retries });
 }
 
+async function fetchOptionalJson(url, provider, timeout = 12_000, retries = 1) {
+  try {
+    return await fetchJson(url, provider, timeout, retries);
+  } catch (error) {
+    return { json: null, retrievedAt: null, error };
+  }
+}
+
 function abiFunctionNames(abi) {
   return new Set((Array.isArray(abi) ? abi : [])
     .filter((item) => item && item.type === "function" && typeof item.name === "string")
@@ -134,7 +142,52 @@ function decodeAddress(value) {
   return `0x${value.slice(-40)}`;
 }
 
-function normalizeBlockscout({ response, rpcResponse, retrievedAt, network, providerId }) {
+function normalizeHolderData({ tokenResponse, holdersResponse, retrievedAt, providerId }) {
+  if (!isProviderObject(tokenResponse) || !isProviderObject(holdersResponse)) return {};
+  const items = Array.isArray(holdersResponse.items) ? holdersResponse.items : [];
+  const totalSupplyRaw = tokenResponse.total_supply ?? tokenResponse.totalSupply;
+  let totalSupply;
+  try {
+    totalSupply = BigInt(String(totalSupplyRaw));
+  } catch {
+    return {};
+  }
+  if (totalSupply <= 0n) return {};
+  const burnAddresses = new Set([
+    "0x0000000000000000000000000000000000000000",
+    "0x000000000000000000000000000000000000dead",
+  ]);
+  const holders = items.map((item) => {
+    const address = String(item.address_hash || item.address?.hash || "").toLowerCase();
+    const rawValue = item.value ?? item.token_balance ?? item.balance;
+    let value;
+    try { value = BigInt(String(rawValue)); } catch { value = 0n; }
+    const isContract = item.address?.is_contract === true
+      || item.address?.is_contract === "true"
+      || item.address_type === "contract";
+    return { address, value, isContract, isBurn: burnAddresses.has(address) };
+  }).filter((item) => item.address && item.value >= 0n);
+  const walletHolders = holders.filter((holder) => !holder.isContract && !holder.isBurn).sort((a, b) => (a.value === b.value ? a.address.localeCompare(b.address) : a.value > b.value ? -1 : 1));
+  const percentage = (value) => Number((value * 10000n) / totalSupply) / 100;
+  const sumTop = (count) => walletHolders.slice(0, count).reduce((sum, holder) => sum + holder.value, 0n);
+  const contractHolding = holders.filter((holder) => holder.isContract).reduce((sum, holder) => sum + holder.value, 0n);
+  const count = Number(holdersResponse.total_items ?? holdersResponse.total_count ?? tokenResponse.holders_count);
+  const totalHolders = Number.isFinite(count) && count >= 0 ? count : null;
+  const context = { providerId, retrievedAt };
+  const q = (value, ref) => makePoint(value, context, ref);
+  return {
+    holders: {
+      totalHolders: q(totalHolders, "BS-020"),
+      top1Percent: q(percentage(sumTop(1)), "BS-021"),
+      top5Percent: q(percentage(sumTop(5)), "BS-022"),
+      top10Percent: q(percentage(sumTop(10)), "BS-023"),
+      liquidityRelatedAddresses: q(percentage(contractHolding), "BS-024"),
+      holderDataScope: q("Non-burn, non-contract addresses; contract-held balances are reported separately.", "BS-025"),
+    },
+  };
+}
+
+function normalizeBlockscout({ response, tokenResponse, holdersResponse, rpcResponse, retrievedAt, network, providerId }) {
   if (!isProviderObject(response)) {
     return normalizedResult({ providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR, retrievedAt, errorCode: "MALFORMED_RESPONSE", message: "Block explorer response failed schema validation." });
   }
@@ -157,6 +210,11 @@ function normalizeBlockscout({ response, rpcResponse, retrievedAt, network, prov
   const q = (value, ref) => makePoint(value, context, ref);
   const limitations = [];
   if (!ownerAddress) limitations.push("owner() did not return a decodable address from the public RPC.");
+  const holderEvidence = normalizeHolderData({ tokenResponse, holdersResponse, retrievedAt, providerId });
+  if (!holderEvidence.holders?.totalHolders?.value) {
+    limitations.push("Holder count was not available from the shared block explorer source.");
+  }
+  const creatorAddress = response.creator_address_hash || response.creator_address?.hash || response.creator?.address_hash || null;
   return normalizedResult({
     providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.VALID, retrievedAt,
     limitations,
@@ -167,6 +225,10 @@ function normalizeBlockscout({ response, rpcResponse, retrievedAt, network, prov
         proxyAdminActive: q(Boolean(adminSlot), "BS-003"),
         adminControlFullyRemoved: q(adminSlot ? false : null, "BS-003"),
       },
+      deployer: {
+        address: q(creatorAddress, "BS-026"),
+      },
+      ...holderEvidence,
       verification: {
         sourceCode: q(true, "BS-001"),
         verifiedAbi: q([...names], "BS-002"),
@@ -397,12 +459,21 @@ function createDefaultProviderRegistry(options = {}) {
           providerPolicy.timeoutMs,
           providerPolicy.retries,
         );
-        const rpc = await fetchRpc(network.rpcUrl, "Public JSON-RPC", address, providerPolicy.timeoutMs, providerPolicy.retries);
-        return { json: { explorer: explorer.json, rpc: rpc.json }, retrievedAt: explorer.retrievedAt };
+        const [rpc, token, holders] = await Promise.all([
+          fetchRpc(network.rpcUrl, "Public JSON-RPC", address, providerPolicy.timeoutMs, providerPolicy.retries),
+          fetchOptionalJson(`https://${network.blockscoutHost}/api/v2/tokens/${encodeURIComponent(address)}`, "Blockscout token metadata", providerPolicy.timeoutMs, providerPolicy.retries),
+          fetchOptionalJson(`https://${network.blockscoutHost}/api/v2/tokens/${encodeURIComponent(address)}/holders`, "Blockscout token holders", providerPolicy.timeoutMs, providerPolicy.retries),
+        ]);
+        return {
+          json: { explorer: explorer.json, rpc: rpc.json, token: token.json, holders: holders.json },
+          retrievedAt: explorer.retrievedAt,
+        };
       },
       normalizeResponse: ({ response, retrievedAt, network, providerId }) =>
         normalizeBlockscout({
           response: response.explorer,
+          tokenResponse: response.token,
+          holdersResponse: response.holders,
           rpcResponse: response.rpc,
           retrievedAt,
           network,

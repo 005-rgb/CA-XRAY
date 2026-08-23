@@ -1,0 +1,129 @@
+# PROMPT RONDE 2 UNTUK REPLIT AI — CA X-RAY: TUNTASKAN BUG RESIDUAL + HOLDER/DEPLOYER FEATURE
+### Lanjutan dari ronde 1 (P0-1, P0-2, P1-1, P1-2, P2 sudah sebagian dikerjakan — jangan ulangi dari nol)
+
+> Copy-paste seluruh isi ini ke Replit AI / Agent dalam SATU sesi. Jangan minta konfirmasi di tengah jalan kecuali menemukan blocker nyata — kerjakan semua task secara berurutan dan laporkan hasil akhir sekaligus di akhir (bukan per-task) untuk efisiensi.
+
+---
+
+## ATURAN KERJA (WAJIB DIIKUTI UNTUK EFISIENSI)
+
+1. **Jangan re-audit ulang seluruh codebase dari nol.** Ronde 1 sudah berhasil memperbaiki: score range (P1-1), kontradiksi renounced/CAN CONTROL (P0-2), label jujur untuk data DexScreener yang tidak tersedia (Bagian 0), parsing website/socials (P2), relabeling "Pair Age" vs "Contract Age" (P2). **Cari langsung ke file/module yang menangani hal-hal itu** — kemungkinan besar bug residual di bawah ini letaknya di module yang SAMA atau module tetangga, bukan di tempat baru.
+2. **Kerjakan semua BAGIAN A sampai D di bawah dalam satu pass**, jangan berhenti untuk konfirmasi kecuali ada keputusan arsitektur besar yang tidak bisa diputuskan sendiri (mis. pilihan provider baru di BAGIAN D — untuk itu boleh ajukan 1 pertanyaan singkat, bukan banyak).
+3. **Prioritaskan fix yang tidak butuh provider baru dulu (BAGIAN A, B, C)** — ini murni bug logika/rendering di kode yang sudah ada, cepat dikerjakan, dampak besar. BAGIAN D (fitur baru holder/deployer) baru dikerjakan setelah A-C selesai dan lulus test.
+4. **Test wajib dijalankan dengan fixture yang SAMA yang sudah dipakai ronde 1** (PEPE `0x6982508145454Ce325dDbE47a25d4ec3d2311933` dan BOOE `0x289Ff00235D2b98b0145ff5D4435d3e92f9540a6`) — jangan buat fixture baru kecuali BAGIAN D butuh token dengan holder terkonsentrasi sebagai kasus uji tambahan (lihat BAGIAN D).
+5. Output akhir yang saya butuhkan: (a) daftar file yang diubah, (b) hasil test pass/fail, (c) **JSON before/after untuk re-scan PEPE** (lihat BAGIAN A — ini prioritas nomor satu, tanpa ini ronde 1 belum terbukti valid), (d) JSON hasil scan BOOE terbaru untuk verifikasi BAGIAN B & C.
+
+---
+
+## BAGIAN A — WAJIB PALING PERTAMA: BUKTIKAN REGRESI PEPE SUDAH TUNTAS
+
+Ronde 1 memperbaiki logika, tapi **belum pernah diverifikasi ulang terhadap kasus asli yang memicu semua perbaikan ini**: token PEPE (`0x6982508145454Ce325dDbE47a25d4ec3d2311933`, ownership renounced, TIDAK punya fungsi blacklist/pause/anti-whale di ABI terverifikasi).
+
+### Task
+1. Jalankan scan PEPE dengan kode hasil ronde 1.
+2. Verifikasi dan laporkan eksplisit satu per satu:
+   - Apakah `Blacklist addresses`, `Pause transfers`, `Modify anti-whale limits` sekarang berstatus `UNVERIFIED_SIGNAL` atau `NOT_CHECKED` (BUKAN lagi `DETECTED` dengan `CONFIDENCE: HIGH`)?
+   - Apakah `Contract Power Map` untuk PEPE menampilkan `CAN CONTROL: (kosong/UNKNOWN)`, bukan lagi daftar 3 kapabilitas seperti sebelum fix?
+   - Apakah `Overall Risk Score` PEPE turun signifikan dari nilai lama 22/100? Berapa nilai barunya (atau range barunya)?
+   - Apakah `Contract Control` category score juga turun dari 35/100?
+3. **Kalau ternyata provider capability-detection (yang menghasilkan evidence ID `GP-XXX`) TERNYATA masih tidak melakukan cross-check ke ABI sama sekali untuk PEPE** (artinya bug P0-1 sebenarnya belum benar-benar di-fix, cuma BOOE yang kebetulan sudah `NOT_DETECTED` dari awal sehingga terlihat "sudah benar" padahal logikanya belum tersentuh) — **laporkan ini sebagai temuan kritis terpisah**, jangan disembunyikan atau dianggap selesai. Ini kemungkinan nyata karena laporan BOOE yang saya terima kemarin tidak membuktikan verification layer bekerja (semua kapabilitas BOOE memang sudah NOT_DETECTED sejak awal, tidak pernah jadi test case yang valid untuk P0-1).
+
+### Acceptance Criteria (mutlak, tidak bisa ditawar)
+- JSON scan PEPE sebelum vs sesudah ditampilkan berdampingan di output akhir kamu.
+- Kalau setelah dicek ternyata verification layer P0-1 BELUM benar-benar terpasang untuk kasus PEPE (bukan cuma "kebetulan sudah benar" seperti BOOE), **implementasikan sekarang juga** sebelum lanjut ke bagian lain — ini prioritas absolut di atas semua task lain di dokumen ini.
+
+---
+
+## BAGIAN B — FIX 4 BUG KONKRET YANG DITEMUKAN DI RE-SCAN BOOE RONDE 1
+
+Semua bug ini murni logika/rendering, tidak butuh provider baru. Kerjakan sekaligus.
+
+### B1 — `Total Supply` masih menampilkan literal `NaN`
+Field `Quick Summary → Total Supply` pada hasil scan BOOE ronde 1 masih `NaN`. Ini melanggar acceptance criteria P2 ronde 1 yang eksplisit melarang literal `NaN` bocor ke UI.
+- **Fix**: null-check sebelum kalkulasi apa pun yang menghasilkan field ini. Kalau memang tidak bisa dihitung dari data yang tersedia (bukan derivasi fdv/price yang valid), tampilkan `"Tidak dapat dihitung dari sumber data saat ini"`.
+- **Kalau field ini SEHARUSNYA computed dari `fdv ÷ priceUsd`** (implied supply, bukan totalSupply() on-chain asli) — pastikan hasilnya benar secara matematis untuk BOOE (fdv $4.424.731 ÷ price $0.04424 ≈ 100.000.000, yang match dengan totalSupply 100.000.000 BOOE dari data publik) dan tampilkan dengan label jelas "Estimasi (fdv ÷ harga)". Kalau kalkulasi ini menghasilkan NaN, cari tahu kenapa — kemungkinan `priceUsd` bernilai `0`/`null`/`undefined` pada titik kalkulasi meski di bagian lain response API `price` berhasil ter-parse dengan benar (`$0.04424 VERIFIED` tampil normal di Market section) — ini indikasi ada DUA path kode berbeda yang membaca field price dari response yang sama, salah satunya gagal. Satukan jadi satu source of truth (sudah diminta di ronde 1, pastikan benar-benar diterapkan di path Total Supply juga).
+
+### B2 — Kontradiksi `DATA STATUS` panel vs detail laporan
+Panel ringkasan di bagian atas laporan (`DATA STATUS: On-Chain Data / Contract Code / Liquidity Data / Holder Data / Market Data / Social Data`) menampilkan status `Valid`/`Unavailable` yang **tidak sinkron** dengan detail di bawahnya:
+- `Holder Data: Valid` — padahal SEMUA field holder di bawah (`Total holders`, `Top 10%`, `Deployer`) berstatus `NOT CHECKED`/`UNKNOWN`. Ini salah, harusnya `Holder Data: Not Available` atau `Not Checked`.
+- `Social Data: Unavailable` — padahal `Official website` dan `Official socials` berhasil `VERIFIED` di bagian Project Context. Ini salah, harusnya `Valid`/`Available`.
+- **Fix**: panel `DATA STATUS` ini harus dihitung/dibaca dari **status field aktual yang sama** yang dipakai di bagian detail (satu source of truth), bukan flag terpisah yang di-set manual/independen di tempat lain. Cari di kode bagian mana yang men-generate panel ringkasan ini — kemungkinan besar itu logic lama dari sebelum ronde 1 yang belum ikut diupdate saat status granular (VERIFIED/NOT_CHECKED/UNKNOWN) diperkenalkan.
+
+### B3 — `EVIDENCE SOURCES` counter tidak update
+Laporan menampilkan `"1 Total Sources, 1 Successful, 0 Partial, 0 Failed"` padahal laporan yang sama memakai minimal 3 evidence type berbeda (contoh: `GP-001`...`GP-019` dari satu provider, `BS-001` dari provider lain untuk source verification, `DS-006` dari provider market data).
+- **Fix**: hitung `Total Sources` dari jumlah **provider unik yang benar-benar dipanggil** di scan tersebut (grouping berdasarkan prefix evidence ID atau field provider-name eksplisit kalau ada), bukan angka hardcoded/stale.
+
+### B4 — Format confidence rusak: `"HIGHData retrieval: HIGH"`
+Di tabel `KEY FINDINGS`, kolom confidence menampilkan dua label (risk confidence & data retrieval confidence — hasil pemisahan P1-2 ronde 1) yang menempel jadi satu string tanpa pemisah.
+- **Fix**: render dengan baris/pemisah jelas, contoh: `"Risk confidence: HIGH · Data retrieval: HIGH"` atau ditampilkan sebagai dua badge terpisah di UI, bukan satu string tanpa spasi.
+
+### B5 — `Project Identity Status: UNKNOWN` meski website & socials sudah VERIFIED
+Field ini seharusnya ikut naik statusnya begitu `Official website` dan `Official socials` berhasil VERIFIED dan konsisten dengan proyek yang diklaim (nama proyek match, kontrak match kalau website punya halaman yang menyebutkan contract address).
+- **Fix**: definisikan level `PROJECT IDENTITY STATUS` secara bertingkat, contoh:
+  - `UNKNOWN` — tidak ada website/socials ditemukan sama sekali.
+  - `PARTIAL` — website/socials ditemukan tapi belum ada cross-check contract address dari halaman resmi.
+  - `VERIFIED` — website/socials ditemukan DAN halaman resmi proyek menyebutkan contract address yang sama dengan yang di-scan (butuh scraping/cross-check minimal, boleh best-effort — kalau tidak feasible sekarang, minimal upgrade ke `PARTIAL` untuk kasus BOOE, jangan biarkan `UNKNOWN` padahal datanya sudah ada).
+- Jangan hardcode BOOE secara khusus — buat logic generik yang berlaku untuk semua token.
+
+### B6 — Reliability score stuck di 59/100 meski data coverage naik
+Coverage naik dari 59%→60% dan lebih banyak field berhasil VERIFIED (website, socials, source verification lewat BS-001) tapi Reliability tidak bergerak sama sekali.
+- **Cek** formula Reliability (`E × 35% + S × 20% + F × 15% + C × 15% + R × 10% + I × 5%`) — pastikan komponen `E` (kemungkinan "Evidence completeness") benar-benar dihitung ulang dari data terbaru tiap scan, bukan nilai yang di-cache/stale dari template lama. Laporkan formula lengkap tiap komponen (E, S, F, C, R, I) ke saya di output — apa arti masing-masing dan dari field mana asalnya — supaya bisa saya audit terpisah.
+
+### Acceptance Criteria BAGIAN B
+- Re-scan BOOE setelah fix: tidak ada lagi kontradiksi antara DATA STATUS panel vs detail; Total Supply bukan NaN; Evidence Sources count sesuai jumlah provider unik yang benar-benar dipanggil; confidence label terpisah rapi; Project Identity Status minimal jadi PARTIAL; Reliability score menunjukkan pergerakan yang masuk akal terhadap perubahan coverage.
+
+---
+
+## BAGIAN C — FIELD "Contract: UNKNOWN" / "Network: UNKNOWN" di Project Context
+
+Field ini muncul di bawah "Project name: VERIFIED" dan "Token/symbol: VERIFIED" tapi isinya "UNKNOWN" padahal contract address & network (Ethereum) sudah jelas ada di header laporan yang sama.
+
+### Task
+1. **Cari tahu dulu apa maksud field ini di kode** (jangan tebak) — kemungkinan besar ini dimaksudkan untuk "contract address yang diklaim di website/dokumentasi resmi proyek" (untuk cross-check terhadap contract address yang sedang di-scan — beda dari header laporan yang menampilkan address yang DIMINTA user untuk di-scan).
+2. Kalau memang itu maksudnya:
+   - Ganti label jadi lebih jelas, contoh: `"Contract address (per official source)"` dan `"Network (per official source)"`.
+   - Isi field ini kalau berhasil di-cross-check, atau tetap `UNKNOWN` dengan label yang sudah diperjelas kalau memang belum bisa di-cross-check (bukan bug, tapi labelnya harus tidak ambigu).
+3. Kalau ternyata field ini memang bug/duplikasi tidak berguna dari data yang sudah ada di header → hapus saja, jangan biarkan field kosong membingungkan tanpa fungsi jelas.
+
+---
+
+## BAGIAN D — FITUR BARU: HOLDER CONCENTRATION + DEPLOYER REPUTATION
+
+**Ini gap fungsional terbesar dibanding kompetitor (De.Fi) saat ini** — De.Fi berhasil mendeteksi "Dump Risk: a private wallet owns a significant percentage of total supply" untuk BOOE sebagai **High Risk**, sementara CA X-RAY masih `UNKNOWN`/`NOT CHECKED` total di kategori ini. Ini bukan cuma soal kelengkapan data — ini risiko nyata yang saat ini benar-benar terlewat oleh CA X-RAY.
+
+**Kerjakan BAGIAN D ini SETELAH BAGIAN A-C selesai dan lulus test**, karena ini scope lebih besar (integrasi provider baru).
+
+### D1 — Provider untuk Holder Data
+1. Tentukan provider: gunakan **block explorer API** (Etherscan API — endpoint `tokenholderlist`/`token holder count`, atau Blockscout API kalau chain tidak didukung Etherscan) untuk chain Ethereum. Kalau app sudah punya koneksi block explorer aktif dari BAGIAN A/perbaikan P0-1 ronde 1 (untuk ambil ABI/source code) — **pakai koneksi yang sama**, jangan bikin integrasi terpisah untuk hindari duplikasi kredit/rate-limit API.
+2. Data minimum yang wajib diambil & ditampilkan (kalau provider mendukung):
+   - `Total holders` (jumlah address unik pemegang token)
+   - `Top 1 holder %`, `Top 5 holders %`, `Top 10 holders %` dari total supply (exclude burn address `0x000...dEaD` dan LP pair address itu sendiri dari kalkulasi persentase individual — LP pair wajar memegang % besar karena itu liquidity, bukan "dump risk", tapi WAJIB tetap ditandai terpisah sebagai "Liquidity pool holding" bukan "private wallet holding" supaya tidak jadi false positive baru)
+3. **Threshold "Dump Risk" harus jelas dan bisa diaudit** (jangan black-box): contoh rule eksplisit yang harus ditampilkan ke user — *"Wallet non-LP, non-burn, non-contract memegang >X% dari total supply → flag sebagai Dump Risk [severity]"*. Tentukan X (sarankan mulai dari >10% untuk MEDIUM, >20% untuk HIGH — silakan sesuaikan tapi WAJIB didokumentasikan dan konsisten, bukan angka sembarang).
+4. Kalau holder API rate-limited/gagal untuk token tertentu → status `NOT_CHECKED` dengan alasan jelas (sesuai Bagian 0 ronde 1: bedakan "provider belum aktif" vs "API call gagal" vs "data memang tidak ada"), JANGAN pernah tampilkan 0%/kosong sebagai pengganti yang terlihat seperti "aman".
+
+### D2 — Deployer Reputation
+1. Pisahkan secara eksplisit dua identitas yang saat ini tercampur/hilang:
+   - **`Contract Creator`** — address yang men-deploy kontrak (transaksi deployment, ambil dari block explorer API "contract creator" endpoint).
+   - **`Contract Owner`** — hasil `eth_call` ke `owner()` (sudah ada logikanya dari P0-2 ronde 1, sudah benar untuk PEPE/BOOE menampilkan renounced).
+   - Ini dua hal berbeda (De.Fi di screenshot sudah memisahkan ini dengan benar — `Contract Creator: 0xc632...` vs `Contract Owner: 0x000...`), CA X-RAY saat ini keduanya `UNKNOWN`/kosong.
+2. **Deployer history (minimum viable, jangan over-engineer di ronde ini)**: cek apakah address `Contract Creator` sama pernah men-deploy kontrak lain yang tercatat di database internal aplikasi ini sendiri (dari riwayat scan sebelumnya — TIDAK perlu integrasi provider eksternal baru untuk fitur ini, cukup query database sendiri: "apakah address ini pernah muncul sebagai Contract Creator di scan lain sebelumnya, dan apa hasil risk score-nya saat itu?"). Ini fondasi awal reputasi deployer tanpa butuh data eksternal tambahan — bisa dikembangkan lebih jauh di ronde berikutnya.
+3. Field `Recent deployment` yang sudah ada di skema (saat ini `UNKNOWN`) — isi dengan boolean/timestamp dari data deployer yang sekarang berhasil diambil di D2.1.
+
+### Acceptance Criteria BAGIAN D
+- Scan ulang BOOE setelah fitur ini aktif: `Contract Creator` terisi (harus muncul `0xc632...0b1ffb` sesuai data publik yang sudah dikonfirmasi De.Fi & Etherscan), `Total holders` dan breakdown top holder % terisi (kalau provider berhasil), atau `NOT_CHECKED` dengan alasan jelas kalau gagal — bukan `UNKNOWN` generik lagi.
+- **Test case tambahan wajib**: cari SATU contoh token dengan holder terkonsentrasi nyata (>20% di satu wallet non-LP) dari data publik, jalankan scan, buktikan `Dump Risk` ter-flag dengan benar sesuai threshold yang didefinisikan di D1.3.
+- Field UI `HOLDER SUMMARY` dan `DEPLOYER` section di laporan (yang sudah ada strukturnya, tinggal isi datanya) harus terisi konsisten dengan data baru ini, ganti semua placeholder `NOT CHECKED`/`UNKNOWN` yang sekarang jadi data valid, atau tetap sebagai status yang jujur kalau memang provider gagal untuk kasus spesifik.
+
+---
+
+## LARANGAN YANG TETAP BERLAKU (diwarisi dari ronde 1, jangan dilanggar di ronde ini)
+- Jangan isi field kosong dengan default/tebakan yang terlihat meyakinkan.
+- Jangan naikkan confidence level tanpa dasar verifikasi nyata.
+- Kalau ragu antara "tampilkan status jujur (UNKNOWN/NOT_CHECKED)" vs "isi dengan estimasi supaya laporan terlihat lengkap" — selalu pilih yang pertama.
+- Field top holder % WAJIB memisahkan LP/contract address dari wallet individu — jangan sampai fitur baru ini malah menciptakan false positive baru (LP pair yang wajar memegang banyak token jangan ikut di-flag sebagai "dump risk").
+
+## URUTAN PENGERJAAN (untuk hemat kredit — jangan lompat urutan)
+1. **BAGIAN A** (regresi PEPE) — mutlak pertama, ini pembuktian ronde 1 valid atau tidak.
+2. **BAGIAN B** (6 bug residual) — semua bisa dikerjakan paralel dalam satu pass karena saling independen, tidak perlu provider baru.
+3. **BAGIAN C** (klarifikasi field Contract/Network UNKNOWN) — cepat, gabung sekalian dengan BAGIAN B.
+4. **BAGIAN D** (holder + deployer) — terakhir, scope paling besar, baru dikerjakan setelah A-C lulus test supaya tidak debugging dua lapis masalah sekaligus.
