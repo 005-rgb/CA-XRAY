@@ -1148,9 +1148,15 @@ async function scanLive({
     Object.assign(validationError, validationDetails, { validationMessage: message });
     throw validationError;
   }
+  const timestamp = new Date().toISOString();
+  const scan = createBaseScan({ mode: "LIVE", address: validation.normalized, network: validation.network, timestamp });
   if (!validation.network.evm) {
     try {
-      await verifyNativeNetwork({ network: validation.network, address: validation.normalized });
+      const nativeVerification = await verifyNativeNetwork({
+        network: validation.network,
+        address: validation.normalized,
+      });
+      applyProviderResult(scan, nativeVerification.result);
     } catch (error) {
       const verificationError = new Error(error.message);
       verificationError.code = error.code || "NATIVE_PROVIDER_ERROR";
@@ -1158,8 +1164,6 @@ async function scanLive({
       throw verificationError;
     }
   }
-  const timestamp = new Date().toISOString();
-  const scan = createBaseScan({ mode: "LIVE", address: validation.normalized, network: validation.network, timestamp });
   const providers = providerRegistry.list().slice().sort((left, right) => left.id.localeCompare(right.id));
   const context = {
     address: validation.normalized,

@@ -1,4 +1,5 @@
 const NATIVE_ADAPTER_VERSION = "1.0.0";
+const { normalizedPoint, normalizedResult, PROVIDER_RESULT_STATUS } = require("./contracts");
 
 const ADAPTERS = Object.freeze({
   solana: {
@@ -85,14 +86,46 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
   let exists = false;
   if (adapter.type === "solana-rpc") {
     const body = await requestJson(adapter.endpoint, {
-      jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [address, { encoding: "base64", commitment: "finalized" }],
+      jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [address, { encoding: "jsonParsed", commitment: "finalized" }],
     }, timeoutMs);
+    if (body.error) throw Object.assign(new Error("Solana RPC returned an error."), { code: "NATIVE_PROVIDER_ERROR" });
     const value = body.result?.value;
     exists = Boolean(value && typeof value === "object" && value.owner);
+    if (exists && value.data?.parsed?.type === "mint") {
+      const info = value.data.parsed.info || {};
+      const context = {
+        providerId: "solana-native-rpc",
+        adapterVersion: NATIVE_ADAPTER_VERSION,
+        retrievedAt: new Date().toISOString(),
+      };
+      const point = (item, evidenceReference) => normalizedPoint({
+        value: item,
+        ...context,
+        evidenceReference,
+      });
+      var nativeResult = normalizedResult({
+        providerId: context.providerId,
+        adapterVersion: context.adapterVersion,
+        status: PROVIDER_RESULT_STATUS.VALID,
+        retrievedAt: context.retrievedAt,
+        evidence: {
+          token: {
+            decimals: point(Number(info.decimals), "SOL-001"),
+            totalSupply: point(info.supply, "SOL-002"),
+          },
+          verification: {
+            nativeAccount: point(true, "SOL-003"),
+            tokenProgram: point(value.owner, "SOL-004"),
+            initialized: point(info.isInitialized === true, "SOL-005"),
+          },
+        },
+      });
+    }
   } else if (adapter.type === "sui-rpc") {
     const body = await requestJson(adapter.endpoint, {
       jsonrpc: "2.0", id: 1, method: "sui_getObject", params: [address, { showType: true, showOwner: true }],
     }, timeoutMs);
+    if (body.error) throw Object.assign(new Error("Sui RPC returned an error."), { code: "NATIVE_PROVIDER_ERROR" });
     exists = Boolean(body.result?.data?.objectId && !body.result?.error);
   } else if (adapter.type === "aptos-rest") {
     const response = await fetch(`${adapter.endpoint}/accounts/${encodeURIComponent(address)}/modules?limit=1`, {
@@ -108,6 +141,7 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
       jsonrpc: "2.0", id: "ca-xray", method: "query",
       params: { request_type: "view_account", finality: "final", account_id: address },
     }, timeoutMs);
+    if (body.error) throw Object.assign(new Error("NEAR RPC returned an error."), { code: "NATIVE_PROVIDER_ERROR" });
     exists = Boolean(body.result?.amount !== undefined && !body.error);
   }
 
@@ -121,6 +155,23 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
     adapterVersion: NATIVE_ADAPTER_VERSION,
     networkId: network.id,
     status: "verified",
+    result: nativeResult || normalizedResult({
+      providerId: `${network.id}-native-rpc`,
+      adapterVersion: NATIVE_ADAPTER_VERSION,
+      status: PROVIDER_RESULT_STATUS.VALID,
+      retrievedAt: new Date().toISOString(),
+      evidence: {
+        verification: {
+          nativeAccount: normalizedPoint({
+            value: true,
+            providerId: `${network.id}-native-rpc`,
+            adapterVersion: NATIVE_ADAPTER_VERSION,
+            retrievedAt: new Date().toISOString(),
+            evidenceReference: "NATIVE-001",
+          }),
+        },
+      },
+    }),
   };
 }
 

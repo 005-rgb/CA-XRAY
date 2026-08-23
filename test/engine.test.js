@@ -9,7 +9,7 @@ const {
   CATEGORY_WEIGHTS,
 } = require("../src/engine");
 const { normalizeBlockscout } = require("../src/providers/default-adapters");
-const { validateNativeAddress } = require("../src/providers/native-network-adapters");
+const { validateNativeAddress, verifyNativeNetwork } = require("../src/providers/native-network-adapters");
 
 const valid = "0x1234567890123456789012345678901234567890";
 
@@ -43,6 +43,17 @@ test("native network validation rejects EVM-shaped addresses on non-EVM networks
   );
   assert.equal(result.valid, false);
   assert.equal(result.code, "INVALID_ADDRESS");
+});
+
+test("native network verification rejects networks without a native adapter", async () => {
+  await assert.rejects(
+    () => verifyNativeNetwork({
+      network: { id: "ton", name: "TON" },
+      address: "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c",
+    }),
+    (error) => error.code === "NATIVE_NETWORK_VERIFICATION_UNAVAILABLE"
+      && /TON/.test(error.message),
+  );
 });
 
 test("all three demos are deterministic and clearly marked", () => {
