@@ -927,6 +927,9 @@ function validateForm() {
   const networkName = selectedNetwork?.textContent?.trim() || "selected network";
   const isSolana = networkInput.value === "solana";
   const isEvm = ["ethereum", "bsc", "base", "arbitrum", "polygon"].includes(networkInput.value);
+  const isSuiOrAptos = ["sui", "aptos"].includes(networkInput.value);
+  const isNear = networkInput.value === "near";
+  const isTron = networkInput.value === "tron";
   let valid = true;
   addressError.textContent = "";
   networkError.textContent = "";
@@ -938,6 +941,15 @@ function validateForm() {
     valid = false;
   } else if (isSolana && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
     addressError.textContent = "Enter a valid Solana contract address.";
+    valid = false;
+  } else if (isSuiOrAptos && !/^0x[0-9a-f]{1,64}$/i.test(address)) {
+    addressError.textContent = `Enter a valid native ${networkName} address.`;
+    valid = false;
+  } else if (isNear && !/^(?:[a-z0-9][a-z0-9._-]{0,63}|0x[0-9a-f]{64})$/i.test(address)) {
+    addressError.textContent = `Enter a valid native ${networkName} address.`;
+    valid = false;
+  } else if (isTron && !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address)) {
+    addressError.textContent = "Enter a valid native Tron address.";
     valid = false;
   } else if (!isEvm && !isSolana && /^0x[a-fA-F0-9]{40}$/.test(address)) {
     addressError.textContent = `${networkName} does not use EVM contract addresses. Enter an address native to ${networkName}, or check the selected network.`;
@@ -1168,7 +1180,7 @@ async function scanLive() {
     renderReport(currentScan);
   } catch (error) {
     showLanding({ privateView: true });
-    addressError.textContent = error.code === "CONTRACT_NOT_DEPLOYED_ON_NETWORK"
+    addressError.textContent = ["CONTRACT_NOT_DEPLOYED_ON_NETWORK", "NATIVE_NETWORK_VERIFICATION_UNAVAILABLE"].includes(error.code)
       ? `${error.message} Detected network: unavailable.`
       : error.message;
   } finally {

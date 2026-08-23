@@ -9,6 +9,7 @@ const {
   CATEGORY_WEIGHTS,
 } = require("../src/engine");
 const { normalizeBlockscout } = require("../src/providers/default-adapters");
+const { validateNativeAddress } = require("../src/providers/native-network-adapters");
 
 const valid = "0x1234567890123456789012345678901234567890";
 
@@ -33,6 +34,15 @@ test("block explorer rejects an address with no deployed code on the selected ne
   assert.equal(result.status, "unavailable");
   assert.equal(result.errorCode, "CONTRACT_NOT_DEPLOYED_ON_NETWORK");
   assert.match(result.message, /Ethereum/);
+});
+
+test("native network validation rejects EVM-shaped addresses on non-EVM networks", () => {
+  const result = validateNativeAddress(
+    valid,
+    { id: "solana", name: "Solana" },
+  );
+  assert.equal(result.valid, false);
+  assert.equal(result.code, "INVALID_ADDRESS");
 });
 
 test("all three demos are deterministic and clearly marked", () => {

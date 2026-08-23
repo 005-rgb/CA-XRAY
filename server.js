@@ -1279,6 +1279,10 @@ async function handleApiUnsafe(req, res, url, context) {
       const known = error && error.message === "REQUEST_TOO_LARGE";
       const targetValidation = [
         "CONTRACT_NOT_DEPLOYED_ON_NETWORK",
+        "NATIVE_NETWORK_VERIFICATION_UNAVAILABLE",
+        "INVALID_NATIVE_ADDRESS",
+        "NATIVE_PROVIDER_ERROR",
+        "NATIVE_PROVIDER_TIMEOUT",
         "NETWORK_NOT_SUPPORTED",
         "INVALID_ADDRESS",
         "EMPTY_ADDRESS",

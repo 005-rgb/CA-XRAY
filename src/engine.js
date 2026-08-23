@@ -4,6 +4,7 @@ const {
   PROVIDER_RESULT_STATUS,
 } = require("./providers/contracts");
 const { createDefaultProviderRegistry } = require("./providers/default-adapters");
+const { validateNativeAddress, verifyNativeNetwork } = require("./providers/native-network-adapters");
 
 const STATUS = Object.freeze({
   VERIFIED: "VERIFIED",
@@ -151,9 +152,7 @@ function validateAddress(value, network = null) {
   if ((network ? network.evm : true) && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
     return { valid: false, code: "INVALID_ADDRESS", message: `Enter a valid ${network?.name || "EVM"} contract address.` };
   }
-  if (network?.id === "solana" && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
-    return { valid: false, code: "INVALID_ADDRESS", message: "Enter a valid Solana address." };
-  }
+  if (network && !network.evm) return validateNativeAddress(address, network);
   if (network && !network.evm && /^0x[a-fA-F0-9]{40}$/.test(address)) {
     return { valid: false, code: "INVALID_ADDRESS", message: `Enter a valid ${network.name} contract address.` };
   }
@@ -1148,6 +1147,16 @@ async function scanLive({
     const { message, ...validationDetails } = validation;
     Object.assign(validationError, validationDetails, { validationMessage: message });
     throw validationError;
+  }
+  if (!validation.network.evm) {
+    try {
+      await verifyNativeNetwork({ network: validation.network, address: validation.normalized });
+    } catch (error) {
+      const verificationError = new Error(error.message);
+      verificationError.code = error.code || "NATIVE_PROVIDER_ERROR";
+      verificationError.validationMessage = error.message;
+      throw verificationError;
+    }
   }
   const timestamp = new Date().toISOString();
   const scan = createBaseScan({ mode: "LIVE", address: validation.normalized, network: validation.network, timestamp });
