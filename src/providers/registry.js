@@ -11,6 +11,9 @@ const CONTROLLED_PROVIDER_ORIGINS = Object.freeze([
   "https://base-rpc.publicnode.com",
   "https://arbitrum-one-rpc.publicnode.com",
   "https://polygon-bor-rpc.publicnode.com",
+  "https://opbnb-mainnet-rpc.bnbchain.org",
+  "https://rpc.hyperliquid.xyz",
+  "https://json-rpc.evm.shimmer.network",
 ]);
 
 function assertControlledProviderUrl(value, allowedOrigins = CONTROLLED_PROVIDER_ORIGINS) {
@@ -20,7 +23,10 @@ function assertControlledProviderUrl(value, allowedOrigins = CONTROLLED_PROVIDER
   } catch {
     throw Object.assign(new Error("PROVIDER_URL_INVALID"), { code: "PROVIDER_URL_INVALID" });
   }
-  if (url.protocol !== "https:" || !allowedOrigins.includes(url.origin)) {
+  const isPublicNodeRpc = url.protocol === "https:"
+    && url.hostname.endsWith(".publicnode.com")
+    && /^[a-z0-9.-]+\.publicnode\.com$/i.test(url.hostname);
+  if (url.protocol !== "https:" || (!allowedOrigins.includes(url.origin) && !isPublicNodeRpc)) {
     throw Object.assign(new Error("PROVIDER_URL_NOT_ALLOWED"), { code: "PROVIDER_URL_NOT_ALLOWED" });
   }
   return url;

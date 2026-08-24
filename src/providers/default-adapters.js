@@ -13,6 +13,7 @@ const {
 
 const ADAPTER_VERSION = "1.0.0";
 const BLOCKSCOUT_ADAPTER_VERSION = "1.0.0";
+const RPC_ADAPTER_VERSION = "1.0.0";
 
 function isProviderObject(value) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -275,6 +276,34 @@ function normalizeBlockscout({ response, tokenResponse, holdersResponse, rpcResp
   });
 }
 
+function normalizeRpcContract({ response, retrievedAt, network, providerId }) {
+  const code = response?.contractCode?.result;
+  if (typeof code !== "string") {
+    return normalizedResult({
+      providerId, adapterVersion: RPC_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR,
+      retrievedAt, errorCode: "MALFORMED_RESPONSE", message: "RPC response did not include contract bytecode.",
+    });
+  }
+  if (/^0x0*$/i.test(code)) {
+    return normalizedResult({
+      providerId, adapterVersion: RPC_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.UNAVAILABLE,
+      retrievedAt, errorCode: "CONTRACT_NOT_DEPLOYED_ON_NETWORK",
+      message: `No contract code was found at this address on ${network.name}. Check the selected network.`,
+      limitations: [`The public RPC proved that no contract bytecode is deployed on ${network.name}.`],
+    });
+  }
+  return normalizedResult({
+    providerId, adapterVersion: RPC_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.VALID,
+    retrievedAt, evidence: {
+      verification: {
+        nativeAccount: makePoint(true, { providerId, retrievedAt }, "RPC-001"),
+        contractBytecode: makePoint(code, { providerId, retrievedAt }, "RPC-002"),
+      },
+    },
+    limitations: ["RPC bytecode presence was verified; ABI, ownership, holders, and source verification require explorer evidence."],
+  });
+}
+
 function normalizeGoPlus({ response, retrievedAt, network, providerId, verifiedCapabilities = {} }) {
   const sourceContext = { providerId, retrievedAt };
   if (!isProviderObject(response) || ![1, "1"].includes(response.code) || !isProviderObject(response.result)) {
@@ -526,6 +555,20 @@ function createDefaultProviderRegistry(options = {}) {
           providerId,
         }),
     },
+    {
+      id: "rpc-contract",
+      source: "Public JSON-RPC contract bytecode",
+      version: RPC_ADAPTER_VERSION,
+      capabilities: Object.freeze(["contract-existence"]),
+      validateResponse: (response) =>
+        isProviderObject(response) && isProviderObject(response.contractCode)
+          ? true
+          : { code: "MALFORMED_RESPONSE", message: "RPC response did not include contract bytecode." },
+      fetch: ({ address, network, providerPolicy = {} }) =>
+        fetchRpc(network.rpcUrl, "Public JSON-RPC contract existence", address, providerPolicy.timeoutMs, providerPolicy.retries),
+      normalizeResponse: ({ response, retrievedAt, network, providerId }) =>
+        normalizeRpcContract({ response, retrievedAt, network, providerId }),
+    },
   ], options);
 }
 
@@ -535,4 +578,5 @@ module.exports = {
   normalizeDexScreener,
   normalizeGoPlus,
   normalizeBlockscout,
+  normalizeRpcContract,
 };

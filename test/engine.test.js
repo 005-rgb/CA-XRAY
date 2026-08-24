@@ -2,13 +2,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   createDemoScan,
+  NETWORKS,
   validateAddress,
   validateScanTarget,
   calculateCategoryScores,
   calculateReliability,
   CATEGORY_WEIGHTS,
 } = require("../src/engine");
-const { normalizeBlockscout } = require("../src/providers/default-adapters");
+const { normalizeBlockscout, normalizeRpcContract } = require("../src/providers/default-adapters");
 const { validateNativeAddress, verifyNativeNetwork } = require("../src/providers/native-network-adapters");
 
 const valid = "0x1234567890123456789012345678901234567890";
@@ -54,6 +55,28 @@ test("native network verification rejects networks without a native adapter", as
     (error) => error.code === "NATIVE_NETWORK_VERIFICATION_UNAVAILABLE"
       && /TON/.test(error.message),
   );
+});
+
+test("network catalog keeps 53 entries and exposes RPC evidence for every EVM entry", () => {
+  assert.equal(NETWORKS.length, 53);
+  const evmNetworks = NETWORKS.filter((network) => network.evm);
+  assert.ok(evmNetworks.length >= 20);
+  for (const network of evmNetworks) {
+    assert.match(network.rpcUrl, /^https:\/\//);
+    assert.equal(network.providerSupport["rpc-contract"], true);
+    assert.equal(validateAddress(`0x${"1".repeat(40)}`, network).valid, true);
+  }
+});
+
+test("RPC contract evidence never treats empty bytecode as deployed", () => {
+  const result = normalizeRpcContract({
+    network: { name: "Base" },
+    providerId: "rpc-contract",
+    retrievedAt: "2026-08-24T00:00:00.000Z",
+    response: { contractCode: { result: "0x" } },
+  });
+  assert.equal(result.status, "unavailable");
+  assert.equal(result.errorCode, "CONTRACT_NOT_DEPLOYED_ON_NETWORK");
 });
 
 test("all three demos are deterministic and clearly marked", () => {

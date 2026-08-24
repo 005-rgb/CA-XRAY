@@ -32,6 +32,7 @@ npm test
 - Phase 4 private routes fail closed across workspace boundaries. Superadmins are platform-scoped and cannot select or access a workspace through workspace routes.
 - Scan requests enforce bounded request size, multi-dimensional rate protection, monthly plan quota, concurrent-scan limits, idempotency, and append-only audit events.
 - Provider calls use a server-controlled HTTPS allowlist, strict adapter response validation, timeout/retry budgets, and circuit breakers. LIVE data is never replaced with DEMO data.
+- The catalog contains 53 networks. EVM entries with a verified public RPC use the `rpc-contract` adapter to prove bytecode exists on the selected chain; unsupported or unverified networks remain explicitly `unavailable`.
 - Phase 2 uses a provider-agnostic pipeline: chain validation → replaceable adapter → canonical normalized evidence → evidence validation → forensic/risk/report engines. Provider result states are `valid`, `unknown`, `unavailable`, and `provider_error`.
 - Live evidence keeps internal provenance (provider ID, adapter/schema/engine versions, retrieval time, confidence, and evidence reference), while public reports redact provider identity. Risk score, reliability score, and data status remain separate.
 - Provider conflicts are explicit and excluded from silent scoring; missing, null, malformed, unavailable, and provider-error values never become zero, false, or a safe status.

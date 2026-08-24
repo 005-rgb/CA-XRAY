@@ -62,15 +62,55 @@ const DEX_ONLY_NETWORKS = [
   ["fuse", "Fuse", "fuse"], ["neon-evm", "Neon EVM", "neon"], ["shimmer", "Shimmer", "shimmer"], ["karura", "Karura", "karura"],
 ].map(([id, name, dexChainId]) => ({ id, name, dexChainId, evm: false }));
 
+// Public RPC/explorer metadata is intentionally explicit. A network is only
+// promoted to EVM support when its chain id and RPC are known; the RPC adapter
+// still proves bytecode exists before any live report is produced.
+const EVM_EXTENSION_METADATA = Object.freeze({
+  avalanche: { chainId: "43114", rpcUrl: "https://avalanche-c-chain-rpc.publicnode.com", explorer: "https://snowtrace.io/address/" },
+  optimism: { chainId: "10", rpcUrl: "https://optimism-rpc.publicnode.com", explorer: "https://optimistic.etherscan.io/address/", blockscoutHost: "optimism.blockscout.com" },
+  blast: { chainId: "81457", rpcUrl: "https://blast-rpc.publicnode.com", explorer: "https://blastscan.io/address/" },
+  linea: { chainId: "59144", rpcUrl: "https://linea-rpc.publicnode.com", explorer: "https://lineascan.build/address/" },
+  scroll: { chainId: "534352", rpcUrl: "https://scroll-rpc.publicnode.com", explorer: "https://scrollscan.com/address/" },
+  taiko: { chainId: "167000", rpcUrl: "https://taiko-rpc.publicnode.com", explorer: "https://taikoscan.io/address/" },
+  mantle: { chainId: "5000", rpcUrl: "https://mantle-rpc.publicnode.com", explorer: "https://mantlescan.xyz/address/" },
+  metis: { chainId: "1088", rpcUrl: "https://metis-rpc.publicnode.com", explorer: "https://andromeda-explorer.metisdevops.link/address/" },
+  opbnb: { chainId: "204", rpcUrl: "https://opbnb-mainnet-rpc.bnbchain.org", explorer: "https://opbnbscan.com/address/" },
+  hyperliquid: { chainId: "999", rpcUrl: "https://rpc.hyperliquid.xyz/evm", explorer: "https://hyperevmscan.io/address/" },
+  berachain: { chainId: "80094", rpcUrl: "https://berachain-rpc.publicnode.com", explorer: "https://berascan.com/address/" },
+  "fantom-sonic": { chainId: "146", rpcUrl: "https://sonic-rpc.publicnode.com", explorer: "https://sonicscan.org/address/" },
+  celo: { chainId: "42220", rpcUrl: "https://celo-rpc.publicnode.com", explorer: "https://celoscan.io/address/" },
+  cronos: { chainId: "25", rpcUrl: "https://cronos-evm-rpc.publicnode.com", explorer: "https://cronoscan.com/address/" },
+  gnosis: { chainId: "100", rpcUrl: "https://gnosis-rpc.publicnode.com", explorer: "https://gnosisscan.io/address/", blockscoutHost: "gnosis.blockscout.com" },
+});
+
 const NETWORKS = Object.freeze([
   ...EVM_NETWORKS.map(([id, name, goplusChainId, dexChainId, blockscoutHost, rpcUrl, explorer]) => ({
     id, name, goplusChainId, dexChainId, blockscoutHost, rpcUrl, explorer, evm: true,
-    providerSupport: { "goplus-security": true, dexscreener: true, "blockscout-abi": true },
+    providerSupport: { "goplus-security": true, dexscreener: true, "blockscout-abi": true, "rpc-contract": true },
   })),
-  ...DEX_ONLY_NETWORKS.map((network) => ({
-    ...network,
-    providerSupport: { "goplus-security": false, dexscreener: true, "blockscout-abi": false },
-  })),
+  ...DEX_ONLY_NETWORKS.map((network) => {
+    const metadata = EVM_EXTENSION_METADATA[network.id];
+    if (!metadata) {
+      return {
+        ...network,
+        providerSupport: { "goplus-security": false, dexscreener: true, "blockscout-abi": false, "rpc-contract": false },
+      };
+    }
+    return {
+      ...network,
+      evm: true,
+      goplusChainId: metadata.chainId,
+      rpcUrl: metadata.rpcUrl,
+      explorer: metadata.explorer,
+      blockscoutHost: metadata.blockscoutHost || null,
+      providerSupport: {
+        "goplus-security": false,
+        dexscreener: true,
+        "blockscout-abi": Boolean(metadata.blockscoutHost),
+        "rpc-contract": true,
+      },
+    };
+  }),
 ]);
 
 const FIXED_DEMO_TIMESTAMP = "2026-01-15T12:00:00.000Z";
@@ -1158,10 +1198,24 @@ async function scanLive({
       });
       applyProviderResult(scan, nativeVerification.result);
     } catch (error) {
+      if (error.code === "NATIVE_NETWORK_VERIFICATION_UNAVAILABLE") {
+        applyProviderResult(scan, {
+          providerId: `${validation.network.id}-native-rpc`,
+          adapterVersion: "1.0.0",
+          status: PROVIDER_RESULT_STATUS.UNAVAILABLE,
+          retrievedAt: null,
+          confidence: "UNKNOWN",
+          errorCode: error.code,
+          message: error.message,
+          limitations: [`Live contract verification is not available for ${validation.network.name}.`],
+          evidence: {},
+        });
+      } else {
       const verificationError = new Error(error.message);
       verificationError.code = error.code || "NATIVE_PROVIDER_ERROR";
       verificationError.validationMessage = error.message;
       throw verificationError;
+      }
     }
   }
   const providers = providerRegistry.list().slice().sort((left, right) => left.id.localeCompare(right.id));
