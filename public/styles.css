@@ -1375,3 +1375,55 @@ html[data-theme="light"] .signal-board { background: rgba(255,255,255,.88); }
 @media (prefers-reduced-motion: reduce) {
   .radar-scan, .radar-ring, .signal-path, .signal-node, .hero-status-dot { animation: none; }
 }
+
+/* Auth surfaces use the same deliberate contrast system as the public landing. */
+.auth-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  border-color: var(--joben-line);
+  background: linear-gradient(135deg, rgba(18,28,39,.98), rgba(9,16,24,.98));
+  box-shadow: 0 26px 90px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.045);
+}
+.auth-panel::before {
+  content: "";
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  right: -130px;
+  top: -180px;
+  border: 1px solid rgba(77,225,208,.15);
+  border-radius: 50%;
+  box-shadow: 0 0 0 58px rgba(77,225,208,.025), 0 0 0 116px rgba(77,225,208,.018);
+  pointer-events: none;
+}
+.auth-panel > * { position: relative; z-index: 1; }
+.auth-copy h1 { color: var(--joben-text); }
+.auth-copy p:not(.eyebrow) { color: var(--joben-muted); }
+.auth-panel .form-field label,
+.auth-panel .recovery-form label { color: var(--joben-muted); }
+.auth-panel .form-field input,
+.auth-panel .recovery-form input {
+  color: var(--joben-text);
+  background: #09121b;
+  border-color: var(--joben-line-bright);
+}
+.auth-panel .form-field input::placeholder,
+.auth-panel .recovery-form input::placeholder { color: var(--joben-dim); }
+.auth-panel .auth-actions,
+.auth-panel .recovery-form { border-color: var(--joben-line); }
+.auth-panel .text-button { color: var(--joben-cyan); }
+.auth-panel .text-button:hover { color: var(--joben-text); }
+.auth-panel .secondary-button { color: var(--joben-text); background: rgba(255,255,255,.035); border-color: var(--joben-line-bright); }
+.auth-panel .secondary-button:hover { color: var(--joben-cyan); border-color: var(--joben-cyan); background: rgba(77,225,208,.08); }
+.auth-panel .field-error { color: #ff9696; }
+
+html[data-theme="light"] .auth-panel {
+  background: rgba(255,255,255,.95);
+  border-color: rgba(19,65,75,.18);
+  box-shadow: 0 25px 75px rgba(37,70,77,.12), inset 0 1px rgba(255,255,255,.95);
+}
+html[data-theme="light"] .auth-panel::before { border-color: rgba(0,125,120,.14); box-shadow: 0 0 0 58px rgba(0,125,120,.025), 0 0 0 116px rgba(0,125,120,.018); }
+html[data-theme="light"] .auth-panel .form-field input,
+html[data-theme="light"] .auth-panel .recovery-form input { color: var(--joben-text); background: #ffffff; border-color: var(--joben-line-bright); }
+html[data-theme="light"] .auth-panel .field-error { color: #a52f36; }
