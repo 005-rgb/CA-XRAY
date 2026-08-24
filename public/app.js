@@ -484,7 +484,7 @@ function showLanding({ privateView = false } = {}) {
     watchtower: ["Watchtower", "Review scheduled monitoring and evidence alerts."],
     "api-access": ["API Access", "Programmatic access to evidence-backed contract analysis."],
     settings: ["Settings", "Manage your identity, security, preferences, and active workspace."],
-    public: ["Kenali kemampuan kontrak sebelum menyentuh wallet Anda.", "Baca risiko kontrak dengan bukti nyata, sebelum keputusan menyentuh wallet Anda."],
+    public: ["Know what a contract can do before it touches your wallet.", "Read contract risk through real evidence before a decision reaches your wallet."],
   };
   document.querySelectorAll(".primary-nav .nav-item[data-route]").forEach((item) => {
     item.classList.toggle("active", privateView && item.dataset.route === `/dashboard${page === "dashboard" ? "" : `/${page}`}`);
