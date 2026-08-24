@@ -1,6 +1,6 @@
-# CA X-RAY
+# JOBEN NETWORK
 
-CA X-RAY is an evidence-based crypto contract forensic analyzer. It accepts an EVM contract address or a Solana public key, validates the selected supported network, and produces either a clearly labeled deterministic demo report or a LIVE report assembled from protocol-appropriate evidence.
+JOBEN NETWORK is an evidence-based crypto contract forensic analyzer. It accepts an EVM contract address or a Solana public key, validates the selected supported network, and produces either a clearly labeled deterministic demo report or a LIVE report assembled from protocol-appropriate evidence.
 
 ## Run
 

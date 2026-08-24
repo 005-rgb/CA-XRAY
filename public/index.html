@@ -3,17 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="CA X-RAY — evidence-based crypto contract forensic analysis." />
-    <title>CA X-RAY — Contract Forensic Analysis</title>
+    <meta name="description" content="JOBEN NETWORK — evidence-based crypto contract forensic analysis." />
+    <title>JOBEN NETWORK — Contract Intelligence</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <div class="signal-toast-region" id="signal-toast-region" aria-live="polite" aria-atomic="true"></div>
     <div class="app-frame" id="app-frame">
       <aside class="sidebar" id="sidebar" hidden>
-        <a class="brand" href="/" aria-label="CA X-RAY home">
+        <a class="brand" href="/" aria-label="JOBEN NETWORK home">
           <span class="brand-mark">◇</span>
-          <span class="brand-copy"><strong>CA X-RAY</strong><small>CONTRACT AUDIT INTELLIGENCE</small></span>
+          <span class="brand-copy"><strong>JOBEN NETWORK</strong><small>CONTRACT INTELLIGENCE</small></span>
         </a>
         <nav class="primary-nav" aria-label="Primary navigation">
           <a class="nav-item" data-route="/dashboard" href="/dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
@@ -38,9 +39,9 @@
 
       <div class="app-main">
         <header class="public-header" id="public-header">
-          <a class="brand" href="/" aria-label="CA X-RAY home">
+          <a class="brand" href="/" aria-label="JOBEN NETWORK home">
             <span class="brand-mark">◇</span>
-            <span class="brand-copy"><strong>CA X-RAY</strong><small>CONTRACT AUDIT INTELLIGENCE</small></span>
+            <span class="brand-copy"><strong>JOBEN NETWORK</strong><small>CONTRACT INTELLIGENCE</small></span>
           </a>
           <a class="auth-entry" id="auth-entry" href="/login">Sign in <span>→</span></a>
         </header>
@@ -59,7 +60,7 @@
           <section id="auth-panel" class="auth-panel" hidden>
             <div class="auth-copy">
               <p class="eyebrow">PRIVATE WORKSPACE ACCESS</p>
-              <h1 id="auth-title">Sign in to CA X-RAY</h1>
+              <h1 id="auth-title">Sign in to JOBEN NETWORK</h1>
               <p>Sign in to securely save your analysis and keep scan history isolated to your account.</p>
             </div>
             <form id="auth-form" class="auth-form" novalidate>
@@ -223,9 +224,9 @@
           <section id="landing" class="dashboard-page public-home">
             <div class="dashboard-heading" id="dashboard">
               <div>
-                <p class="eyebrow">CA X-RAY / CONTRACT INTELLIGENCE</p>
-                <h1 id="landing-title">Analyze a smart contract before you trust it.</h1>
-                <p id="landing-description">Evidence-based contract forensic analysis across supported networks.</p>
+                <p class="eyebrow">JOBEN NETWORK / CONTRACT INTELLIGENCE</p>
+                <h1 id="landing-title">Know what a contract can do before it touches your wallet.</h1>
+                <p id="landing-description">Evidence-based smart contract intelligence across supported networks.</p>
               </div>
             </div>
             <section id="dashboard-overview" class="dashboard-overview" hidden>
@@ -280,6 +281,23 @@
                 </div>
               </div>
             </div>
+            <section class="network-pulse" id="network-pulse" aria-label="Network telemetry">
+              <div class="pulse-intro"><span class="pulse-orbit"></span><div><span class="card-kicker">NETWORK TELEMETRY</span><strong>Evidence systems online</strong></div></div>
+              <div class="pulse-stat"><span>NETWORKS</span><strong>53</strong><small>SUPPORTED</small></div>
+              <div class="pulse-stat"><span>SCAN MODE</span><strong>READ-ONLY</strong><small>NO WALLET ACCESS</small></div>
+              <div class="pulse-stat"><span>STATUS</span><strong class="pulse-live">OPERATIONAL</strong><small>LAST CHECK <time>NOW</time></small></div>
+            </section>
+            <section class="signal-board" id="signal-board" aria-label="Helpful scan signals">
+              <div class="signal-board-heading">
+                <div><span class="card-kicker">SIGNAL CENTER</span><h2>Every scan leaves an evidence trail.</h2></div>
+                <span class="signal-live"><i></i> LIVE MONITORING</span>
+              </div>
+              <div class="signal-board-grid">
+                <article class="signal-preview signal-preview-cyan"><span class="signal-marker">01</span><div><strong>Provider-aware</strong><p>Conflicting or unavailable evidence stays visible instead of becoming a false “safe” result.</p></div><span class="signal-state">READY</span></article>
+                <article class="signal-preview signal-preview-amber"><span class="signal-marker">02</span><div><strong>Risk changes</strong><p>Re-scans surface what changed in control, liquidity, trading, and holder behavior.</p></div><span class="signal-state">TRACKED</span></article>
+                <article class="signal-preview signal-preview-green"><span class="signal-marker">03</span><div><strong>Actionable verdicts</strong><p>Every high-impact finding is paired with evidence and a clear next step.</p></div><span class="signal-state">VERIFIED</span></article>
+              </div>
+            </section>
             <section id="scan-history" class="scan-history" hidden>
               <div class="history-heading">
                 <div></div>
@@ -331,7 +349,7 @@
               </div>
               <div class="settings-card api-coming-soon">
                 <span class="card-kicker">API PROGRAM</span>
-                <h3>Build with CA X-RAY intelligence</h3>
+                <h3>Build with JOBEN NETWORK intelligence</h3>
                 <p class="settings-help">API keys, usage limits, and documentation will be available when the developer program launches. Your account is not charged for this feature while it is marked Soon.</p>
                 <div class="api-preview-grid">
                   <div><strong>Read-only analysis</strong><span>Evidence stays within the same safety boundary as the dashboard.</span></div>
@@ -394,7 +412,7 @@
                   </section>
                   <section class="settings-card" id="settings-privacy">
                     <div class="settings-card-heading"><div><span class="card-kicker">PRIVACY &amp; DATA</span><h3>Your data controls</h3></div></div>
-                    <p class="settings-help privacy-summary">CA-XRAY performs read-only analysis. We never request private keys, seed phrases, signatures, or transaction permissions. Scan history belongs to the active workspace.</p>
+                    <p class="settings-help privacy-summary">JOBEN NETWORK performs read-only analysis. We never request private keys, seed phrases, signatures, or transaction permissions. Scan history belongs to the active workspace.</p>
                     <div class="privacy-actions"><button class="secondary-button" id="export-data" type="button">Export my scan data</button><button class="danger-button" id="delete-account" type="button">Request account deletion</button></div>
                     <p id="privacy-status" class="settings-status" role="status"></p>
                   </section>
@@ -424,7 +442,7 @@
           <section id="scan-loading" class="loading-page" hidden>
             <div class="loading-orbit" aria-hidden="true"></div>
             <p class="eyebrow">ANALYSIS IN PROGRESS</p>
-            <h2 id="loading-title">Building a forensic snapshot.</h2>
+          <h2 id="loading-title">Building a forensic snapshot.</h2>
             <div id="loading-stages" class="loading-stages"></div>
             <p class="loading-note">Available evidence is preserved as returned. No fallback values are being substituted.</p>
             <button type="button" id="cancel-scan" class="secondary-button cancel-scan">Cancel scan</button>

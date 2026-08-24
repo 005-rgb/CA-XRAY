@@ -105,6 +105,7 @@ let activeScanJobId = null;
 let historyCursor = null;
 let adminInventoryType = null;
 const adminState = { providers: [] };
+let lastSignalStage = "";
 const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
 const isAdminRoute = () => pathName() === "/admin";
@@ -131,6 +132,20 @@ async function apiJson(url, options = {}) {
 
 function authMessage(message, target = authStatus) {
   if (target) target.textContent = message || "";
+}
+
+function pushSignal(title, message, tone = "cyan", replace = false) {
+  const region = document.querySelector("#signal-toast-region");
+  if (!region || !title) return;
+  const key = `${title}:${message}`;
+  if (replace && lastSignalStage === key) return;
+  lastSignalStage = key;
+  const toast = document.createElement("div");
+  toast.className = `signal-toast ${tone}`;
+  toast.innerHTML = `<span class="toast-pulse"></span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(message)}</p></div><button type="button" aria-label="Dismiss notification">×</button>`;
+  toast.querySelector("button").addEventListener("click", () => toast.remove());
+  region.appendChild(toast);
+  window.setTimeout(() => toast.remove(), tone === "danger" ? 7200 : 5200);
 }
 
 function setShell({ privateView = false, authView = false } = {}) {
@@ -169,7 +184,7 @@ function configureAuthRoute() {
   if (!isAuthRoute()) return;
   const register = pathName() === "/register";
   authMode.value = register ? "register" : "login";
-  authTitle.textContent = register ? "Create your CA X-RAY account" : "Sign in to CA X-RAY";
+  authTitle.textContent = register ? "Create your JOBEN NETWORK account" : "Sign in to JOBEN NETWORK";
   authSubmitLabel.textContent = register ? "Create account" : "Sign in";
   authSwitch.textContent = register ? "I already have an account" : "Create an account";
   authPassword.autocomplete = register ? "new-password" : "current-password";
@@ -294,7 +309,7 @@ authForm?.addEventListener("submit", async (event) => {
 authSwitch?.addEventListener("click", () => {
   const register = authMode.value !== "register";
   authMode.value = register ? "register" : "login";
-  authTitle.textContent = register ? "Create your CA X-RAY account" : "Sign in to CA X-RAY";
+  authTitle.textContent = register ? "Create your JOBEN NETWORK account" : "Sign in to JOBEN NETWORK";
   authSubmitLabel.textContent = register ? "Create account" : "Sign in";
   authSwitch.textContent = register ? "I already have an account" : "Create an account";
   authPassword.autocomplete = register ? "new-password" : "current-password";
@@ -468,7 +483,7 @@ function showLanding({ privateView = false } = {}) {
     watchtower: ["Watchtower", "Review scheduled monitoring and evidence alerts."],
     "api-access": ["API Access", "Programmatic access to evidence-backed contract analysis."],
     settings: ["Settings", "Manage your identity, security, preferences, and active workspace."],
-    public: ["Analyze a smart contract before you trust it.", "Evidence-based contract forensic analysis across supported networks."],
+    public: ["Know what a contract can do before it touches your wallet.", "Evidence-based smart contract intelligence across supported networks."],
   };
   document.querySelectorAll(".primary-nav .nav-item[data-route]").forEach((item) => {
     item.classList.toggle("active", privateView && item.dataset.route === `/dashboard${page === "dashboard" ? "" : `/${page}`}`);
@@ -476,6 +491,10 @@ function showLanding({ privateView = false } = {}) {
   document.querySelector("#landing-title").textContent = pageCopy[page][0];
   document.querySelector("#landing-description").textContent = pageCopy[page][1];
   document.querySelector("#scan-mode-card").hidden = !privateView || !["dashboard", "new-scan"].includes(page);
+  const signalSurface = document.querySelector("#signal-board");
+  const networkPulse = document.querySelector("#network-pulse");
+  if (signalSurface) signalSurface.hidden = privateView && !["dashboard", "new-scan"].includes(page);
+  if (networkPulse) networkPulse.hidden = privateView && !["dashboard", "new-scan"].includes(page);
   document.querySelector("#dashboard").classList.toggle("private-heading", privateView);
   document.querySelector("#dashboard-overview").hidden = !privateView || page !== "dashboard";
   document.querySelector("#new-scan").hidden = privateView ? page !== "new-scan" : false;
@@ -661,7 +680,7 @@ document.querySelector("#export-data")?.addEventListener("click", async () => {
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "ca-xray-scan-data.json";
+    link.download = "joben-network-scan-data.json";
     link.click();
     URL.revokeObjectURL(link.href);
     settingMessage("privacy-status", "Your workspace scan data has been exported.", "success");
@@ -1153,12 +1172,15 @@ function showLoading(stages = []) {
   report.hidden = true;
   loading.hidden = false;
   loadingStages.innerHTML = (stages.length ? stages : ["VALIDATING", "FETCHING DATA"]).map((stage, index) => `<span class="stage ${index === 0 ? "active" : ""}">${escapeHtml(stage)}</span>`).join("");
+  pushSignal("Scan initialized", "The evidence pipeline is validating your selected network and address.", "cyan");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function updateLoading(scan) {
   if (!scan?.stages) return;
   loadingStages.innerHTML = scan.stages.map((stage, index) => `<span class="stage ${index === scan.stages.length - 1 ? "active" : "done"}">${escapeHtml(stage)}</span>`).join("");
+  const currentStage = scan.stages[scan.stages.length - 1];
+  if (currentStage) pushSignal(currentStage.replaceAll("_", " "), "Evidence collection is progressing through the forensic pipeline.", "cyan", true);
 }
 
 function validateForm() {
@@ -1418,11 +1440,17 @@ async function scanLive() {
     updateLoading(currentScan);
     window.history.pushState({}, "", `/dashboard/scans/${encodeURIComponent(body.job.id)}`);
     renderReport(currentScan);
+    const score = currentScan?.risk?.finalScore;
+    const level = currentScan?.risk?.level || "UNKNOWN";
+    pushSignal(`Scan complete · ${level}`, score === null || score === undefined
+      ? "The report is ready, but the available evidence is not sufficient for a numeric risk score."
+      : `Risk posture calculated at ${Math.round(score)} / 100. Review the evidence trail before taking action.`, score >= 70 ? "danger" : score >= 40 ? "warning" : "success");
   } catch (error) {
     showLanding({ privateView: true });
     addressError.textContent = ["CONTRACT_NOT_DEPLOYED_ON_NETWORK", "NATIVE_NETWORK_VERIFICATION_UNAVAILABLE"].includes(error.code)
       ? `${error.message} Detected network: unavailable.`
       : error.message;
+    pushSignal("Scan interrupted", error.message, "danger");
   } finally {
     activeScanJobId = null;
     if (cancelScanButton) cancelScanButton.disabled = false;
@@ -1448,9 +1476,11 @@ async function loadPrivateRoute() {
     currentScan = job.scan;
     updateLoading(currentScan);
     renderReport(currentScan);
+    pushSignal("Report restored", "The completed evidence snapshot is available in your private workspace.", "success");
   } catch (error) {
     showLanding({ privateView: true });
     addressError.textContent = error.message;
+    pushSignal("Report unavailable", error.message, "danger");
   }
 }
 
@@ -1529,7 +1559,7 @@ function renderHero(scan) {
     ${scan.errors.length ? `<div class="error-banner"><strong>PARTIAL DATA:</strong> Some evidence was unavailable for this scan. Missing fields remain UNKNOWN and were not replaced.</div>` : ""}
     <div class="report-hero">
       <div class="report-identity">
-        <p class="eyebrow">CA X-RAY / FORENSIC REPORT</p>
+        <p class="eyebrow">JOBEN NETWORK / FORENSIC REPORT</p>
         <h1>${name}${symbol ? ` <span class="symbol">/ ${symbol}</span>` : ""}</h1>
         <p>${escapeHtml(summaryParagraph(scan))}</p>
         <div class="identity-grid">
@@ -1835,7 +1865,7 @@ function renderFinalAssessment(scan) {
     </div>
     <h3 class="subheading verify-heading">WHAT TO VERIFY BEFORE TRUSTING THIS TOKEN</h3>
     <div class="checklist"><div>Verify contract address</div><div>Review owner permissions</div><div>Review holder concentration</div><div>Review liquidity</div><div>Review trading restrictions</div><div>Review audit claims</div><div>Review deployer activity</div></div>
-    <p class="disclaimer">This is not financial advice. This assessment does not guarantee safety and does not establish that a token is a scam. CA X-RAY does not provide BUY, SELL, LONG, or SHORT recommendations.</p>
+    <p class="disclaimer">This is not financial advice. This assessment does not guarantee safety and does not establish that a token is a scam. JOBEN NETWORK does not provide BUY, SELL, LONG, or SHORT recommendations.</p>
   </section>`;
 }
 

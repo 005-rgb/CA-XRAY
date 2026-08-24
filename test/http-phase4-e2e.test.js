@@ -108,7 +108,7 @@ test("Phase 4 HTTP authorization matrix", async () => {
   const homepage = await visitor.request("/");
   assert.equal(homepage.status, 200);
   const homepageHtml = await homepage.text();
-  assert.match(homepageHtml, /CA X-RAY/);
+  assert.match(homepageHtml, /JOBEN NETWORK/);
 
   const privateRedirect = await visitor.request("/dashboard");
   assert.equal(privateRedirect.status, 302);
