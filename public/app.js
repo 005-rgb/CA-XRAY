@@ -109,7 +109,16 @@ const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
 const isAdminRoute = () => pathName() === "/admin";
 const reportRouteMatch = () => pathName().match(/^\/dashboard\/scans\/([^/]+)$/);
-const isPrivateRoute = () => pathName() === "/dashboard" || pathName().startsWith("/dashboard/");
+const isPrivateRoute = () => pathName() === "/dashboard" || /^\/dashboard\/(?:new-scan|history|passport|watchtower|api-access|settings)$/.test(pathName()) || pathName().startsWith("/dashboard/scans/");
+const privatePage = () => {
+  if (pathName() === "/dashboard/new-scan") return "new-scan";
+  if (pathName() === "/dashboard/history") return "history";
+  if (pathName() === "/dashboard/passport") return "passport";
+  if (pathName() === "/dashboard/watchtower") return "watchtower";
+  if (pathName() === "/dashboard/api-access") return "api-access";
+  if (pathName() === "/dashboard/settings") return "settings";
+  return "dashboard";
+};
 const pendingScanStorageKey = "ca_xray_pending_scan";
 let authRequested = isAuthRoute() || isAdminRoute();
 
@@ -450,22 +459,43 @@ function showLanding({ privateView = false } = {}) {
   report.hidden = true;
   document.querySelector("#dashboard-report").hidden = true;
   document.querySelector("#dashboard-report").innerHTML = "";
-  document.querySelector("#landing-title").textContent = privateView
-    ? "Scan New Contract"
-    : "Analyze a smart contract before you trust it.";
-  document.querySelector("#landing-description").textContent = privateView
-    ? "Evidence-backed forensic assessment for the selected contract."
-    : "Evidence-based contract forensic analysis across supported networks.";
-  document.querySelector("#scan-mode-card").hidden = !privateView;
+  const page = privateView ? privatePage() : "public";
+  const pageCopy = {
+    dashboard: ["Dashboard", "Your evidence-backed contract intelligence workspace."],
+    "new-scan": ["Scan New Contract", "Evidence-backed forensic assessment for the selected contract."],
+    history: ["Scan History", "Previous analyses available to this workspace."],
+    passport: ["Risk Passport", "Track evidence-backed changes across monitored contracts."],
+    watchtower: ["Watchtower", "Review scheduled monitoring and evidence alerts."],
+    "api-access": ["API Access", "Programmatic access to evidence-backed contract analysis."],
+    settings: ["Settings", "Manage your identity, security, preferences, and active workspace."],
+    public: ["Analyze a smart contract before you trust it.", "Evidence-based contract forensic analysis across supported networks."],
+  };
+  document.querySelectorAll(".primary-nav .nav-item[data-route]").forEach((item) => {
+    item.classList.toggle("active", privateView && item.dataset.route === `/dashboard${page === "dashboard" ? "" : `/${page}`}`);
+  });
+  document.querySelector("#landing-title").textContent = pageCopy[page][0];
+  document.querySelector("#landing-description").textContent = pageCopy[page][1];
+  document.querySelector("#scan-mode-card").hidden = !privateView || !["dashboard", "new-scan"].includes(page);
   document.querySelector("#dashboard").classList.toggle("private-heading", privateView);
+  document.querySelector("#dashboard-overview").hidden = !privateView || page !== "dashboard";
+  document.querySelector("#new-scan").hidden = privateView ? page !== "new-scan" : false;
   document.querySelector("#new-scan").classList.toggle("public-scan-workbench", !privateView);
   document.querySelector("#new-scan").classList.remove("report-route");
-  scanHistory.hidden = !privateView;
-  settingsPanel.hidden = !privateView || !window.location.hash.startsWith("#settings");
+  scanHistory.hidden = !privateView || page !== "history";
+  intelligenceDashboard.hidden = !privateView || !["passport", "watchtower"].includes(page);
+  document.querySelector("#api-access").hidden = !privateView || page !== "api-access";
+  settingsPanel.hidden = !privateView || page !== "settings";
+  document.querySelector("#risk-passport").hidden = page !== "passport";
+  document.querySelector("#watchtower").hidden = page !== "watchtower";
+  document.querySelector("#watchtower-alerts").hidden = page !== "watchtower";
+  document.querySelector(".intelligence-heading h2").textContent = page === "passport" ? "Risk Passport" : "Watchtower";
+  document.querySelector(".intelligence-heading p").textContent = page === "passport"
+    ? "Track evidence-backed change over time."
+    : "Review scheduled monitoring and evidence alerts.";
   if (privateView) {
-    loadScanHistory();
-    loadIntelligenceDashboard();
-    loadSettings();
+    if (page === "history") loadScanHistory();
+    if (["passport", "watchtower"].includes(page)) loadIntelligenceDashboard();
+    if (page === "settings") loadSettings();
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -650,9 +680,7 @@ document.querySelector("#delete-account")?.addEventListener("click", async (even
 settingsNavLinks.forEach((link) => link.addEventListener("click", () => {
   settingsNavLinks.forEach((item) => item.classList.toggle("active", item === link));
 }));
-window.addEventListener("hashchange", () => {
-  if (settingsPanel && isPrivateRoute()) settingsPanel.hidden = !window.location.hash.startsWith("#settings");
-});
+window.addEventListener("hashchange", () => refreshAuth());
 
 function showAdminShell() {
   setShell({ privateView: true });

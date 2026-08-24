@@ -425,6 +425,20 @@ body { background: var(--dashboard-bg); color: #17191c; }
 .settings-status { min-height: 13px; margin: 0; color: #71777c; font-size: 9px; }
 .settings-status.success { color: #328a60; }
 .settings-status.error { color: #bd443c; }
+.dashboard-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.overview-page-card { display: grid; align-content: start; gap: 9px; min-height: 190px; padding: 18px; border: 1px solid var(--dashboard-border); border-radius: 5px; background: #fff; }
+.overview-page-card strong { color: #30363b; font-size: 14px; }
+.overview-page-card p { margin: 0 0 8px; color: #858b90; font-size: 10px; line-height: 1.6; }
+.overview-link { justify-self: start; text-decoration: none; }
+.overview-link span { margin-left: 8px; }
+.page-badge { align-self: flex-start; margin-top: 6px; }
+.api-coming-soon { max-width: 780px; }
+.api-coming-soon h3 { margin: 8px 0; color: #30363b; font-size: 16px; }
+.api-coming-soon > p { max-width: 560px; }
+.api-preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 22px; }
+.api-preview-grid > div { display: grid; gap: 6px; padding: 13px; border: 1px solid #eff0f1; border-radius: 4px; background: #fafbfb; }
+.api-preview-grid strong { color: #50565b; font-size: 9px; }
+.api-preview-grid span { color: #858b90; font-size: 8px; line-height: 1.5; }
 .settings-list { border-top: 1px solid #eff0f1; }
 .settings-list-row { display: flex; justify-content: space-between; align-items: center; gap: 15px; border-bottom: 1px solid #eff0f1; padding: 10px 0; }
 .settings-list-row strong, .settings-list-row span { display: block; }
@@ -673,6 +687,7 @@ body { background: var(--dashboard-bg); color: #17191c; }
   .report-side-column { grid-template-columns: 1fr 1fr; }
   .lower-side { grid-template-columns: 1fr; }
   .intelligence-grid { grid-template-columns: 1fr; }
+  .dashboard-overview, .api-preview-grid { grid-template-columns: 1fr; }
   .intelligence-heading { align-items: flex-start; flex-direction: column; }
   .watchlist-form { grid-template-columns: 1fr; }
   .watchlist-form .primary-button { grid-column: auto; }

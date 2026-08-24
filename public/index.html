@@ -16,13 +16,13 @@
           <span class="brand-copy"><strong>CA X-RAY</strong><small>CONTRACT AUDIT INTELLIGENCE</small></span>
         </a>
         <nav class="primary-nav" aria-label="Primary navigation">
-          <a class="nav-item active" href="/dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
-          <a class="nav-item" href="/dashboard#new-scan"><span class="nav-icon">⌁</span><span>New Scan</span></a>
-          <a class="nav-item" href="/dashboard#history"><span class="nav-icon">◷</span><span>Scan History</span></a>
-          <a class="nav-item" href="/dashboard#risk-passport"><span class="nav-icon">♢</span><span>Risk Passport</span></a>
-          <a class="nav-item" href="/dashboard#watchtower"><span class="nav-icon">◉</span><span>Watchtower</span></a>
-          <a class="nav-item" href="#api-access"><span class="nav-icon">⌘</span><span>API Access</span><span class="soon">Soon</span></a>
-          <a class="nav-item" href="#settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
+          <a class="nav-item" data-route="/dashboard" href="/dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
+          <a class="nav-item" data-route="/dashboard/new-scan" href="/dashboard/new-scan"><span class="nav-icon">⌁</span><span>New Scan</span></a>
+          <a class="nav-item" data-route="/dashboard/history" href="/dashboard/history"><span class="nav-icon">◷</span><span>Scan History</span></a>
+          <a class="nav-item" data-route="/dashboard/passport" href="/dashboard/passport"><span class="nav-icon">♢</span><span>Risk Passport</span></a>
+          <a class="nav-item" data-route="/dashboard/watchtower" href="/dashboard/watchtower"><span class="nav-icon">◉</span><span>Watchtower</span></a>
+          <a class="nav-item" data-route="/dashboard/api-access" href="/dashboard/api-access"><span class="nav-icon">⌘</span><span>API Access</span><span class="soon">Soon</span></a>
+          <a class="nav-item" data-route="/dashboard/settings" href="/dashboard/settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
            <a class="nav-item admin-nav" id="admin-nav" href="/admin" hidden><span class="nav-icon">▣</span><span>Platform Ops</span></a>
         </nav>
         <div class="sidebar-spacer"></div>
@@ -228,6 +228,11 @@
                 <p id="landing-description">Evidence-based contract forensic analysis across supported networks.</p>
               </div>
             </div>
+            <section id="dashboard-overview" class="dashboard-overview" hidden>
+              <div class="overview-page-card"><span class="card-kicker">WORKSPACE</span><strong>Evidence workspace</strong><p>Start a new scan or review the latest evidence collected for this workspace.</p><a class="secondary-button overview-link" href="/dashboard/new-scan">Start a new scan <span>→</span></a></div>
+              <div class="overview-page-card"><span class="card-kicker">SCAN HISTORY</span><strong>Review previous work</strong><p>Keep an auditable view of completed, running, and failed analyses.</p><a class="secondary-button overview-link" href="/dashboard/history">Open scan history <span>→</span></a></div>
+              <div class="overview-page-card"><span class="card-kicker">CONTINUOUS INTELLIGENCE</span><strong>Monitor risk over time</strong><p>Use Risk Passport and Watchtower to follow changes after the first scan.</p><a class="secondary-button overview-link" href="/dashboard/passport">Open intelligence <span>→</span></a></div>
+            </section>
             <div class="scan-workbench" id="new-scan">
               <div class="scan-form-card">
                 <form id="scan-form" novalidate>
@@ -327,6 +332,26 @@
                 <div class="card-heading"><div><span class="card-kicker">ALERTS</span><h3>Review queue</h3></div><span class="data-label" id="alert-count">0 OPEN</span></div>
                 <div id="alert-list" class="intelligence-list"><div class="unknown-message">Loading alerts…</div></div>
               </section>
+            </section>
+            <section id="api-access" class="settings-page api-access-page" hidden>
+              <div class="settings-heading">
+                <div>
+                  <span class="card-kicker">DEVELOPER ACCESS</span>
+                  <h2>API Access</h2>
+                  <p>Programmatic access to evidence-backed contract analysis.</p>
+                </div>
+                <span class="soon page-badge">SOON</span>
+              </div>
+              <div class="settings-card api-coming-soon">
+                <span class="card-kicker">API PROGRAM</span>
+                <h3>Build with CA X-RAY intelligence</h3>
+                <p class="settings-help">API keys, usage limits, and documentation will be available when the developer program launches. Your account is not charged for this feature while it is marked Soon.</p>
+                <div class="api-preview-grid">
+                  <div><strong>Read-only analysis</strong><span>Evidence stays within the same safety boundary as the dashboard.</span></div>
+                  <div><strong>Workspace-scoped keys</strong><span>Access will be isolated to the workspace that creates it.</span></div>
+                  <div><strong>Usage visibility</strong><span>Requests and limits will be visible before activation.</span></div>
+                </div>
+              </div>
             </section>
             <section id="settings" class="settings-page" hidden>
               <div class="settings-heading">
