@@ -1717,6 +1717,11 @@ function metric(label, dataPoint, formatter = formatValue) {
   return `<div class="metric"><div class="data-label">${escapeHtml(label)}</div>${metaValue(dataPoint, formatter)}</div>`;
 }
 
+function formatEvidenceMetadata(value) {
+  if (!value || typeof value !== "object") return formatValue(value);
+  return JSON.stringify(value);
+}
+
 function renderHolderLiquidity(scan) {
   const h = scan.holders || {};
   const l = scan.liquidity || {};
@@ -1750,6 +1755,9 @@ function renderMarketDeployer(scan) {
   const m = scan.market || {};
   const d = scan.deployer || {};
   const p = scan.project || {};
+  const v = scan.verification || {};
+  const s = scan.security || {};
+  const h = scan.holders || {};
   return `<section id="report-market" class="report-section full">${sectionHeading("05", "MARKET & DEPLOYER SIGNALS", "05 / 08")}
     <div class="forensic-grid">
        <div id="report-market-data"><h3 class="subheading">MARKET & PROJECT</h3><div class="metric-grid">
@@ -1766,12 +1774,21 @@ function renderMarketDeployer(scan) {
       <div><h3 class="subheading">DEPLOYER</h3><div class="metric-grid">
          ${metric("Contract Creator", d.address, truncateAddress)}
          ${metric("Contract Owner", scan.security?.ownerAddress, truncateAddress)}
-         ${metric("Pair age", scan.liquidity?.pairAge || d.deploymentDate)}
+         ${metric("Deployment date", d.deploymentDate)}
         ${metric("Suspicious behavior", d.suspiciousBehavior)}
         ${metric("Related contracts", d.relatedContracts)}
         ${metric("Recent deployment", d.veryRecentDeployment)}
         ${metric("Token concentration", d.tokenConcentration, formatPercent)}
         ${metric("Malicious association", d.maliciousAssociation)}
+      </div>
+      <h3 class="subheading evidence-subheading">EXPLORER / INDEXER EVIDENCE</h3><div class="metric-grid">
+        ${metric("Source verification", v.sourceCode || s.sourceVerified)}
+        ${metric("Verified ABI / class", v.verifiedAbi, formatEvidenceMetadata)}
+        ${metric("Contract metadata", v.contractMetadata, formatEvidenceMetadata)}
+        ${metric("Owner address", s.ownerAddress, truncateAddress)}
+        ${metric("Deployer address", d.address, truncateAddress)}
+        ${metric("Deployment time", d.deploymentDate)}
+        ${metric("Holder count", h.totalHolders)}
       </div></div>
     </div>
   </section>`;

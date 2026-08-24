@@ -187,6 +187,22 @@ function nativeEvidence({ context, network, address, fields, accountType = null 
   };
 }
 
+function normalizedDate(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+    : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function starknetAbiNames(contractClass) {
+  const abi = Array.isArray(contractClass?.abi) ? contractClass.abi : [];
+  return abi
+    .map((entry) => entry?.name || entry?.type)
+    .filter((name) => typeof name === "string");
+}
+
 function isValidSolanaPublicKey(address) {
   if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) return false;
   const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -522,20 +538,53 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
     exists = body.success === true && account && typeof account === "object";
     if (exists) {
       const context = { providerId: "tron-native-rest", adapterVersion: NATIVE_ADAPTER_VERSION, retrievedAt: new Date().toISOString() };
+      let contract = null;
+      try {
+        const contractResponse = await requestJson(adapter.endpoint.replace(/\/$/, "") + "/wallet/getcontract", {
+          value: address,
+          visible: true,
+        }, timeoutMs);
+        if (contractResponse && typeof contractResponse === "object" && (contractResponse.bytecode || contractResponse.name)) {
+          contract = contractResponse;
+        }
+      } catch {
+        // Account evidence remains useful when the optional contract metadata endpoint is unavailable.
+      }
+      const creator = contract?.origin_address || contract?.owner_address || null;
+      const deploymentDate = normalizedDate(contract?.create_time || account.create_time);
       nativeResult = normalizedResult({
         providerId: context.providerId,
         adapterVersion: context.adapterVersion,
         status: PROVIDER_RESULT_STATUS.VALID,
         retrievedAt: context.retrievedAt,
-        evidence: nativeEvidence({
+        evidence: {
+          ...nativeEvidence({
           context, network, address, accountType: "TRON_ACCOUNT",
           fields: (point) => ({
             balanceSun: point(account.balance, "TRX-001"),
             accountResource: point(account.account_resource || null, "TRX-002"),
             hasPermissions: point(Array.isArray(account.active_permission) && account.active_permission.length > 0, "TRX-003"),
           }),
-        }),
-        limitations: ["TRON account evidence does not include contract source verification or complete token-holder distribution."],
+          }),
+          security: { ownerAddress: point(creator, "TRX-004") },
+          deployer: {
+            address: point(creator, "TRX-005"),
+            deploymentDate: point(deploymentDate, "TRX-006"),
+          },
+          verification: {
+            contractMetadata: point(contract ? {
+              name: contract.name || null,
+              bytecodeLength: typeof contract.bytecode === "string" ? contract.bytecode.length / 2 : null,
+              consumeUserResourcePercent: contract.consume_user_resource_percent ?? null,
+              originEnergyLimit: contract.origin_energy_limit ?? null,
+            } : null, "TRX-007"),
+            sourceVerified: point(null, "TRX-008"),
+          },
+        },
+        limitations: [
+          "TRONGrid contract metadata is available when the address is a contract; it does not prove source verification or ABI verification.",
+          "TRON account evidence does not include complete token-holder distribution.",
+        ],
       });
     }
   } else if (adapter.type === "xrpl-json-rpc") {
@@ -581,19 +630,36 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
     }
     if (exists) {
       const context = { providerId: "starknet-native-rpc", adapterVersion: NATIVE_ADAPTER_VERSION, retrievedAt: new Date().toISOString() };
+      const abiNames = starknetAbiNames(result);
       nativeResult = normalizedResult({
         providerId: context.providerId,
         adapterVersion: context.adapterVersion,
         status: PROVIDER_RESULT_STATUS.VALID,
         retrievedAt: context.retrievedAt,
-        evidence: nativeEvidence({
+        evidence: {
+          ...nativeEvidence({
           context, network, address, accountType: "STARKNET_CONTRACT",
           fields: (point) => ({
             classHash: point(result.class_hash || result.sierra_class_hash || null, "STRK-001"),
             casmHash: point(result.casm_class_hash || null, "STRK-002"),
           }),
-        }),
-        limitations: ["Starknet class evidence proves deployed contract state; source verification and token metadata require a separate indexer."],
+          }),
+          verification: {
+            verifiedAbi: point(abiNames.length ? abiNames : null, "STRK-003"),
+            contractMetadata: point({
+              classHash: result.class_hash || result.sierra_class_hash || null,
+              casmHash: result.casm_class_hash || null,
+              entryPointCount: Array.isArray(result.entry_points_by_type)
+                ? result.entry_points_by_type.reduce((count, group) => count + (Array.isArray(group) ? group.length : 0), 0)
+                : null,
+            }, "STRK-004"),
+            sourceVerified: point(null, "STRK-005"),
+          },
+        },
+        limitations: [
+          "Starknet RPC class metadata proves deployed class state; it does not prove source-code verification.",
+          "Owner, deployer, holder distribution, and deployment time require an independent Starknet indexer.",
+        ],
       });
     }
   } else if (adapter.type === "cosmos-lcd") {
