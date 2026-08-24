@@ -419,6 +419,30 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "PATCH" && url.pathname === "/api/auth/profile") {
+    const body = await readBody(req);
+    const user = await authService.updateProfile(requireAuthenticated(context), { displayName: body.displayName });
+    sendJson(res, 200, { user }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/password") {
+    const body = await readBody(req);
+    const result = await authService.changePassword(
+      requireAuthenticated(context), body.currentPassword, body.newPassword,
+    );
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/sessions/revoke-others") {
+    const authenticated = requireAuthenticated(context);
+    const revoked = await authService.store.revokeOtherSessions(authenticated.user.id, context.sessionId);
+    await authService.audit("SESSIONS_REVOKED", authenticated.user.id, context.workspaceId, { revokedSessions: revoked });
+    sendJson(res, 200, { revoked }, { context });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/auth/sessions") {
     const authenticated = requireAuthenticated(context);
     const sessions = await authService.store.listSessions(authenticated.user.id);
@@ -486,6 +510,16 @@ async function handleApiUnsafe(req, res, url, context) {
     const body = await readBody(req);
     const result = await authService.selectWorkspace(requireAuthenticated(context), body.workspaceId);
     sendJson(res, 200, result, { context });
+    return true;
+  }
+
+  const workspaceSettingsMatch = url.pathname.match(/^\/api\/workspaces\/([^/]+)$/);
+  if (req.method === "PATCH" && workspaceSettingsMatch) {
+    const body = await readBody(req);
+    const workspace = await authService.updateWorkspace(
+      requireAuthenticated(context), workspaceSettingsMatch[1], { name: body.name },
+    );
+    sendJson(res, 200, { workspace }, { context });
     return true;
   }
 

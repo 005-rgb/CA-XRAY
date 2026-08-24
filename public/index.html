@@ -328,6 +328,91 @@
                 <div id="alert-list" class="intelligence-list"><div class="unknown-message">Loading alerts…</div></div>
               </section>
             </section>
+            <section id="settings" class="settings-page" hidden>
+              <div class="settings-heading">
+                <div>
+                  <span class="card-kicker">ACCOUNT CONTROL</span>
+                  <h2>Settings</h2>
+                  <p>Manage your identity, security, preferences, and the active workspace.</p>
+                </div>
+              </div>
+              <div class="settings-layout">
+                <nav class="settings-nav" aria-label="Settings sections">
+                  <a href="#settings-profile" class="active">Profile</a>
+                  <a href="#settings-security">Security</a>
+                  <a href="#settings-preferences">Preferences</a>
+                  <a href="#settings-notifications">Notifications</a>
+                  <a href="#settings-privacy">Privacy &amp; Data</a>
+                  <a href="#settings-workspace">Workspace</a>
+                  <a href="#settings-billing">Billing</a>
+                </nav>
+                <div class="settings-content">
+                  <section class="settings-card" id="settings-profile">
+                    <div class="settings-card-heading"><div><span class="card-kicker">PROFILE</span><h3>Your identity</h3></div><span id="settings-profile-status" class="settings-status"></span></div>
+                    <form id="profile-form" class="settings-form">
+                      <label>Display name<input id="profile-name" maxlength="120" placeholder="Your name" /></label>
+                      <label>Email<input id="profile-email" type="email" disabled /></label>
+                      <p class="settings-help">Your email is used for sign-in and cannot be changed here.</p>
+                      <button class="secondary-button" type="submit">Save profile</button>
+                    </form>
+                  </section>
+                  <section class="settings-card" id="settings-security">
+                    <div class="settings-card-heading"><div><span class="card-kicker">SECURITY</span><h3>Protect your account</h3></div></div>
+                    <form id="password-form" class="settings-form">
+                      <label>Current password<input id="current-password" type="password" autocomplete="current-password" required /></label>
+                      <label>New password<input id="new-password" type="password" minlength="12" autocomplete="new-password" required /></label>
+                      <p class="settings-help">Use at least 12 characters. Changing your password signs out other active sessions.</p>
+                      <button class="secondary-button" type="submit">Change password</button><p id="password-status" class="settings-status" role="status"></p>
+                    </form>
+                    <div class="settings-divider"></div>
+                    <div class="settings-card-heading"><div><span class="card-kicker">ACTIVE SESSIONS</span><h3>Where you are signed in</h3></div><button class="text-button" id="revoke-other-sessions" type="button">Sign out others</button></div>
+                    <div id="sessions-list" class="settings-list"></div>
+                  </section>
+                  <section class="settings-card" id="settings-preferences">
+                    <div class="settings-card-heading"><div><span class="card-kicker">PREFERENCES</span><h3>Analysis defaults</h3></div></div>
+                    <div class="settings-form">
+                      <label>Default network<select id="preference-network"><option value="ethereum">Ethereum</option><option value="base">Base</option><option value="bsc">BNB Chain</option><option value="arbitrum">Arbitrum</option><option value="polygon">Polygon</option></select></label>
+                      <label>Timezone<select id="preference-timezone"><option value="UTC">UTC</option><option value="Asia/Jakarta">Asia/Jakarta</option><option value="Asia/Singapore">Asia/Singapore</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New York</option></select></label>
+                      <label class="settings-check"><input id="preference-confirm-live" type="checkbox" checked /> Confirm before starting a live scan</label>
+                      <button class="secondary-button" id="save-preferences" type="button">Save preferences</button><p id="preferences-status" class="settings-status" role="status"></p>
+                    </div>
+                  </section>
+                  <section class="settings-card" id="settings-notifications">
+                    <div class="settings-card-heading"><div><span class="card-kicker">NOTIFICATIONS</span><h3>Stay informed</h3></div></div>
+                    <div class="settings-form">
+                      <label class="settings-check"><input id="notify-watchtower" type="checkbox" checked /> Watchtower risk and evidence alerts</label>
+                      <label class="settings-check"><input id="notify-scan" type="checkbox" checked /> Scan completion and failure alerts</label>
+                      <label class="settings-check"><input id="notify-security" type="checkbox" checked /> Security notifications for new sign-ins</label>
+                      <p class="settings-help">In-app alerts are available now. Email delivery follows your workspace notification service configuration.</p>
+                      <button class="secondary-button" id="save-notifications" type="button">Save notification settings</button><p id="notifications-status" class="settings-status" role="status"></p>
+                    </div>
+                  </section>
+                  <section class="settings-card" id="settings-privacy">
+                    <div class="settings-card-heading"><div><span class="card-kicker">PRIVACY &amp; DATA</span><h3>Your data controls</h3></div></div>
+                    <p class="settings-help privacy-summary">CA-XRAY performs read-only analysis. We never request private keys, seed phrases, signatures, or transaction permissions. Scan history belongs to the active workspace.</p>
+                    <div class="privacy-actions"><button class="secondary-button" id="export-data" type="button">Export my scan data</button><button class="danger-button" id="delete-account" type="button">Request account deletion</button></div>
+                    <p id="privacy-status" class="settings-status" role="status"></p>
+                  </section>
+                  <section class="settings-card" id="settings-workspace">
+                    <div class="settings-card-heading"><div><span class="card-kicker">WORKSPACE</span><h3 id="settings-workspace-name">Active workspace</h3></div><span id="settings-workspace-role" class="role-pill"></span></div>
+                    <form id="workspace-form" class="settings-form workspace-owner-only">
+                      <label>Workspace name<input id="workspace-name" maxlength="120" required /></label>
+                      <button class="secondary-button" type="submit">Save workspace</button><p id="workspace-status" class="settings-status" role="status"></p>
+                    </form>
+                    <div class="settings-divider"></div>
+                    <div class="settings-card-heading"><div><span class="card-kicker">TEAM MEMBERS</span><h3>People with access</h3></div></div>
+                    <div id="members-list" class="settings-list"></div>
+                    <form id="invite-form" class="invite-form workspace-owner-only"><input id="invite-email" type="email" placeholder="colleague@example.com" required /><select id="invite-role"><option value="Workspace Member">Member</option><option value="Workspace Owner">Owner</option></select><button class="secondary-button" type="submit">Invite</button></form>
+                    <p id="invite-status" class="settings-status" role="status"></p>
+                  </section>
+                  <section class="settings-card" id="settings-billing">
+                    <div class="settings-card-heading"><div><span class="card-kicker">BILLING</span><h3>Plan and usage</h3></div></div>
+                    <div class="billing-summary"><div><span>Current plan</span><strong id="settings-plan">—</strong></div><div><span>Workspace type</span><strong id="settings-workspace-type">—</strong></div><div><span>Billing status</span><strong>Managed by workspace owner</strong></div></div>
+                    <p class="settings-help">Plan changes and payment details will be available when billing is enabled for this workspace.</p>
+                  </section>
+                </div>
+              </div>
+            </section>
             <div id="dashboard-report" hidden></div>
           </section>
 

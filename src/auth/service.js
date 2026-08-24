@@ -267,6 +267,41 @@ class MemoryAuthStore {
     return true;
   }
 
+  async revokeOtherSessions(userId, currentSessionId) {
+    let count = 0;
+    for (const session of this.sessions.values()) {
+      if (session.userId === userId && session.id !== currentSessionId && !session.revokedAt) {
+        session.revokedAt = this.now();
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  async updateUserProfile(userId, { displayName }) {
+    const user = this.users.get(userId);
+    if (!user || user.deletedAt) throw Object.assign(new Error("USER_NOT_FOUND"), { code: "USER_NOT_FOUND" });
+    user.displayName = typeof displayName === "string" ? displayName.trim().slice(0, 120) || null : user.displayName;
+    return clone(user);
+  }
+
+  async updateWorkspace(workspaceId, { name }) {
+    const workspace = this.workspaces.get(workspaceId);
+    if (!workspace || workspace.deletedAt) throw Object.assign(new Error("WORKSPACE_NOT_FOUND"), { code: "WORKSPACE_NOT_FOUND" });
+    workspace.name = String(name || "").trim().slice(0, 120) || workspace.name || "Untitled workspace";
+    return clone(workspace);
+  }
+
+  async updatePassword(userId, password) {
+    const user = this.users.get(userId);
+    if (!user || user.deletedAt) throw Object.assign(new Error("USER_NOT_FOUND"), { code: "USER_NOT_FOUND" });
+    if (typeof password !== "string" || password.length < 12 || password.length > 200) {
+      throw Object.assign(new Error("WEAK_PASSWORD"), { code: "WEAK_PASSWORD" });
+    }
+    user.passwordHash = passwordHash(password);
+    return clone(user);
+  }
+
   async confirmMfa(sessionId) {
     const session = this.sessions.get(sessionId);
     if (!session || session.revokedAt) return false;
@@ -708,6 +743,49 @@ class PostgresAuthStore {
       [sessionId, userId],
     );
     return Boolean(result.rowCount);
+  }
+
+  async revokeOtherSessions(userId, currentSessionId) {
+    const result = await this.pool.query(
+      "UPDATE auth_sessions SET revoked_at = NOW() WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL",
+      [userId, currentSessionId],
+    );
+    return Number(result.rowCount || 0);
+  }
+
+  async updateUserProfile(userId, { displayName }) {
+    const result = await this.pool.query(
+      `UPDATE users SET display_name = $2 WHERE id = $1 AND deleted_at IS NULL
+       RETURNING id, email, display_name, platform_role, mfa_enabled, mfa_secret_encrypted,
+                 email_verified, email_verified_at, created_at, deleted_at`,
+      [userId, typeof displayName === "string" ? displayName.trim().slice(0, 120) || null : null],
+    );
+    if (!result.rowCount) throw Object.assign(new Error("USER_NOT_FOUND"), { code: "USER_NOT_FOUND" });
+    return rowUser(result.rows[0]);
+  }
+
+  async updateWorkspace(workspaceId, { name }) {
+    const result = await this.pool.query(
+      `UPDATE workspaces SET name = $2 WHERE id = $1 AND deleted_at IS NULL
+       RETURNING id, name, owner_user_id, workspace_type, plan_id, created_at, archived_at, deleted_at`,
+      [workspaceId, String(name || "").trim().slice(0, 120) || "Untitled workspace"],
+    );
+    if (!result.rowCount) throw Object.assign(new Error("WORKSPACE_NOT_FOUND"), { code: "WORKSPACE_NOT_FOUND" });
+    return rowWorkspace(result.rows[0]);
+  }
+
+  async updatePassword(userId, password) {
+    if (typeof password !== "string" || password.length < 12 || password.length > 200) {
+      throw Object.assign(new Error("WEAK_PASSWORD"), { code: "WEAK_PASSWORD" });
+    }
+    const result = await this.pool.query(
+      `UPDATE users SET password_hash = $2 WHERE id = $1 AND deleted_at IS NULL
+       RETURNING id, email, display_name, platform_role, mfa_enabled, mfa_secret_encrypted,
+                 email_verified, email_verified_at, created_at, deleted_at`,
+      [userId, passwordHash(password)],
+    );
+    if (!result.rowCount) throw Object.assign(new Error("USER_NOT_FOUND"), { code: "USER_NOT_FOUND" });
+    return rowUser(result.rows[0]);
   }
 
   async confirmMfa(sessionId) {
@@ -1329,6 +1407,29 @@ class AuthService {
     return publicUser(context.user);
   }
 
+  async updateProfile(context, input) {
+    const authenticated = context.kind === "authenticated"
+      ? context
+      : (() => { throw Object.assign(new Error("UNAUTHORIZED"), { code: "UNAUTHORIZED" }); })();
+    const user = await this.store.updateUserProfile(authenticated.user.id, input);
+    await this.audit("PROFILE_UPDATED", authenticated.user.id, authenticated.workspaceId, {});
+    return publicUser(user);
+  }
+
+  async changePassword(context, currentPassword, nextPassword) {
+    const authenticated = context.kind === "authenticated"
+      ? context
+      : (() => { throw Object.assign(new Error("UNAUTHORIZED"), { code: "UNAUTHORIZED" }); })();
+    const stored = await this.store.getUser(authenticated.user.id);
+    if (!stored || !verifyPassword(currentPassword, stored.passwordHash)) {
+      throw Object.assign(new Error("CURRENT_PASSWORD_INVALID"), { code: "CURRENT_PASSWORD_INVALID" });
+    }
+    await this.store.updatePassword(authenticated.user.id, nextPassword);
+    const revoked = await this.store.revokeOtherSessions(authenticated.user.id, authenticated.sessionId);
+    await this.audit("PASSWORD_CHANGED", authenticated.user.id, authenticated.workspaceId, { revokedSessions: revoked });
+    return { changed: true, revokedSessions: revoked };
+  }
+
   async selectWorkspace(context, workspaceId) {
     if (context.kind !== "authenticated" || context.user.platformRole === ROLES.SUPERADMIN) {
       throw Object.assign(new Error("FORBIDDEN"), { code: "FORBIDDEN" });
@@ -1409,6 +1510,13 @@ class AuthService {
     await this.requireWorkspace(context, workspaceId, { owner: true });
     const result = await this.store.transferOwnership({ workspaceId, currentOwnerId: context.user.id, nextOwnerId });
     await this.audit("OWNERSHIP_TRANSFERRED", context.user.id, workspaceId, { targetUserId: nextOwnerId });
+    return result;
+  }
+
+  async updateWorkspace(context, workspaceId, input) {
+    await this.requireWorkspace(context, workspaceId, { owner: true });
+    const result = await this.store.updateWorkspace(workspaceId, input);
+    await this.audit("WORKSPACE_UPDATED", context.user.id, workspaceId, {});
     return result;
   }
 

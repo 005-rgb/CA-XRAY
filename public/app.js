@@ -90,6 +90,14 @@ const adminSystemNote = document.querySelector("#admin-system-note");
 const adminCoverage = document.querySelector("#admin-coverage");
 const adminReviewQueue = document.querySelector("#admin-review-queue");
 const adminLastEvent = document.querySelector("#admin-last-event");
+const settingsPanel = document.querySelector("#settings");
+const profileForm = document.querySelector("#profile-form");
+const passwordForm = document.querySelector("#password-form");
+const sessionsList = document.querySelector("#sessions-list");
+const membersList = document.querySelector("#members-list");
+const workspaceForm = document.querySelector("#workspace-form");
+const inviteForm = document.querySelector("#invite-form");
+const settingsNavLinks = document.querySelectorAll(".settings-nav a");
 let authState = null;
 let currentScan = null;
 let currentJob = null;
@@ -453,12 +461,170 @@ function showLanding({ privateView = false } = {}) {
   document.querySelector("#new-scan").classList.toggle("public-scan-workbench", !privateView);
   document.querySelector("#new-scan").classList.remove("report-route");
   scanHistory.hidden = !privateView;
+  settingsPanel.hidden = !privateView || !window.location.hash.startsWith("#settings");
   if (privateView) {
     loadScanHistory();
     loadIntelligenceDashboard();
+    loadSettings();
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
+
+function settingMessage(id, message, tone = "") {
+  const target = document.querySelector(`#${id}`);
+  if (target) {
+    target.textContent = message || "";
+    target.className = `settings-status ${tone}`.trim();
+  }
+}
+
+function storedPreferences() {
+  try {
+    return JSON.parse(localStorage.getItem("ca_xray_preferences") || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function loadPreferences() {
+  const preferences = storedPreferences();
+  const timezone = preferences.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  document.querySelector("#preference-network").value = preferences.network || "ethereum";
+  document.querySelector("#preference-timezone").value = [...document.querySelector("#preference-timezone").options]
+    .some((option) => option.value === timezone) ? timezone : "UTC";
+  document.querySelector("#preference-confirm-live").checked = preferences.confirmLive !== false;
+  document.querySelector("#notify-watchtower").checked = preferences.notifyWatchtower !== false;
+  document.querySelector("#notify-scan").checked = preferences.notifyScan !== false;
+  document.querySelector("#notify-security").checked = preferences.notifySecurity !== false;
+}
+
+async function loadSettings() {
+  if (!authState?.authenticated || !settingsPanel) return;
+  document.querySelector("#profile-name").value = authState.user?.displayName || "";
+  document.querySelector("#profile-email").value = authState.user?.email || "";
+  document.querySelector("#workspace-name").value = authState.workspace?.name || "";
+  document.querySelector("#settings-workspace-name").textContent = authState.workspace?.name || "Active workspace";
+  document.querySelector(".topbar-context strong").textContent = authState.workspace?.name || "Personal";
+  document.querySelector("#settings-workspace-role").textContent = authState.membership?.role || "Member";
+  document.querySelector("#settings-plan").textContent = authState.workspace?.planId || "free";
+  document.querySelector("#settings-workspace-type").textContent = authState.workspace?.workspaceType || "personal";
+  const isOwner = authState.membership?.role === "Workspace Owner";
+  document.querySelectorAll(".workspace-owner-only").forEach((element) => { element.hidden = !isOwner; });
+  loadPreferences();
+  try {
+    const [sessionResult, memberResult] = await Promise.all([
+      apiJson("/api/auth/sessions"),
+      authState.workspace?.id ? apiJson(`/api/workspaces/${encodeURIComponent(authState.workspace.id)}/members`) : Promise.resolve({ members: [] }),
+    ]);
+    sessionsList.innerHTML = sessionResult.sessions.map((session) => `
+      <div class="settings-list-row"><div><strong>${escapeHtml(session.userAgent || "Browser session")}</strong><span>${escapeHtml(session.ip || "Unknown network")} · last active ${escapeHtml(formatDate(session.lastSeenAt))}</span></div>
+      <div>${session.current ? '<span class="current-session">Current</span>' : `<button class="text-button revoke-session" data-session-id="${escapeHtml(session.id)}" type="button">Revoke</button>`}</div></div>`).join("")
+      || '<p class="settings-help">No active sessions found.</p>';
+    membersList.innerHTML = memberResult.members.map((member) => `
+      <div class="settings-list-row"><div><strong>${escapeHtml(member.user?.displayName || member.user?.email || "Workspace member")}</strong><span>${escapeHtml(member.user?.email || "")}</span></div><span class="role-pill">${escapeHtml(member.role || "Member")}</span></div>`).join("")
+      || '<p class="settings-help">No members found.</p>';
+  } catch (error) {
+    sessionsList.innerHTML = `<p class="settings-help">${escapeHtml(error.message)}</p>`;
+    membersList.innerHTML = `<p class="settings-help">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+profileForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await apiJson("/api/auth/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: document.querySelector("#profile-name").value }) });
+    authState.user = result.user;
+    userName.textContent = result.user.displayName || result.user.email;
+    settingMessage("settings-profile-status", "Profile saved.", "success");
+  } catch (error) { settingMessage("settings-profile-status", error.message, "error"); }
+});
+
+passwordForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await apiJson("/api/auth/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: document.querySelector("#current-password").value, newPassword: document.querySelector("#new-password").value }) });
+    passwordForm.reset();
+    settingMessage("password-status", `Password changed. ${result.revokedSessions} other session(s) signed out.`, "success");
+    await loadSettings();
+  } catch (error) { settingMessage("password-status", error.message, "error"); }
+});
+
+document.querySelector("#revoke-other-sessions")?.addEventListener("click", async () => {
+  try {
+    const result = await apiJson("/api/auth/sessions/revoke-others", { method: "POST" });
+    settingMessage("password-status", `${result.revoked} other session(s) signed out.`, "success");
+    await loadSettings();
+  } catch (error) { settingMessage("password-status", error.message, "error"); }
+});
+
+sessionsList?.addEventListener("click", async (event) => {
+  const button = event.target.closest(".revoke-session");
+  if (!button) return;
+  await apiJson(`/api/auth/sessions/${encodeURIComponent(button.dataset.sessionId)}`, { method: "DELETE" }).catch((error) => settingMessage("password-status", error.message, "error"));
+  await loadSettings();
+});
+
+document.querySelector("#save-preferences")?.addEventListener("click", () => {
+  localStorage.setItem("ca_xray_preferences", JSON.stringify({
+    network: document.querySelector("#preference-network").value,
+    timezone: document.querySelector("#preference-timezone").value,
+    confirmLive: document.querySelector("#preference-confirm-live").checked,
+    notifyWatchtower: document.querySelector("#notify-watchtower").checked,
+    notifyScan: document.querySelector("#notify-scan").checked,
+    notifySecurity: document.querySelector("#notify-security").checked,
+  }));
+  networkInput.value = document.querySelector("#preference-network").value;
+  settingMessage("preferences-status", "Preferences saved on this device.", "success");
+});
+document.querySelector("#save-notifications")?.addEventListener("click", () => {
+  document.querySelector("#save-preferences").click();
+  settingMessage("notifications-status", "Notification settings saved on this device.", "success");
+});
+
+workspaceForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await apiJson(`/api/workspaces/${encodeURIComponent(authState.workspace.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: document.querySelector("#workspace-name").value }) });
+    authState.workspace = result.workspace;
+    document.querySelector(".topbar-context strong").textContent = result.workspace.name;
+    document.querySelector("#settings-workspace-name").textContent = result.workspace.name;
+    settingMessage("workspace-status", "Workspace updated.", "success");
+  } catch (error) { settingMessage("workspace-status", error.message, "error"); }
+});
+
+inviteForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await apiJson(`/api/workspaces/${encodeURIComponent(authState.workspace.id)}/invites`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: document.querySelector("#invite-email").value.trim(), role: document.querySelector("#invite-role").value }) });
+    inviteForm.reset();
+    settingMessage("invite-status", `Invite created for ${result.email}. ${result.inviteToken ? `Development token: ${result.inviteToken}` : "The invite email is queued."}`, "success");
+    await loadSettings();
+  } catch (error) { settingMessage("invite-status", error.message, "error"); }
+});
+
+document.querySelector("#export-data")?.addEventListener("click", async () => {
+  try {
+    const result = await apiJson("/api/scans?limit=100");
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "ca-xray-scan-data.json";
+    link.click();
+    URL.revokeObjectURL(link.href);
+    settingMessage("privacy-status", "Your workspace scan data has been exported.", "success");
+  } catch (error) { settingMessage("privacy-status", error.message, "error"); }
+});
+
+document.querySelector("#delete-account")?.addEventListener("click", () => {
+  settingMessage("privacy-status", "For safety, account deletion is handled through support after workspace ownership and data retention are reviewed.", "error");
+});
+
+settingsNavLinks.forEach((link) => link.addEventListener("click", () => {
+  settingsNavLinks.forEach((item) => item.classList.toggle("active", item === link));
+}));
+window.addEventListener("hashchange", () => {
+  if (settingsPanel && isPrivateRoute()) settingsPanel.hidden = !window.location.hash.startsWith("#settings");
+});
 
 function showAdminShell() {
   setShell({ privateView: true });
