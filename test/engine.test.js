@@ -10,7 +10,7 @@ const {
   CATEGORY_WEIGHTS,
 } = require("../src/engine");
 const { normalizeBlockscout, normalizeRpcContract } = require("../src/providers/default-adapters");
-const { validateNativeAddress, verifyNativeNetwork } = require("../src/providers/native-network-adapters");
+const { isValidSolanaPublicKey, validateNativeAddress, verifyNativeNetwork } = require("../src/providers/native-network-adapters");
 
 const valid = "0x1234567890123456789012345678901234567890";
 
@@ -44,6 +44,12 @@ test("native network validation rejects EVM-shaped addresses on non-EVM networks
   );
   assert.equal(result.valid, false);
   assert.equal(result.code, "INVALID_ADDRESS");
+});
+
+test("Solana public-key validation checks decoded 32-byte length", () => {
+  assert.equal(isValidSolanaPublicKey("So11111111111111111111111111111111111111112"), true);
+  assert.equal(isValidSolanaPublicKey("111111111111111111111111111111111111111111111111111111111111"), false);
+  assert.equal(validateNativeAddress("So11111111111111111111111111111111111111112", { id: "solana", name: "Solana" }).valid, true);
 });
 
 test("native network verification rejects networks without a native adapter", async () => {

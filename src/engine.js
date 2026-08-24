@@ -98,6 +98,14 @@ const EVM_EXTENSION_METADATA = Object.freeze({
   "oasis-sapphire": { chainId: "23294", rpcUrl: "https://sapphire.oasis.io", explorer: "https://explorer.sapphire.oasis.io/address/" },
 });
 
+const NATIVE_NETWORK_METADATA = Object.freeze({
+  solana: {
+    rpcUrl: "https://api.mainnet-beta.solana.com",
+    explorer: "https://solscan.io/account/",
+    nativeAdapter: "solana-rpc",
+  },
+});
+
 const NETWORKS = Object.freeze([
   ...EVM_NETWORKS.map(([id, name, goplusChainId, dexChainId, blockscoutHost, rpcUrl, explorer]) => ({
     id, name, goplusChainId, dexChainId, blockscoutHost, rpcUrl, explorer, evm: true,
@@ -105,10 +113,24 @@ const NETWORKS = Object.freeze([
   })),
   ...DEX_ONLY_NETWORKS.map((network) => {
     const metadata = EVM_EXTENSION_METADATA[network.id];
-    if (!metadata) {
+    const nativeMetadata = NATIVE_NETWORK_METADATA[network.id];
+    if (!metadata && !nativeMetadata) {
       return {
         ...network,
         providerSupport: { "goplus-security": false, dexscreener: true, "blockscout-abi": false, "rpc-contract": false },
+      };
+    }
+    if (nativeMetadata) {
+      return {
+        ...network,
+        ...nativeMetadata,
+        providerSupport: {
+          "goplus-security": false,
+          dexscreener: true,
+          "blockscout-abi": false,
+          "rpc-contract": false,
+          "native-rpc": true,
+        },
       };
     }
     return {

@@ -1,5 +1,8 @@
-const NATIVE_ADAPTER_VERSION = "1.0.0";
+const NATIVE_ADAPTER_VERSION = "1.1.0";
 const { normalizedPoint, normalizedResult, PROVIDER_RESULT_STATUS } = require("./contracts");
+
+const SOLANA_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const SOLANA_TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 
 const ADAPTERS = Object.freeze({
   solana: {
@@ -32,6 +35,32 @@ function nativeAddressPattern(networkId) {
   }
 }
 
+function isValidSolanaPublicKey(address) {
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) return false;
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const bytes = [0];
+  for (const character of address) {
+    const value = alphabet.indexOf(character);
+    if (value < 0) return false;
+    let carry = value;
+    for (let index = 0; index < bytes.length; index += 1) {
+      carry += bytes[index] * 58;
+      bytes[index] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  let leadingZeroes = 0;
+  for (const character of address) {
+    if (character !== "1") break;
+    leadingZeroes += 1;
+  }
+  return bytes.length + leadingZeroes === 32;
+}
+
 function nativeAddressMessage(networkName) {
   return `Enter a valid native ${networkName} address.`;
 }
@@ -40,6 +69,13 @@ function validateNativeAddress(address, network) {
   const pattern = nativeAddressPattern(network.id);
   if (!pattern) return { valid: true, normalized: address };
   if (!pattern.test(address)) {
+    return {
+      valid: false,
+      code: "INVALID_ADDRESS",
+      message: nativeAddressMessage(network.name),
+    };
+  }
+  if (network.id === "solana" && !isValidSolanaPublicKey(address)) {
     return {
       valid: false,
       code: "INVALID_ADDRESS",
@@ -90,9 +126,11 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
     }, timeoutMs);
     if (body.error) throw Object.assign(new Error("Solana RPC returned an error."), { code: "NATIVE_PROVIDER_ERROR" });
     const value = body.result?.value;
-    exists = Boolean(value && typeof value === "object" && value.owner);
-    if (exists && value.data?.parsed?.type === "mint") {
-      const info = value.data.parsed.info || {};
+    exists = Boolean(value && typeof value === "object" && typeof value.owner === "string");
+    if (exists) {
+      const info = value.data?.parsed?.info || {};
+      const isMint = value.data?.parsed?.type === "mint"
+        && [SOLANA_TOKEN_PROGRAM, SOLANA_TOKEN_2022_PROGRAM].includes(value.owner);
       const context = {
         providerId: "solana-native-rpc",
         adapterVersion: NATIVE_ADAPTER_VERSION,
@@ -103,22 +141,35 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
         ...context,
         evidenceReference,
       });
+      const evidence = {
+        verification: {
+          nativeAccount: point(true, "SOL-003"),
+          accountOwner: point(value.owner, "SOL-004"),
+          executable: point(value.executable === true, "SOL-005"),
+          lamports: point(value.lamports, "SOL-006"),
+          dataLength: point(Array.isArray(value.data) ? value.data[0]?.length : null, "SOL-007"),
+        },
+      };
+      if (isMint) {
+        evidence.token = {
+          decimals: point(Number(info.decimals), "SOL-001"),
+          totalSupply: point(info.supply, "SOL-002"),
+          mintAuthority: point(info.mintAuthority || null, "SOL-008"),
+          freezeAuthority: point(info.freezeAuthority || null, "SOL-009"),
+        };
+        evidence.security = {
+          canMint: point(Boolean(info.mintAuthority), "SOL-010"),
+          canFreeze: point(Boolean(info.freezeAuthority), "SOL-011"),
+        };
+        evidence.verification.tokenProgram = point(value.owner, "SOL-012");
+        evidence.verification.initialized = point(info.isInitialized === true, "SOL-013");
+      }
       var nativeResult = normalizedResult({
         providerId: context.providerId,
         adapterVersion: context.adapterVersion,
         status: PROVIDER_RESULT_STATUS.VALID,
         retrievedAt: context.retrievedAt,
-        evidence: {
-          token: {
-            decimals: point(Number(info.decimals), "SOL-001"),
-            totalSupply: point(info.supply, "SOL-002"),
-          },
-          verification: {
-            nativeAccount: point(true, "SOL-003"),
-            tokenProgram: point(value.owner, "SOL-004"),
-            initialized: point(info.isInitialized === true, "SOL-005"),
-          },
-        },
+        evidence,
       });
     }
   } else if (adapter.type === "sui-rpc") {
@@ -179,6 +230,7 @@ module.exports = {
   ADAPTERS,
   NATIVE_ADAPTER_VERSION,
   nativeAddressPattern,
+  isValidSolanaPublicKey,
   validateNativeAddress,
   verifyNativeNetwork,
 };
