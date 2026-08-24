@@ -1,0 +1,59 @@
+Rencana solusi yang benar
+Urutannya sebaiknya:
+
+Selesaikan EVM dulu
+Zora
+Moonbeam
+Moonriver
+Telos
+Lengkapi native adapter
+TON, Tron, XRPL, Starknet, Cosmos-based chains, Cardano.
+Tambahkan explorer/indexer evidence
+source verification,
+ABI atau contract metadata,
+owner/deployer,
+holders,
+deployment data.
+Buat contract test per protocol
+alamat valid dan aktif,
+alamat valid tetapi tidak ada contract/account,
+provider timeout,
+malformed response.
+Aktifkan network hanya setelah live probe berhasil.
+Yang penting: provider API key seperti Blockfrost, TronGrid, TonAPI, atau provider RPC premium diperlukan bila endpoint publik tidak stabil. Key tersebut harus disimpan melalui Replit Secrets atau integration, bukan ditempel ke source code.
+
+Jadi solusi teknisnya bukan memaksa 18 network memakai EVM adapter, melainkan menyediakan adapter sesuai protokol masing-masing dan mempertahankan unavailable sampai bukti provider benar-benar tersedia.
+
+
+
+Worked for 23 seconds
+kerjakan solana dulu karena ii adalah core inti. komunitasnya luar biasa banyak. carai berbagai cara agar ceompleted. real work.
+
+Free
+6 minutes ago
+Saya akan fokus penuh pada Solana sebagai network native utama: validasi alamat base58, verifikasi akun langsung lewat Solana mainnet RPC, deteksi token mint dan Token-2022, metadata supply/decimals/authority, link explorer, serta status fail-closed untuk akun yang tidak ada. Saya akan mempertahankan DexScreener hanya sebagai market evidence dan tidak menganggapnya sebagai bukti on-chain.
+
+
+
+4 actions
+Solana sudah memiliki RPC dasar, tetapi evidence-nya masih terlalu tipis: hanya memeriksa akun dan metadata mint sederhana. Saya akan menaikkannya menjadi adapter production-grade untuk account/mint verification, termasuk Token Program dan Token-2022, status initialized/executable, lamports, ukuran data, supply, decimals, mint authority, freeze authority, catalog RPC, dan explorer.
+
+
+
+3 actions
+Saya menemukan satu edge case penting sebelum menjalankan live test: akun Solana biasa/program tidak selalu memiliki data.parsed, jadi adapter harus tetap menghasilkan bukti account tanpa crash. Saya akan memperbaikinya, menambah regresi valid/invalid public key, lalu menguji mint Solana nyata melalui mainnet RPC.
+
+
+
+6 actions
+Live RPC Solana sebenarnya berhasil: USDC mint terdeteksi sebagai Token Program dengan decimals 6, supply, dan authority evidence. Tes gagal karena decoder base58 saya menghitung panjang byte dengan offset yang salah, bukan karena RPC atau data Solana. Saya akan memperbaiki decoder dan memastikan system account seperti 111... tidak dianggap token mint secara keliru.
+
+
+
+12 actions
+Live scan Solana sudah membuktikan mint nyata, tetapi saya menemukan bug integrasi: metadata native mengganti providerSupport lama karena objek DEX-only belum membawa map provider. Akibatnya provider EVM mencoba memanggil Solana. Saya akan memperbaiki map support supaya hanya RPC Solana dan DexScreener berjalan, sementara GoPlus/Blockscout/RPC EVM tercatat unavailable secara eksplisit.
+
+
+
+5 actions
+Core Solana flow sekarang sudah benar: native RPC berhasil, provider EVM tidak lagi dipanggil, dan metadata token terbaca. Saya akan restart workflow untuk mengambil perubahan terbaru dan melakukan satu cek akhir pada market-data path serta preview.

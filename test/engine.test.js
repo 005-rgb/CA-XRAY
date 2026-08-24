@@ -10,7 +10,7 @@ const {
   CATEGORY_WEIGHTS,
 } = require("../src/engine");
 const { normalizeBlockscout, normalizeRpcContract } = require("../src/providers/default-adapters");
-const { isValidSolanaPublicKey, validateNativeAddress, verifyNativeNetwork } = require("../src/providers/native-network-adapters");
+const { isValidSolanaPublicKey, solanaDataLength, validateNativeAddress, verifyNativeNetwork } = require("../src/providers/native-network-adapters");
 
 const valid = "0x1234567890123456789012345678901234567890";
 
@@ -48,8 +48,22 @@ test("native network validation rejects EVM-shaped addresses on non-EVM networks
 
 test("Solana public-key validation checks decoded 32-byte length", () => {
   assert.equal(isValidSolanaPublicKey("So11111111111111111111111111111111111111112"), true);
+  assert.equal(isValidSolanaPublicKey("11111111111111111111111111111111"), true);
   assert.equal(isValidSolanaPublicKey("111111111111111111111111111111111111111111111111111111111111"), false);
   assert.equal(validateNativeAddress("So11111111111111111111111111111111111111112", { id: "solana", name: "Solana" }).valid, true);
+});
+
+test("Solana account data length decodes raw base64 instead of counting encoded characters", () => {
+  assert.equal(solanaDataLength(["AAECAwQ=", "base64"]), 5);
+  assert.equal(solanaDataLength(["not-a-parsed-account"], "jsonParsed"), null);
+});
+
+test("Solana catalog uses native RPC support and a chain-specific explorer", () => {
+  const network = NETWORKS.find((item) => item.id === "solana");
+  assert.equal(network.evm, false);
+  assert.equal(network.providerSupport["native-rpc"], true);
+  assert.equal(network.providerSupport["rpc-contract"], false);
+  assert.equal(network.explorer, "https://solscan.io/account/");
 });
 
 test("native network verification rejects networks without a native adapter", async () => {
@@ -61,6 +75,22 @@ test("native network verification rejects networks without a native adapter", as
     (error) => error.code === "NATIVE_NETWORK_VERIFICATION_UNAVAILABLE"
       && /TON/.test(error.message),
   );
+});
+
+test("Solana native verification classifies malformed RPC results explicitly", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({ jsonrpc: "2.0", id: 1 }), { status: 200 });
+  try {
+    await assert.rejects(
+      () => verifyNativeNetwork({
+        network: { id: "solana", name: "Solana", explorer: "https://solscan.io/account/" },
+        address: "So11111111111111111111111111111111111111112",
+      }),
+      (error) => error.code === "NATIVE_PROVIDER_MALFORMED_RESPONSE",
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test("network catalog keeps 53 entries and exposes RPC evidence for every EVM entry", () => {

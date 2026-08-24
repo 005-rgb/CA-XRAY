@@ -1,6 +1,6 @@
 # CA X-RAY
 
-CA X-RAY is an evidence-based crypto contract forensic analyzer. It accepts an EVM contract address, validates the selected supported network, and produces either a clearly labeled deterministic demo report or a LIVE report assembled from GoPlus Security and DexScreener data.
+CA X-RAY is an evidence-based crypto contract forensic analyzer. It accepts an EVM contract address or a Solana public key, validates the selected supported network, and produces either a clearly labeled deterministic demo report or a LIVE report assembled from protocol-appropriate evidence.
 
 ## Run
 
@@ -33,6 +33,7 @@ npm test
 - Scan requests enforce bounded request size, multi-dimensional rate protection, monthly plan quota, concurrent-scan limits, idempotency, and append-only audit events.
 - Provider calls use a server-controlled HTTPS allowlist, strict adapter response validation, timeout/retry budgets, and circuit breakers. LIVE data is never replaced with DEMO data.
 - The catalog contains 53 networks. EVM entries with a verified public RPC use the `rpc-contract` adapter to prove bytecode exists on the selected chain; unsupported or unverified networks remain explicitly `unavailable`.
+- Solana uses its native mainnet RPC adapter, validates canonical 32-byte base58 public keys, verifies account existence fail-closed, reports account owner/executable/lamports/data size, detects SPL Token and Token-2022 mints, exposes supply/decimals/mint and freeze authorities, and includes a Solscan evidence link. DexScreener remains market-only; EVM providers are explicitly unavailable for Solana.
 - Phase 2 uses a provider-agnostic pipeline: chain validation → replaceable adapter → canonical normalized evidence → evidence validation → forensic/risk/report engines. Provider result states are `valid`, `unknown`, `unavailable`, and `provider_error`.
 - Live evidence keeps internal provenance (provider ID, adapter/schema/engine versions, retrieval time, confidence, and evidence reference), while public reports redact provider identity. Risk score, reliability score, and data status remain separate.
 - Provider conflicts are explicit and excluded from silent scoring; missing, null, malformed, unavailable, and provider-error values never become zero, false, or a safe status.

@@ -58,7 +58,21 @@ function isValidSolanaPublicKey(address) {
     if (character !== "1") break;
     leadingZeroes += 1;
   }
-  return bytes.length + leadingZeroes === 32;
+  const decodedLength = bytes.length + leadingZeroes
+    - (bytes.length === 1 && bytes[0] === 0 ? 1 : 0);
+  return decodedLength === 32;
+}
+
+function solanaDataLength(data) {
+  if (!Array.isArray(data) || typeof data[0] !== "string") return null;
+  if (data[1] === "base64") {
+    try {
+      return Buffer.from(data[0], "base64").length;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function nativeAddressMessage(networkName) {
@@ -125,6 +139,9 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
       jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [address, { encoding: "jsonParsed", commitment: "finalized" }],
     }, timeoutMs);
     if (body.error) throw Object.assign(new Error("Solana RPC returned an error."), { code: "NATIVE_PROVIDER_ERROR" });
+    if (!Object.prototype.hasOwnProperty.call(body, "result") || !body.result || typeof body.result !== "object") {
+      throw Object.assign(new Error("Solana RPC response did not include an account result."), { code: "NATIVE_PROVIDER_MALFORMED_RESPONSE" });
+    }
     const value = body.result?.value;
     exists = Boolean(value && typeof value === "object" && typeof value.owner === "string");
     if (exists) {
@@ -147,7 +164,8 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
           accountOwner: point(value.owner, "SOL-004"),
           executable: point(value.executable === true, "SOL-005"),
           lamports: point(value.lamports, "SOL-006"),
-          dataLength: point(Array.isArray(value.data) ? value.data[0]?.length : null, "SOL-007"),
+          dataLength: point(solanaDataLength(value.data), "SOL-007"),
+          explorer: point(`${network.explorer}${encodeURIComponent(address)}`, "SOL-014"),
         },
       };
       if (isMint) {
@@ -231,6 +249,7 @@ module.exports = {
   NATIVE_ADAPTER_VERSION,
   nativeAddressPattern,
   isValidSolanaPublicKey,
+  solanaDataLength,
   validateNativeAddress,
   verifyNativeNetwork,
 };

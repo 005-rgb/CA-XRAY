@@ -276,6 +276,7 @@ function createBaseScan({ mode, address, network, timestamp }) {
     network: {
       id: network.id,
       name: network.name,
+      ...(network.explorer ? { explorer: network.explorer } : {}),
       validated: true,
       source: mode === "DEMO" ? "CA X-RAY DEMO FIXTURE" : "CA X-RAY network registry",
     },
