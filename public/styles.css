@@ -1531,3 +1531,164 @@ html[data-theme="light"] .map-node-contract { background: #65e6a2; }
   .map-node-tax { left: 19%; }.map-node-liquidity { right: 15%; }
   .map-status-row { gap: 6px; font-size: 5px; }
 }
+
+/* Light mode refinement: warm mineral surfaces give the interface depth
+   without the glare of a white canvas. Keep every public surface explicit so
+   translucent dark-mode fills never leak into light mode. */
+html[data-theme="light"] {
+  --joben-void: #f0f3f0;
+  --joben-panel: #f8faf7;
+  --joben-panel-2: #e8efeb;
+  --joben-text: #17282a;
+  --joben-muted: #536568;
+  --joben-dim: #718184;
+  --joben-line: rgba(27, 61, 61, .17);
+  --joben-line-bright: rgba(27, 61, 61, .32);
+  --joben-cyan: #08766f;
+  --joben-green: #14734e;
+  --joben-amber: #98600b;
+  --joben-red: #a13a3a;
+}
+html[data-theme="light"] body {
+  color: var(--joben-text);
+  background:
+    radial-gradient(circle at 86% 7%, rgba(123, 164, 151, .16), transparent 29rem),
+    radial-gradient(circle at 8% 86%, rgba(218, 182, 117, .12), transparent 25rem),
+    #edf2ef;
+}
+html[data-theme="light"] .public-header,
+html[data-theme="light"] .topbar {
+  background: rgba(232, 239, 235, .9);
+  border-bottom-color: rgba(27, 61, 61, .2);
+  box-shadow: 0 1px 0 rgba(255,255,255,.55);
+}
+html[data-theme="light"] .public-header .brand-mark {
+  color: var(--joben-cyan);
+  background: rgba(8,118,111,.06);
+  border-color: var(--joben-cyan);
+}
+html[data-theme="light"] .public-header .brand-copy strong,
+html[data-theme="light"] .public-home .dashboard-heading h1,
+html[data-theme="light"] .evidence-command-heading h2,
+html[data-theme="light"] .signal-board-heading h2 { color: #17282a; }
+html[data-theme="light"] .public-header .brand-copy small,
+html[data-theme="light"] .public-nav a,
+html[data-theme="light"] .auth-entry { color: #536568; }
+html[data-theme="light"] .public-nav a:hover,
+html[data-theme="light"] .auth-entry:hover { color: var(--joben-cyan); }
+html[data-theme="light"] .theme-toggle {
+  color: #314e4d;
+  background: rgba(248,250,247,.64);
+  border-color: rgba(27,61,61,.22);
+}
+html[data-theme="light"] .theme-toggle:hover {
+  color: var(--joben-cyan);
+  background: rgba(255,255,255,.72);
+}
+html[data-theme="light"] .forensic-backdrop { opacity: .64; }
+html[data-theme="light"] .forensic-backdrop::before {
+  background:
+    radial-gradient(ellipse at 82% 20%, rgba(82, 120, 188, .11), transparent 38%),
+    radial-gradient(ellipse at 72% 82%, rgba(8, 118, 111, .1), transparent 33%),
+    linear-gradient(180deg, rgba(237,242,239,.05), rgba(237,242,239,.7));
+}
+html[data-theme="light"] .radar-grid { opacity: .28; }
+html[data-theme="light"] .hero-status { color: #08766f; }
+html[data-theme="light"] .hero-status-dot { box-shadow: 0 0 0 5px rgba(20,115,78,.11), 0 0 14px rgba(20,115,78,.38); }
+html[data-theme="light"] .public-home .dashboard-heading p:not(.eyebrow),
+html[data-theme="light"] .evidence-command-heading p,
+html[data-theme="light"] .signal-preview p { color: #536568; }
+html[data-theme="light"] .hero-proof-row,
+html[data-theme="light"] .privacy-note { color: #637477; }
+html[data-theme="light"] .scan-form-card,
+html[data-theme="light"] .public-home .scan-form-card {
+  color: var(--joben-text);
+  background: rgba(248,250,247,.86);
+  border-color: rgba(27,61,61,.2);
+  box-shadow: 0 22px 60px rgba(45,70,65,.11), inset 0 1px rgba(255,255,255,.8);
+}
+html[data-theme="light"] .form-field label {
+  color: #40595a;
+  font-weight: 800;
+}
+html[data-theme="light"] .form-field select,
+html[data-theme="light"] .form-field input {
+  color: #17282a;
+  background: #fbfcf9;
+  border-color: rgba(27,61,61,.3);
+  box-shadow: inset 0 1px 2px rgba(27,61,61,.035);
+}
+html[data-theme="light"] .form-field select:focus,
+html[data-theme="light"] .form-field input:focus {
+  border-color: var(--joben-cyan);
+  box-shadow: 0 0 0 3px rgba(8,118,111,.13);
+}
+html[data-theme="light"] .form-field input::placeholder { color: #819092; }
+html[data-theme="light"] .primary-button {
+  color: #f4fbf8;
+  background: #0b625d;
+  border-color: #0b625d;
+  box-shadow: 0 9px 22px rgba(8,118,111,.18);
+}
+html[data-theme="light"] .primary-button:hover { color: #fff; background: #07504d; }
+html[data-theme="light"] .network-pulse,
+html[data-theme="light"] .public-home .network-pulse {
+  background: rgba(27,61,61,.16);
+  border-color: rgba(27,61,61,.17);
+}
+html[data-theme="light"] .pulse-intro,
+html[data-theme="light"] .pulse-stat {
+  color: var(--joben-text);
+  background: rgba(248,250,247,.96);
+  border-color: rgba(27,61,61,.13);
+}
+html[data-theme="light"] .pulse-stat strong,
+html[data-theme="light"] .pulse-intro strong { color: #17282a; }
+html[data-theme="light"] .pulse-stat span,
+html[data-theme="light"] .pulse-stat small { color: #687a7b; }
+html[data-theme="light"] .signal-board,
+html[data-theme="light"] .public-home .signal-board {
+  background: rgba(231,239,235,.62);
+  border-top: 1px solid rgba(27,61,61,.13);
+  border-bottom: 1px solid rgba(27,61,61,.13);
+}
+html[data-theme="light"] .signal-preview {
+  background: rgba(248,250,247,.92);
+  border-color: rgba(27,61,61,.17);
+  box-shadow: 0 10px 25px rgba(45,70,65,.05);
+}
+html[data-theme="light"] .signal-preview strong { color: #17282a; }
+html[data-theme="light"] .signal-preview:hover { background: #f8fcf9; border-color: var(--joben-cyan); }
+html[data-theme="light"] .card-kicker,
+html[data-theme="light"] .data-label { color: #6b7c7e; }
+html[data-theme="light"] .evidence-map-card,
+html[data-theme="light"] .risk-posture-card,
+html[data-theme="light"] .verification-trail-card {
+  background: linear-gradient(145deg, rgba(248,250,247,.98), rgba(232,239,235,.95));
+  border-color: rgba(27,61,61,.2);
+  box-shadow: 0 16px 38px rgba(45,70,65,.09), inset 0 1px rgba(255,255,255,.76);
+}
+html[data-theme="light"] .evidence-map-visual {
+  background: radial-gradient(circle at 50% 52%, rgba(8,118,111,.1), transparent 43%);
+}
+html[data-theme="light"] .map-node {
+  color: #263c3d;
+  background: rgba(249,251,248,.97);
+  border-color: rgba(27,61,61,.27);
+  box-shadow: 0 7px 18px rgba(45,70,65,.08);
+}
+html[data-theme="light"] .map-node b { color: #1c3031; }
+html[data-theme="light"] .map-node small { color: #637477; }
+html[data-theme="light"] .map-node-contract,
+html[data-theme="light"] .map-node-contract b,
+html[data-theme="light"] .map-node-contract small { color: inherit; }
+html[data-theme="light"] .command-foot,
+html[data-theme="light"] .posture-rows div,
+html[data-theme="light"] .trail-item span,
+html[data-theme="light"] .trail-item time { color: #687a7b; }
+html[data-theme="light"] .trail-item b,
+html[data-theme="light"] .posture-score strong { color: #17282a; }
+html[data-theme="light"] .confidence-tag,
+html[data-theme="light"] .trail-id { color: #687a7b; }
+html[data-theme="light"] .command-foot { border-top-color: rgba(27,61,61,.17); }
+html[data-theme="light"] .status-swatch { box-shadow: 0 0 0 2px rgba(255,255,255,.75); }

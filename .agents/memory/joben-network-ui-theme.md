@@ -15,6 +15,12 @@ For the light theme, every descendant surface must explicitly replace dark trans
 
 **How to apply:** When adding a light theme, audit cards, inputs, selects, hover states, and nested status blocks—not only the page shell—and verify both themes with screenshots.
 
+Light mode uses a warm mineral surface system rather than pure white: soft sage/ivory panels, graphite text, muted teal borders, and restrained amber/red signals.
+
+**Why:** Pure white flattened the landing hierarchy and reduced the quiet, investigative character of the product; a low-chroma mineral palette preserves depth while keeping text crisp.
+
+**How to apply:** Keep the page background slightly tinted, reserve near-white for readable content surfaces, and use dark teal for primary controls so labels and metadata remain legible.
+
 The JOBEN NETWORK mark is an abstract interlocking J/N signal glyph, not literal text; its orbital trace and node may animate gently while the wordmark remains stable.
 
 **Why:** A geometric monogram scales more clearly from favicon to navigation than raw initials and reinforces the product's network/evidence identity.
