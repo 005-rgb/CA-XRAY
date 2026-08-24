@@ -488,10 +488,6 @@ function showLanding({ privateView = false } = {}) {
   document.querySelector("#risk-passport").hidden = page !== "passport";
   document.querySelector("#watchtower").hidden = page !== "watchtower";
   document.querySelector("#watchtower-alerts").hidden = page !== "watchtower";
-  document.querySelector(".intelligence-heading h2").textContent = page === "passport" ? "Risk Passport" : "Watchtower";
-  document.querySelector(".intelligence-heading p").textContent = page === "passport"
-    ? "Track evidence-backed change over time."
-    : "Review scheduled monitoring and evidence alerts.";
   if (privateView) {
     if (page === "history") loadScanHistory();
     if (["passport", "watchtower"].includes(page)) loadIntelligenceDashboard();
