@@ -1437,3 +1437,34 @@ html[data-theme="light"] .auth-panel::before { border-color: rgba(0,125,120,.14)
 html[data-theme="light"] .auth-panel .form-field input,
 html[data-theme="light"] .auth-panel .recovery-form input { color: var(--joben-text); background: #ffffff; border-color: var(--joben-line-bright); }
 html[data-theme="light"] .auth-panel .field-error { color: #a52f36; }
+
+/* Evidence Command Center preview */
+.evidence-command { max-width: 980px; margin-top: 72px; }
+.evidence-command-heading { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 18px; }
+.evidence-command-heading h2 { margin: 8px 0 0; color: var(--joben-text); font-size: clamp(24px, 3vw, 34px); letter-spacing: -.055em; }
+.evidence-command-heading p { max-width: 250px; margin: 0 0 2px; color: var(--joben-muted); font-size: 11px; line-height: 1.5; }
+.evidence-command-grid { display: grid; grid-template-columns: 1.25fr .85fr .95fr; gap: 10px; }
+.evidence-map-card, .risk-posture-card, .verification-trail-card { min-width: 0; min-height: 300px; padding: 18px; border: 1px solid var(--joben-line); border-radius: 12px; background: rgba(13,20,29,.72); backdrop-filter: blur(14px); box-shadow: inset 0 1px rgba(255,255,255,.035); }
+.command-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.command-live, .confidence-tag, .trail-id { color: var(--joben-dim); font-size: 7px; letter-spacing: .13em; white-space: nowrap; }
+.command-live { color: var(--joben-green); }
+.command-live i { display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; background: var(--joben-green); box-shadow: 0 0 9px var(--joben-green); animation: node-blink 2s ease-in-out infinite; }
+.evidence-map-visual { position: relative; height: 214px; margin: 6px -2px 0; overflow: hidden; background: radial-gradient(circle at 50% 52%, rgba(77,225,208,.08), transparent 42%); }
+.evidence-map-visual::before { content: ""; position: absolute; inset: 16px 8px; border: 1px solid rgba(77,225,208,.1); border-radius: 50%; box-shadow: 0 0 0 28px rgba(77,225,208,.018), 0 0 0 58px rgba(77,225,208,.014); }
+.map-line { position: absolute; height: 1px; transform-origin: left center; background: linear-gradient(90deg, rgba(77,225,208,.5), rgba(77,225,208,.08)); }
+.map-line-a { width: 31%; left: 29%; top: 48%; transform: rotate(-29deg); }.map-line-b { width: 30%; left: 29%; top: 52%; transform: rotate(27deg); }.map-line-c { width: 28%; left: 29%; top: 52%; transform: rotate(1deg); }
+.map-node { position: absolute; display: flex; flex-direction: column; justify-content: center; width: 83px; height: 45px; padding: 7px 8px; border: 1px solid rgba(77,225,208,.34); border-radius: 7px; background: rgba(8,16,24,.9); box-shadow: 0 0 22px rgba(77,225,208,.08); }
+.map-node b { color: var(--joben-text); font-size: 7px; letter-spacing: .1em; }.map-node small { margin-top: 3px; color: var(--joben-dim); font-size: 7px; letter-spacing: .04em; }
+.map-node-contract { left: 28%; top: 41%; width: 112px; height: 54px; border-color: var(--joben-cyan); text-align: center; align-items: center; background: rgba(17,39,44,.94); }
+.map-node-owner { left: 2%; top: 18%; }.map-node-market { right: 3%; top: 13%; border-color: rgba(155,140,255,.45); }.map-node-holders { right: 3%; bottom: 14%; }
+.map-scan-dot { position: absolute; left: 58%; top: 49%; width: 5px; height: 5px; border-radius: 50%; background: var(--joben-cyan); box-shadow: 0 0 0 5px rgba(77,225,208,.08), 0 0 18px var(--joben-cyan); animation: node-blink 2.4s ease-in-out infinite; }
+.command-foot { display: flex; justify-content: space-between; border-top: 1px solid var(--joben-line); padding-top: 11px; color: var(--joben-dim); font-size: 8px; letter-spacing: .08em; }.command-foot strong { color: var(--joben-cyan); font-size: 8px; }
+.posture-score { display: flex; align-items: end; gap: 10px; margin-top: 47px; }.posture-score strong { color: var(--joben-text); font-size: 58px; line-height: .9; letter-spacing: -.08em; }.posture-score span { color: var(--joben-muted); font-size: 9px; margin-bottom: 4px; }
+.posture-meter { height: 5px; margin: 23px 0 24px; background: var(--joben-line); border-radius: 99px; }.posture-meter span { display: block; width: 36%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--joben-cyan), var(--joben-green)); }
+.posture-rows { border-top: 1px solid var(--joben-line); }.posture-rows div { display: flex; justify-content: space-between; gap: 9px; padding: 10px 0; border-bottom: 1px solid var(--joben-line); color: var(--joben-muted); font-size: 9px; }.posture-rows b { color: var(--joben-green); font-size: 7px; letter-spacing: .1em; }
+.trail-list { margin-top: 33px; border-top: 1px solid var(--joben-line); }.trail-item { display: grid; grid-template-columns: 10px 1fr auto; gap: 9px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--joben-line); }.trail-dot { width: 7px; height: 7px; margin-top: 3px; border: 1px solid var(--joben-dim); border-radius: 50%; }.trail-dot.verified { border-color: var(--joben-green); background: var(--joben-green); box-shadow: 0 0 9px rgba(101,230,162,.6); }.trail-item b { display: block; color: var(--joben-text); font-size: 10px; }.trail-item span, .trail-item time { color: var(--joben-dim); font-size: 8px; }.trail-item span { display: block; margin-top: 4px; }.trail-item time { letter-spacing: .08em; }
+html[data-theme="light"] .evidence-map-card, html[data-theme="light"] .risk-posture-card, html[data-theme="light"] .verification-trail-card { background: rgba(255,255,255,.9); border-color: var(--joben-line); box-shadow: 0 14px 40px rgba(37,70,77,.06), inset 0 1px rgba(255,255,255,.9); }
+html[data-theme="light"] .map-node { background: rgba(255,255,255,.96); }.map-node-contract { background: rgba(231,248,246,.98); }.map-node b, html[data-theme="light"] .trail-item b { color: var(--joben-text); }
+html[data-theme="light"] .evidence-map-visual { background: radial-gradient(circle at 50% 52%, rgba(0,125,120,.07), transparent 42%); }
+@media (max-width: 900px) { .evidence-command-grid { grid-template-columns: 1fr 1fr; }.evidence-map-card { grid-row: span 2; } }
+@media (max-width: 640px) { .evidence-command-heading { align-items: flex-start; flex-direction: column; gap: 9px; }.evidence-command-grid { grid-template-columns: 1fr; }.evidence-map-card { grid-row: auto; }.evidence-command { margin-top: 52px; } }
