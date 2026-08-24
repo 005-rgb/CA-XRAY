@@ -478,20 +478,14 @@ function settingMessage(id, message, tone = "") {
   }
 }
 
-function storedPreferences() {
-  try {
-    return JSON.parse(localStorage.getItem("ca_xray_preferences") || "{}");
-  } catch {
-    return {};
-  }
-}
-
 async function loadPreferences() {
-  let preferences = storedPreferences();
+  let preferences = {};
   try {
     const result = await apiJson("/api/auth/preferences");
-    preferences = { ...preferences, ...result.preferences };
-  } catch {}
+    preferences = result.preferences || {};
+  } catch (error) {
+    settingMessage("preferences-status", "Could not load account preferences.", "error");
+  }
   const timezone = preferences.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   document.querySelector("#preference-network").value = preferences.network || "ethereum";
   document.querySelector("#preference-timezone").value = [...document.querySelector("#preference-timezone").options]
@@ -586,14 +580,13 @@ document.querySelector("#save-preferences")?.addEventListener("click", () => {
     notifyScan: document.querySelector("#notify-scan").checked,
     notifySecurity: document.querySelector("#notify-security").checked,
   };
-  localStorage.setItem("ca_xray_preferences", JSON.stringify(preferences));
   apiJson("/api/auth/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preferences) })
     .then(() => { networkInput.value = preferences.network; settingMessage("preferences-status", "Preferences saved to your account.", "success"); })
     .catch((error) => settingMessage("preferences-status", error.message, "error"));
 });
 document.querySelector("#save-notifications")?.addEventListener("click", () => {
   document.querySelector("#save-preferences").click();
-  settingMessage("notifications-status", "Notification settings saved on this device.", "success");
+  settingMessage("notifications-status", "Notification settings saved to your account.", "success");
 });
 
 workspaceForm?.addEventListener("submit", async (event) => {
@@ -630,29 +623,29 @@ document.querySelector("#export-data")?.addEventListener("click", async () => {
   } catch (error) { settingMessage("privacy-status", error.message, "error"); }
 });
 
-document.querySelector("#delete-account")?.addEventListener("click", () => {
-  if (!window.confirm("Schedule account deletion? Your account data will be retained for 30 days and then become eligible for permanent removal.")) return;
-  apiJson("/api/auth/deletion-request", { method: "POST" })
-    .then((result) => {
-      settingMessage("privacy-status", `Deletion scheduled for ${formatDate(result.scheduledFor)}. You can cancel during the 30-day retention period.`, "success");
-      document.querySelector("#delete-account").textContent = "Cancel deletion request";
-      document.querySelector("#delete-account").dataset.scheduled = "true";
-    })
-    .catch((error) => settingMessage("privacy-status", error.message === "TEAM_OWNERSHIP_REQUIRED" ? "Transfer team workspace ownership before deleting your account." : error.message, "error"));
-});
-
-document.querySelector("#delete-account")?.addEventListener("click", (event) => {
+document.querySelector("#delete-account")?.addEventListener("click", async (event) => {
   const button = event.currentTarget;
-  if (button.dataset.scheduled !== "true") return;
-  event.stopImmediatePropagation();
-  apiJson("/api/auth/deletion-request", { method: "DELETE" })
-    .then(() => {
+  if (button.dataset.scheduled === "true") {
+    try {
+      await apiJson("/api/auth/deletion-request", { method: "DELETE" });
       settingMessage("privacy-status", "Deletion request cancelled.", "success");
       button.textContent = "Request account deletion";
       delete button.dataset.scheduled;
-    })
-    .catch((error) => settingMessage("privacy-status", error.message, "error"));
-}, true);
+    } catch (error) {
+      settingMessage("privacy-status", error.message, "error");
+    }
+    return;
+  }
+  if (!window.confirm("Schedule account deletion? Your account data will be retained for 30 days and then become eligible for permanent removal.")) return;
+  try {
+    const result = await apiJson("/api/auth/deletion-request", { method: "POST" });
+    settingMessage("privacy-status", `Deletion scheduled for ${formatDate(result.scheduledFor)}. You can cancel during the 30-day retention period.`, "success");
+    button.textContent = "Cancel deletion request";
+    button.dataset.scheduled = "true";
+  } catch (error) {
+    settingMessage("privacy-status", error.message === "TEAM_OWNERSHIP_REQUIRED" ? "Transfer team workspace ownership before deleting your account." : error.message, "error");
+  }
+});
 
 settingsNavLinks.forEach((link) => link.addEventListener("click", () => {
   settingsNavLinks.forEach((item) => item.classList.toggle("active", item === link));

@@ -315,7 +315,8 @@ class MemoryAuthStore {
   }
 
   async getDeletionRequest(userId) {
-    return clone(this.deletionRequests.get(userId) || null);
+    const request = this.deletionRequests.get(userId);
+    return clone(request?.status === "scheduled" ? request : null);
   }
 
   async scheduleDeletion(userId, scheduledFor) {

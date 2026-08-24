@@ -67,6 +67,15 @@ test("Settings account, team access, preferences, and retention flow", async () 
   assert.equal(response.status, 200);
   response = await owner.request("/api/auth/preferences");
   assert.equal((await body(response)).preferences.network, "base");
+  const secondDevice = client();
+  response = await secondDevice.request("/api/auth/login", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: `settings-${process.pid}@example.com`, password: "correct horse battery staple" }),
+  });
+  assert.equal(response.status, 200);
+  response = await secondDevice.request("/api/auth/preferences");
+  assert.equal((await body(response)).preferences.network, "base");
+  assert.equal((await body(await owner.request("/api/auth/preferences"))).preferences.timezone, "Asia/Jakarta");
 
   response = await owner.request("/api/workspaces", {
     method: "POST", headers: { "content-type": "application/json" },
@@ -116,5 +125,9 @@ test("Personal account deletion can be scheduled and cancelled", async () => {
   assert.equal(new Date(scheduled.scheduledFor).getTime() > Date.now(), true);
   response = await user.request("/api/auth/deletion-request", { method: "DELETE" });
   assert.equal(response.status, 200);
-  assert.equal((await body(response)).status, "cancelled");
+  const cancelled = await body(response);
+  assert.equal(cancelled.status, "cancelled");
+  response = await user.request("/api/auth/deletion-request");
+  assert.equal(response.status, 200);
+  assert.equal((await body(response)).deletion, null);
 });
