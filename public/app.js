@@ -508,6 +508,24 @@ function settingMessage(id, message, tone = "") {
   }
 }
 
+function applySettingsTab() {
+  if (!settingsPanel) return;
+  const validIds = [...settingsNavLinks].map((link) => link.getAttribute("href").slice(1));
+  const requestedId = window.location.hash.startsWith("#settings-")
+    ? window.location.hash.slice(1)
+    : "settings-profile";
+  const activeId = validIds.includes(requestedId) ? requestedId : "settings-profile";
+  settingsNavLinks.forEach((link) => {
+    const isActive = link.getAttribute("href") === `#${activeId}`;
+    link.classList.toggle("active", isActive);
+    link.setAttribute("aria-selected", String(isActive));
+    link.setAttribute("tabindex", isActive ? "0" : "-1");
+  });
+  settingsPanel.querySelectorAll(".settings-content > .settings-card").forEach((section) => {
+    section.hidden = section.id !== activeId;
+  });
+}
+
 async function loadPreferences() {
   let preferences = {};
   try {
@@ -538,6 +556,7 @@ async function loadSettings() {
   document.querySelector("#settings-workspace-type").textContent = authState.workspace?.workspaceType || "personal";
   const isOwner = authState.membership?.role === "Workspace Owner";
   document.querySelectorAll(".workspace-owner-only").forEach((element) => { element.hidden = !isOwner; });
+  applySettingsTab();
   await loadPreferences();
   try {
     const deletionResult = await apiJson("/api/auth/deletion-request");
@@ -678,9 +697,12 @@ document.querySelector("#delete-account")?.addEventListener("click", async (even
 });
 
 settingsNavLinks.forEach((link) => link.addEventListener("click", () => {
-  settingsNavLinks.forEach((item) => item.classList.toggle("active", item === link));
+  window.requestAnimationFrame(applySettingsTab);
 }));
-window.addEventListener("hashchange", () => refreshAuth());
+window.addEventListener("hashchange", () => {
+  if (isPrivateRoute() && privatePage() === "settings") applySettingsTab();
+  else refreshAuth();
+});
 
 function showAdminShell() {
   setShell({ privateView: true });
