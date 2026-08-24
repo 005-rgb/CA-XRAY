@@ -1,4 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" fill="#121417"/>
-  <text x="32" y="39" text-anchor="middle" fill="#fff" font-family="Arial, sans-serif" font-size="19" font-weight="700">CA</text>
+  <defs>
+    <linearGradient id="signal" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4de1d0"/>
+      <stop offset="1" stop-color="#9b8cff"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#070b11"/>
+  <circle cx="32" cy="32" r="24" fill="none" stroke="#22303d" stroke-width="1.5"/>
+  <path d="M16 18v25c0 7 5 10 11 10s11-3 11-10V18" fill="none" stroke="url(#signal)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 18v35l20-35v35" fill="none" stroke="url(#signal)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="46" cy="18" r="3" fill="#65e6a2"/>
 </svg>

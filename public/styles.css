@@ -755,10 +755,20 @@ body:before {
 .public-header, .topbar { height: 74px; background: rgba(7,11,17,.84); border-bottom: 1px solid var(--joben-line); backdrop-filter: blur(18px); }
 .brand { color: var(--joben-text); }
 .brand-mark, .sidebar .brand-mark, .public-header .brand-mark {
-  border: 1px solid rgba(77,225,208,.6); border-radius: 8px; background: rgba(77,225,208,.08); color: var(--joben-cyan);
+  position: relative; overflow: hidden; border: 1px solid rgba(77,225,208,.6); border-radius: 8px; background: rgba(77,225,208,.08); color: var(--joben-cyan);
   box-shadow: 0 0 22px rgba(77,225,208,.1); transition: transform .25s ease, box-shadow .25s ease;
 }
 .brand:hover .brand-mark { transform: rotate(10deg); box-shadow: 0 0 28px rgba(77,225,208,.25); }
+.brand-glyph { display: block; width: 100%; height: 100%; overflow: visible; }
+.monogram-stroke, .monogram-orbit { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+.monogram-stroke { stroke-width: 2.15; }
+.monogram-n { opacity: .72; }
+.monogram-orbit { stroke-width: .7; opacity: .34; stroke-dasharray: 3 4; transform-origin: 16px 16px; animation: monogram-orbit 8s linear infinite; }
+.monogram-node { fill: var(--joben-green); filter: drop-shadow(0 0 3px var(--joben-green)); animation: monogram-node 2.4s ease-in-out infinite; }
+.monogram-j { stroke-dasharray: 44; animation: monogram-flow 4.2s ease-in-out infinite; }
+@keyframes monogram-flow { 0%, 100% { stroke-dashoffset: 44; opacity: .62; } 45%, 70% { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes monogram-orbit { to { transform: rotate(360deg); } }
+@keyframes monogram-node { 0%, 100% { opacity: .45; transform: scale(.8); transform-origin: 24px 7px; } 50% { opacity: 1; transform: scale(1.2); transform-origin: 24px 7px; } }
 .brand-copy strong { color: var(--joben-text); letter-spacing: .13em; }
 .brand-copy small { color: var(--joben-cyan); letter-spacing: .14em; }
 .auth-entry { color: var(--joben-text); border-color: var(--joben-cyan); }
