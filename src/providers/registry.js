@@ -29,6 +29,10 @@ const CONTROLLED_PROVIDER_ORIGINS = Object.freeze([
   "https://sapphire.oasis.io",
   "https://evm.kava.io",
   "https://astar.blockscout.com",
+  "https://rpc.zora.energy",
+  "https://rpc.api.moonbeam.network",
+  "https://rpc.api.moonriver.moonbeam.network",
+  "https://rpc.telos.net",
 ]);
 
 function assertControlledProviderUrl(value, allowedOrigins = CONTROLLED_PROVIDER_ORIGINS) {

@@ -130,6 +130,28 @@ test("network catalog keeps 53 entries and exposes RPC evidence for every EVM en
   }
 });
 
+test("Zora, Moonbeam, Moonriver, and Telos are EVM RPC networks with exact chain metadata", () => {
+  const expected = {
+    zora: { chainId: "7777777", rpcUrl: "https://rpc.zora.energy", explorer: "https://explorer.zora.energy/address/" },
+    moonbeam: { chainId: "1284", rpcUrl: "https://rpc.api.moonbeam.network", explorer: "https://moonbeam.moonscan.io/address/" },
+    moonriver: { chainId: "1285", rpcUrl: "https://rpc.api.moonriver.moonbeam.network", explorer: "https://moonriver.moonscan.io/address/" },
+    telos: { chainId: "40", rpcUrl: "https://rpc.telos.net", explorer: "https://teloscan.io/address/" },
+  };
+  for (const [id, metadata] of Object.entries(expected)) {
+    const network = NETWORKS.find((item) => item.id === id);
+    assert.ok(network, `${id} must exist in the network catalog`);
+    assert.equal(network.evm, true);
+    assert.deepEqual(
+      { chainId: network.goplusChainId, rpcUrl: network.rpcUrl, explorer: network.explorer },
+      metadata,
+    );
+    assert.equal(network.providerSupport["rpc-contract"], true);
+    assert.equal(network.providerSupport.dexscreener, true);
+    assert.equal(network.providerSupport["blockscout-abi"], false);
+    assert.equal(validateAddress(`0x${"1".repeat(40)}`, network).valid, true);
+  }
+});
+
 test("RPC contract evidence never treats empty bytecode as deployed", () => {
   const result = normalizeRpcContract({
     network: { name: "Base" },

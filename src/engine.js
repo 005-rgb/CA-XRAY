@@ -96,6 +96,10 @@ const EVM_EXTENSION_METADATA = Object.freeze({
   shimmer: { chainId: "148", rpcUrl: "https://json-rpc.evm.shimmer.network", explorer: "https://explorer.evm.iota.org/address/" },
   karura: { chainId: "686", rpcUrl: "https://eth-rpc-karura.aca-api.network", explorer: "https://blockscout.acala.network/address/" },
   "oasis-sapphire": { chainId: "23294", rpcUrl: "https://sapphire.oasis.io", explorer: "https://explorer.sapphire.oasis.io/address/" },
+  zora: { chainId: "7777777", rpcUrl: "https://rpc.zora.energy", explorer: "https://explorer.zora.energy/address/" },
+  moonbeam: { chainId: "1284", rpcUrl: "https://rpc.api.moonbeam.network", explorer: "https://moonbeam.moonscan.io/address/" },
+  moonriver: { chainId: "1285", rpcUrl: "https://rpc.api.moonriver.moonbeam.network", explorer: "https://moonriver.moonscan.io/address/" },
+  telos: { chainId: "40", rpcUrl: "https://rpc.telos.net", explorer: "https://teloscan.io/address/" },
 });
 
 const NATIVE_NETWORK_METADATA = Object.freeze({
