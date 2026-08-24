@@ -1692,3 +1692,53 @@ html[data-theme="light"] .confidence-tag,
 html[data-theme="light"] .trail-id { color: #687a7b; }
 html[data-theme="light"] .command-foot { border-top-color: rgba(27,61,61,.17); }
 html[data-theme="light"] .status-swatch { box-shadow: 0 0 0 2px rgba(255,255,255,.75); }
+
+/* Evidence nodes continuously orbit the CA anchor. Each node shares one
+   measured ellipse but starts at a different phase, keeping the graph alive
+   without turning the evidence labels into a collision-heavy carousel. */
+.evidence-map-visual > .map-node:not(.map-node-contract) {
+  left: 50%;
+  top: 50%;
+  animation-name: map-node-orbit;
+  animation-duration: 18s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+  will-change: transform;
+}
+.map-node-owner { animation-delay: -1.5s; }
+.map-node-tax { animation-delay: -4.5s; }
+.map-node-market { animation-delay: -7.5s; }
+.map-node-liquidity { animation-delay: -10.5s; }
+.map-node-holders { animation-delay: -13.5s; }
+.map-node-source { animation-delay: -16.5s; }
+@keyframes map-node-orbit {
+  0% { transform: translate(-50%, -50%) translate(0, -88px); }
+  12.5% { transform: translate(-50%, -50%) translate(82px, -72px); }
+  25% { transform: translate(-50%, -50%) translate(154px, -25px); }
+  37.5% { transform: translate(-50%, -50%) translate(137px, 43px); }
+  50% { transform: translate(-50%, -50%) translate(0, 88px); }
+  62.5% { transform: translate(-50%, -50%) translate(-137px, 43px); }
+  75% { transform: translate(-50%, -50%) translate(-154px, -25px); }
+  87.5% { transform: translate(-50%, -50%) translate(-82px, -72px); }
+  100% { transform: translate(-50%, -50%) translate(0, -88px); }
+}
+html[data-theme="light"] .evidence-map-visual > .map-node:not(.map-node-contract) {
+  background: rgba(249,251,248,.98);
+}
+@media (max-width: 640px) {
+  .evidence-map-visual > .map-node:not(.map-node-contract) {
+    animation-name: map-node-orbit-mobile;
+  }
+}
+@keyframes map-node-orbit-mobile {
+  0% { transform: translate(-50%, -50%) scale(.82) translate(0, -87px); }
+  12.5% { transform: translate(-50%, -50%) scale(.82) translate(70px, -70px); }
+  25% { transform: translate(-50%, -50%) scale(.82) translate(125px, -23px); }
+  37.5% { transform: translate(-50%, -50%) scale(.82) translate(112px, 42px); }
+  50% { transform: translate(-50%, -50%) scale(.82) translate(0, 87px); }
+  62.5% { transform: translate(-50%, -50%) scale(.82) translate(-112px, 42px); }
+  75% { transform: translate(-50%, -50%) scale(.82) translate(-125px, -23px); }
+  87.5% { transform: translate(-50%, -50%) scale(.82) translate(-70px, -70px); }
+  100% { transform: translate(-50%, -50%) scale(.82) translate(0, -87px); }
+}
