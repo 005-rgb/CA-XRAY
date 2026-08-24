@@ -122,6 +122,8 @@ class MemoryAuthStore {
     this.recovery = new Map();
     this.emailVerification = new Map();
     this.recoveryCodes = new Map();
+    this.preferences = new Map();
+    this.deletionRequests = new Map();
     this.emailJobs = [];
     this.audit = [];
   }
@@ -300,6 +302,34 @@ class MemoryAuthStore {
     }
     user.passwordHash = passwordHash(password);
     return clone(user);
+  }
+
+  async getPreferences(userId, workspaceId) {
+    return clone(this.preferences.get(`${userId}:${workspaceId}`) || {});
+  }
+
+  async savePreferences(userId, workspaceId, preferences) {
+    const value = { ...preferences, userId, workspaceId, updatedAt: this.now() };
+    this.preferences.set(`${userId}:${workspaceId}`, value);
+    return clone(value);
+  }
+
+  async getDeletionRequest(userId) {
+    return clone(this.deletionRequests.get(userId) || null);
+  }
+
+  async scheduleDeletion(userId, scheduledFor) {
+    const request = { userId, requestedAt: this.now(), scheduledFor, cancelledAt: null, status: "scheduled" };
+    this.deletionRequests.set(userId, request);
+    return clone(request);
+  }
+
+  async cancelDeletion(userId) {
+    const request = this.deletionRequests.get(userId);
+    if (!request || request.status !== "scheduled") return null;
+    request.status = "cancelled";
+    request.cancelledAt = this.now();
+    return clone(request);
   }
 
   async confirmMfa(sessionId) {
@@ -786,6 +816,62 @@ class PostgresAuthStore {
     );
     if (!result.rowCount) throw Object.assign(new Error("USER_NOT_FOUND"), { code: "USER_NOT_FOUND" });
     return rowUser(result.rows[0]);
+  }
+
+  async getPreferences(userId, workspaceId) {
+    const result = await this.pool.query(
+      "SELECT preferences, updated_at FROM user_preferences WHERE user_id = $1 AND workspace_id = $2",
+      [userId, workspaceId],
+    );
+    return result.rows[0] ? { ...result.rows[0].preferences, userId, workspaceId, updatedAt: result.rows[0].updated_at } : {};
+  }
+
+  async savePreferences(userId, workspaceId, preferences) {
+    const result = await this.pool.query(
+      `INSERT INTO user_preferences (user_id, workspace_id, preferences)
+       VALUES ($1, $2, $3::jsonb)
+       ON CONFLICT (user_id, workspace_id) DO UPDATE SET preferences = EXCLUDED.preferences, updated_at = NOW()
+       RETURNING preferences, updated_at`,
+      [userId, workspaceId, JSON.stringify(preferences)],
+    );
+    return { ...result.rows[0].preferences, userId, workspaceId, updatedAt: result.rows[0].updated_at };
+  }
+
+  async getDeletionRequest(userId) {
+    const result = await this.pool.query(
+      `SELECT user_id, requested_at, scheduled_for, cancelled_at, status
+         FROM account_deletion_requests WHERE user_id = $1 AND status = 'scheduled'`,
+      [userId],
+    );
+    return result.rows[0] ? {
+      userId: result.rows[0].user_id, requestedAt: result.rows[0].requested_at,
+      scheduledFor: result.rows[0].scheduled_for, cancelledAt: result.rows[0].cancelled_at,
+      status: result.rows[0].status,
+    } : null;
+  }
+
+  async scheduleDeletion(userId, scheduledFor) {
+    const result = await this.pool.query(
+      `INSERT INTO account_deletion_requests (user_id, scheduled_for, status)
+       VALUES ($1, $2, 'scheduled')
+       ON CONFLICT (user_id) DO UPDATE SET requested_at = NOW(), scheduled_for = EXCLUDED.scheduled_for,
+         cancelled_at = NULL, status = 'scheduled'
+       RETURNING user_id, requested_at, scheduled_for, cancelled_at, status`,
+      [userId, scheduledFor],
+    );
+    const row = result.rows[0];
+    return { userId: row.user_id, requestedAt: row.requested_at, scheduledFor: row.scheduled_for, cancelledAt: row.cancelled_at, status: row.status };
+  }
+
+  async cancelDeletion(userId) {
+    const result = await this.pool.query(
+      `UPDATE account_deletion_requests SET status = 'cancelled', cancelled_at = NOW()
+        WHERE user_id = $1 AND status = 'scheduled'
+        RETURNING user_id, requested_at, scheduled_for, cancelled_at, status`, [userId],
+    );
+    if (!result.rowCount) return null;
+    const row = result.rows[0];
+    return { userId: row.user_id, requestedAt: row.requested_at, scheduledFor: row.scheduled_for, cancelledAt: row.cancelled_at, status: row.status };
   }
 
   async confirmMfa(sessionId) {
@@ -1428,6 +1514,54 @@ class AuthService {
     const revoked = await this.store.revokeOtherSessions(authenticated.user.id, authenticated.sessionId);
     await this.audit("PASSWORD_CHANGED", authenticated.user.id, authenticated.workspaceId, { revokedSessions: revoked });
     return { changed: true, revokedSessions: revoked };
+  }
+
+  async getPreferences(context) {
+    const authenticated = context.kind === "authenticated"
+      ? context
+      : (() => { throw Object.assign(new Error("UNAUTHORIZED"), { code: "UNAUTHORIZED" }); })();
+    return this.store.getPreferences(authenticated.user.id, authenticated.workspaceId);
+  }
+
+  async savePreferences(context, input) {
+    const authenticated = context.kind === "authenticated"
+      ? context
+      : (() => { throw Object.assign(new Error("UNAUTHORIZED"), { code: "UNAUTHORIZED" }); })();
+    const preferences = {
+      network: typeof input.network === "string" ? input.network.slice(0, 32) : "ethereum",
+      timezone: typeof input.timezone === "string" ? input.timezone.slice(0, 64) : "UTC",
+      confirmLive: input.confirmLive !== false,
+      notifyWatchtower: input.notifyWatchtower !== false,
+      notifyScan: input.notifyScan !== false,
+      notifySecurity: input.notifySecurity !== false,
+    };
+    const result = await this.store.savePreferences(authenticated.user.id, authenticated.workspaceId, preferences);
+    await this.audit("PREFERENCES_UPDATED", authenticated.user.id, authenticated.workspaceId, {});
+    return result;
+  }
+
+  async requestDeletion(context) {
+    const authenticated = context.kind === "authenticated"
+      ? context
+      : (() => { throw Object.assign(new Error("UNAUTHORIZED"), { code: "UNAUTHORIZED" }); })();
+    const workspaces = await this.store.listWorkspaces(authenticated.user.id);
+    const ownsTeam = workspaces.some((workspace) => workspace.workspaceType === "team"
+      && workspace.ownerUserId === authenticated.user.id);
+    if (ownsTeam) throw Object.assign(new Error("TEAM_OWNERSHIP_REQUIRED"), { code: "TEAM_OWNERSHIP_REQUIRED" });
+    const scheduledFor = new Date(this.clock().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const result = await this.store.scheduleDeletion(authenticated.user.id, scheduledFor);
+    await this.audit("ACCOUNT_DELETION_SCHEDULED", authenticated.user.id, authenticated.workspaceId, { retentionDays: 30 });
+    return { ...result, retentionDays: 30 };
+  }
+
+  async cancelDeletion(context) {
+    const authenticated = context.kind === "authenticated"
+      ? context
+      : (() => { throw Object.assign(new Error("UNAUTHORIZED"), { code: "UNAUTHORIZED" }); })();
+    const result = await this.store.cancelDeletion(authenticated.user.id);
+    if (!result) throw Object.assign(new Error("DELETION_REQUEST_NOT_FOUND"), { code: "DELETION_REQUEST_NOT_FOUND" });
+    await this.audit("ACCOUNT_DELETION_CANCELLED", authenticated.user.id, authenticated.workspaceId, {});
+    return result;
   }
 
   async selectWorkspace(context, workspaceId) {

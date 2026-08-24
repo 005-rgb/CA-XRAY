@@ -443,6 +443,38 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/auth/preferences") {
+    const preferences = await authService.getPreferences(requireAuthenticated(context));
+    sendJson(res, 200, { preferences }, { context });
+    return true;
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/auth/preferences") {
+    const body = await readBody(req);
+    const preferences = await authService.savePreferences(requireAuthenticated(context), body);
+    sendJson(res, 200, { preferences }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/deletion-request") {
+    const result = await authService.requestDeletion(requireAuthenticated(context));
+    sendJson(res, 202, result, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/auth/deletion-request") {
+    const authenticated = requireAuthenticated(context);
+    const deletion = await authService.store.getDeletionRequest(authenticated.user.id);
+    sendJson(res, 200, { deletion }, { context });
+    return true;
+  }
+
+  if (req.method === "DELETE" && url.pathname === "/api/auth/deletion-request") {
+    const result = await authService.cancelDeletion(requireAuthenticated(context));
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/auth/sessions") {
     const authenticated = requireAuthenticated(context);
     const sessions = await authService.store.listSessions(authenticated.user.id);
@@ -1457,6 +1489,9 @@ async function handleApi(req, res, url, context) {
       SESSION_NOT_FOUND: 404,
       INVITE_INVALID_OR_EXPIRED: 400,
       INVITE_EMAIL_MISMATCH: 403,
+      CURRENT_PASSWORD_INVALID: 401,
+      TEAM_OWNERSHIP_REQUIRED: 409,
+      DELETION_REQUEST_NOT_FOUND: 404,
       WEAK_PASSWORD: 400,
       INVALID_EMAIL: 400,
       EMAIL_IN_USE: 409,
