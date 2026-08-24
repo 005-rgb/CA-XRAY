@@ -10,7 +10,13 @@ const {
   CATEGORY_WEIGHTS,
 } = require("../src/engine");
 const { normalizeBlockscout, normalizeRpcContract } = require("../src/providers/default-adapters");
-const { isValidSolanaPublicKey, solanaDataLength, validateNativeAddress, verifyNativeNetwork } = require("../src/providers/native-network-adapters");
+const {
+  isValidSolanaPublicKey,
+  normalizeSolanaHolderAccounts,
+  solanaDataLength,
+  validateNativeAddress,
+  verifyNativeNetwork,
+} = require("../src/providers/native-network-adapters");
 
 const valid = "0x1234567890123456789012345678901234567890";
 
@@ -91,6 +97,26 @@ test("Solana native verification classifies malformed RPC results explicitly", a
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test("Solana holder normalization aggregates owners, excludes burns, and checks supply", () => {
+  const context = {
+    providerId: "solana-native-rpc",
+    adapterVersion: "1.1.0",
+    retrievedAt: "2026-08-24T00:00:00.000Z",
+  };
+  const result = normalizeSolanaHolderAccounts([
+    { account: { data: { parsed: { info: { owner: "WalletA", tokenAmount: { amount: "600" } } } } } },
+    { account: { data: { parsed: { info: { owner: "WalletA", tokenAmount: { amount: "100" } } } } } },
+    { account: { data: { parsed: { info: { owner: "WalletB", tokenAmount: { amount: "200" } } } } } },
+    { account: { data: { parsed: { info: { owner: "1nc1nerator11111111111111111111111111111111", tokenAmount: { amount: "100" } } } } } },
+  ], "1000", context);
+  assert.equal(result.holders.totalHolders.value, 2);
+  assert.equal(result.holders.top1Percent.value, 70);
+  assert.equal(result.holders.top10Percent.value, 90);
+  assert.equal(result.holders.observedAccountSupply.value, "1000");
+  assert.equal(result.holders.distributionCompleteness.value, "CONSISTENT");
+  assert.deepEqual(result.limitations, []);
 });
 
 test("network catalog keeps 53 entries and exposes RPC evidence for every EVM entry", () => {

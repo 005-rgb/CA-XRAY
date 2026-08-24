@@ -3,6 +3,10 @@ const { normalizedPoint, normalizedResult, PROVIDER_RESULT_STATUS } = require(".
 
 const SOLANA_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const SOLANA_TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+const SOLANA_BURN_ADDRESSES = new Set([
+  "1nc1nerator11111111111111111111111111111111",
+  "11111111111111111111111111111111",
+]);
 
 const ADAPTERS = Object.freeze({
   solana: {
@@ -75,6 +79,88 @@ function solanaDataLength(data) {
   return null;
 }
 
+function normalizeSolanaHolderAccounts(accounts, totalSupply, context) {
+  if (!Array.isArray(accounts)) return null;
+  let supply;
+  try {
+    supply = BigInt(String(totalSupply));
+  } catch {
+    return null;
+  }
+  if (supply < 0n) return null;
+
+  const owners = new Map();
+  let observedSupply = 0n;
+  for (const account of accounts) {
+    const info = account?.account?.data?.parsed?.info;
+    const owner = typeof info?.owner === "string" ? info.owner : null;
+    const rawAmount = info?.tokenAmount?.amount;
+    if (!owner || rawAmount === null || rawAmount === undefined) continue;
+    let amount;
+    try {
+      amount = BigInt(String(rawAmount));
+    } catch {
+      continue;
+    }
+    if (amount < 0n) continue;
+    observedSupply += amount;
+    if (amount === 0n || SOLANA_BURN_ADDRESSES.has(owner)) continue;
+    owners.set(owner, (owners.get(owner) || 0n) + amount);
+  }
+
+  const ranked = [...owners.entries()]
+    .map(([address, value]) => ({ address, value }))
+    .sort((left, right) => (left.value === right.value
+      ? left.address.localeCompare(right.address)
+      : left.value > right.value ? -1 : 1));
+  const percentage = (value) => supply > 0n ? Number((value * 10000n) / supply) / 100 : null;
+  const sumTop = (count) => ranked.slice(0, count).reduce((sum, holder) => sum + holder.value, 0n);
+  const discrepancy = observedSupply > supply ? observedSupply - supply : supply - observedSupply;
+  const complete = supply === 0n ? observedSupply === 0n : discrepancy * 1000n <= supply;
+  const point = (value, evidenceReference) => normalizedPoint({
+    value,
+    providerId: context.providerId,
+    adapterVersion: context.adapterVersion,
+    retrievedAt: context.retrievedAt,
+    evidenceReference,
+  });
+
+  return {
+    holders: {
+      totalHolders: point(ranked.length, "SOL-H001"),
+      top1Percent: point(percentage(sumTop(1)), "SOL-H002"),
+      top5Percent: point(percentage(sumTop(5)), "SOL-H003"),
+      top10Percent: point(percentage(sumTop(10)), "SOL-H004"),
+      holderDataScope: point(
+        "Non-zero token accounts aggregated by owner; known burn addresses excluded. Program-owned and liquidity classifications are not inferred.",
+        "SOL-H005",
+      ),
+      distributionCompleteness: point(complete ? "CONSISTENT" : "INCONSISTENT", "SOL-H006"),
+      observedAccountSupply: point(String(observedSupply), "SOL-H007"),
+    },
+    limitations: complete
+      ? []
+      : ["Solana token-account balances did not reconcile to mint supply within the 0.1% consistency threshold."],
+  };
+}
+
+async function fetchSolanaHolderEvidence({ endpoint, address, tokenProgram, totalSupply, timeoutMs, context }) {
+  const body = await requestJson(endpoint, {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "getProgramAccounts",
+    params: [tokenProgram, {
+      encoding: "jsonParsed",
+      filters: [{ memcmp: { offset: 0, bytes: address } }],
+    }],
+  }, timeoutMs);
+  if (body.error) throw Object.assign(new Error("Solana holder RPC returned an error."), { code: "NATIVE_PROVIDER_ERROR" });
+  if (!Object.prototype.hasOwnProperty.call(body, "result")) {
+    throw Object.assign(new Error("Solana holder RPC response did not include an account result."), { code: "NATIVE_PROVIDER_MALFORMED_RESPONSE" });
+  }
+  return normalizeSolanaHolderAccounts(body.result, totalSupply, context);
+}
+
 function nativeAddressMessage(networkName) {
   return `Enter a valid native ${networkName} address.`;
 }
@@ -134,6 +220,7 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
   }
 
   let exists = false;
+  let nativeResult;
   if (adapter.type === "solana-rpc") {
     const body = await requestJson(adapter.endpoint, {
       jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [address, { encoding: "jsonParsed", commitment: "finalized" }],
@@ -158,6 +245,7 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
         ...context,
         evidenceReference,
       });
+      const limitations = [];
       const evidence = {
         verification: {
           nativeAccount: point(true, "SOL-003"),
@@ -181,13 +269,35 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
         };
         evidence.verification.tokenProgram = point(value.owner, "SOL-012");
         evidence.verification.initialized = point(info.isInitialized === true, "SOL-013");
+        try {
+          const holderEvidence = await fetchSolanaHolderEvidence({
+            endpoint: adapter.endpoint,
+            address,
+            tokenProgram: value.owner,
+            totalSupply: info.supply,
+            timeoutMs,
+            context,
+          });
+          if (holderEvidence) {
+            evidence.holders = holderEvidence.holders;
+            limitations.push(...holderEvidence.limitations);
+          }
+        } catch (error) {
+          limitations.push(
+            "Solana holder distribution was unavailable; account and mint evidence remain valid.",
+            error.code === "NATIVE_PROVIDER_TIMEOUT"
+              ? "The Solana holder RPC request timed out."
+              : "The Solana holder RPC response was not usable.",
+          );
+        }
       }
-      var nativeResult = normalizedResult({
+      nativeResult = normalizedResult({
         providerId: context.providerId,
         adapterVersion: context.adapterVersion,
         status: PROVIDER_RESULT_STATUS.VALID,
         retrievedAt: context.retrievedAt,
         evidence,
+        limitations,
       });
     }
   } else if (adapter.type === "sui-rpc") {
@@ -250,6 +360,7 @@ module.exports = {
   nativeAddressPattern,
   isValidSolanaPublicKey,
   solanaDataLength,
+  normalizeSolanaHolderAccounts,
   validateNativeAddress,
   verifyNativeNetwork,
 };
