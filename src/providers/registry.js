@@ -14,6 +14,21 @@ const CONTROLLED_PROVIDER_ORIGINS = Object.freeze([
   "https://opbnb-mainnet-rpc.bnbchain.org",
   "https://rpc.hyperliquid.xyz",
   "https://json-rpc.evm.shimmer.network",
+  "https://mainnet.mode.network",
+  "https://mainnet.era.zksync.io",
+  "https://pacific-rpc.manta.network",
+  "https://rpc-gel.inkonchain.com",
+  "https://rpc.monad.xyz",
+  "https://rpc.coredao.org",
+  "https://public-node.rsk.co",
+  "https://evm.astar.network",
+  "https://explorer.velas.com",
+  "https://rpc.fuse.io",
+  "https://neon-proxy-mainnet.solana.p2p.org",
+  "https://eth-rpc-karura.aca-api.network",
+  "https://sapphire.oasis.io",
+  "https://evm.kava.io",
+  "https://astar.blockscout.com",
 ]);
 
 function assertControlledProviderUrl(value, allowedOrigins = CONTROLLED_PROVIDER_ORIGINS) {
