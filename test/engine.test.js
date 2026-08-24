@@ -75,12 +75,36 @@ test("Solana catalog uses native RPC support and a chain-specific explorer", () 
 test("native network verification rejects networks without a native adapter", async () => {
   await assert.rejects(
     () => verifyNativeNetwork({
-      network: { id: "ton", name: "TON" },
-      address: "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c",
+      network: { id: "unconfigured-chain", name: "Unconfigured Chain" },
+      address: "0x1234",
     }),
     (error) => error.code === "NATIVE_NETWORK_VERIFICATION_UNAVAILABLE"
-      && /TON/.test(error.message),
+      && /Unconfigured Chain/.test(error.message),
   );
+});
+
+test("native catalog exposes protocol-specific adapters and rejects cross-chain address formats", () => {
+  const expectedAdapters = {
+    ton: "ton-http",
+    tron: "tron-rest",
+    xrpl: "xrpl-json-rpc",
+    starknet: "starknet-json-rpc",
+    sei: "cosmos-lcd",
+    injective: "cosmos-lcd",
+    celestia: "cosmos-lcd",
+    dymension: "cosmos-lcd",
+    kava: "cosmos-lcd",
+    cardano: "cardano-koios",
+  };
+  for (const [id, adapter] of Object.entries(expectedAdapters)) {
+    const network = NETWORKS.find((item) => item.id === id);
+    assert.equal(network.nativeAdapter, adapter);
+    assert.equal(network.providerSupport["native-rpc"], true);
+    assert.equal(validateNativeAddress("not-a-native-address", network).valid, false);
+  }
+  assert.equal(validateNativeAddress("T" + "1".repeat(33), NETWORKS.find((item) => item.id === "tron")).valid, true);
+  assert.equal(validateNativeAddress("rG1QQv2nh2gr7RCZ1P8YYcBUKCCN633jCn", NETWORKS.find((item) => item.id === "xrpl")).valid, true);
+  assert.equal(validateNativeAddress("EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c", NETWORKS.find((item) => item.id === "ton")).valid, true);
 });
 
 test("Solana native verification classifies malformed RPC results explicitly", async () => {

@@ -25,18 +25,82 @@ const ADAPTERS = Object.freeze({
     type: "near-rpc",
     endpoint: "https://rpc.mainnet.near.org",
   },
+  ton: { type: "ton-http", endpoint: "https://toncenter.com/api/v2" },
+  tron: { type: "tron-rest", endpoint: "https://api.trongrid.io" },
+  xrpl: { type: "xrpl-json-rpc", endpoint: "https://xrplcluster.com" },
+  starknet: { type: "starknet-json-rpc", endpoint: "https://rpc.starknet.lava.build" },
+  sei: { type: "cosmos-lcd", endpoint: "https://rest.sei-apis.com", prefix: "sei" },
+  injective: { type: "cosmos-lcd", endpoint: "https://sentry.lcd.injective.network", prefix: "inj" },
+  celestia: { type: "cosmos-lcd", endpoint: "https://api-celestia-01.stakeflow.io", prefix: "celestia" },
+  dymension: { type: "cosmos-lcd", endpoint: "https://dymension.api.onfinality.io/rest/public", prefix: "dym" },
+  kava: { type: "cosmos-lcd", endpoint: "https://kava-rest.publicnode.com", prefix: "kava" },
+  cardano: { type: "cardano-koios", endpoint: "https://api.koios.rest/api/v1" },
 });
 
 function nativeAddressPattern(networkId) {
   switch (networkId) {
     case "solana": return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    case "ton": return /^(?:(?:-?1|0):[0-9a-f]{64}|[A-Za-z0-9_-]{48})$/;
+    case "xrpl": return /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/;
+    case "cardano": return /^addr1[0-9a-z]+$/;
     case "sui":
-    case "aptos":
+    case "aptos": return /^0x[0-9a-f]{1,64}$/i;
     case "starknet": return /^0x[0-9a-f]{1,64}$/i;
+    case "sei": return /^sei1[0-9a-z]{38,}$/;
+    case "injective": return /^inj1[0-9a-z]{38,}$/;
+    case "celestia": return /^celestia1[0-9a-z]{38,}$/;
+    case "dymension": return /^dym1[0-9a-z]{38,}$/;
+    case "kava": return /^kava1[0-9a-z]{38,}$/;
     case "near": return /^(?:[a-z0-9][a-z0-9._-]{0,63}|0x[0-9a-f]{64})$/i;
     case "tron": return /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
     default: return null;
   }
+}
+
+const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+function bech32Polymod(values) {
+  const generators = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let checksum = 1;
+  for (const value of values) {
+    const top = checksum >>> 25;
+    checksum = ((checksum & 0x1ffffff) << 5) ^ value;
+    for (let index = 0; index < 5; index += 1) {
+      if ((top >>> index) & 1) checksum ^= generators[index];
+    }
+  }
+  return checksum >>> 0;
+}
+
+function validBech32Address(address, expectedPrefix) {
+  const separator = address.lastIndexOf("1");
+  if (separator < 1 || separator + 7 > address.length || address !== address.toLowerCase()) return false;
+  if (address.slice(0, separator) !== expectedPrefix) return false;
+  const data = address.slice(separator + 1);
+  const values = [...data].map((character) => BECH32_CHARSET.indexOf(character));
+  return values.every((value) => value >= 0) && bech32Polymod([
+    ...[...expectedPrefix].map((character) => character.charCodeAt(0) >> 5),
+    0,
+    ...[...expectedPrefix].map((character) => character.charCodeAt(0) & 31),
+    ...values,
+  ]) === 1;
+}
+
+function nativeEvidence({ context, network, address, fields, accountType = null }) {
+  const point = (value, evidenceReference) => normalizedPoint({
+    value,
+    providerId: context.providerId,
+    adapterVersion: context.adapterVersion,
+    retrievedAt: context.retrievedAt,
+    evidenceReference,
+  });
+  return {
+    verification: {
+      nativeAccount: point(true, "NATIVE-001"),
+      accountType: point(accountType || "ACCOUNT", "NATIVE-002"),
+      explorer: point(`${network.explorer}${encodeURIComponent(address)}`, "NATIVE-003"),
+      ...fields(point),
+    },
+  };
 }
 
 function isValidSolanaPublicKey(address) {
@@ -182,6 +246,13 @@ function validateNativeAddress(address, network) {
       message: nativeAddressMessage(network.name),
     };
   }
+  if (["sei", "injective", "celestia", "dymension", "kava"].includes(network.id)
+    && !validBech32Address(address, network.addressPrefix)) {
+    return { valid: false, code: "INVALID_ADDRESS", message: nativeAddressMessage(network.name) };
+  }
+  if (network.id === "cardano" && !validBech32Address(address, "addr")) {
+    return { valid: false, code: "INVALID_ADDRESS", message: nativeAddressMessage(network.name) };
+  }
   return { valid: true, normalized: address };
 }
 
@@ -196,6 +267,31 @@ async function requestJson(endpoint, body, timeoutMs = 12_000) {
       body: JSON.stringify(body),
     });
     const json = await response.json().catch(() => null);
+    if (!response.ok || !json || typeof json !== "object") {
+      throw Object.assign(new Error("NATIVE_PROVIDER_ERROR"), { code: "NATIVE_PROVIDER_ERROR" });
+    }
+    return json;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw Object.assign(new Error("NATIVE_PROVIDER_TIMEOUT"), { code: "NATIVE_PROVIDER_TIMEOUT" });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestJsonGet(endpoint, timeoutMs = 12_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(endpoint, {
+      method: "GET",
+      signal: controller.signal,
+      headers: { Accept: "application/json", "User-Agent": "CA-XRAY/2.0" },
+    });
+    const json = await response.json().catch(() => null);
+    if (response.status === 404) return { notFound: true };
     if (!response.ok || !json || typeof json !== "object") {
       throw Object.assign(new Error("NATIVE_PROVIDER_ERROR"), { code: "NATIVE_PROVIDER_ERROR" });
     }
@@ -298,6 +394,159 @@ async function verifyNativeNetwork({ network, address, timeoutMs }) {
         retrievedAt: context.retrievedAt,
         evidence,
         limitations,
+      });
+    }
+  } else if (adapter.type === "ton-http") {
+    const body = await requestJsonGet(
+      `${adapter.endpoint}/getAddressInformation?address=${encodeURIComponent(address)}`,
+      timeoutMs,
+    );
+    const account = body.result;
+    exists = body.ok === true && account && typeof account === "object";
+    if (exists) {
+      const context = { providerId: "ton-native-http", adapterVersion: NATIVE_ADAPTER_VERSION, retrievedAt: new Date().toISOString() };
+      nativeResult = normalizedResult({
+        providerId: context.providerId,
+        adapterVersion: context.adapterVersion,
+        status: PROVIDER_RESULT_STATUS.VALID,
+        retrievedAt: context.retrievedAt,
+        evidence: nativeEvidence({
+          context, network, address, accountType: "TON_ACCOUNT",
+          fields: (point) => ({
+            state: point(account.state, "TON-001"),
+            balanceNanoTon: point(account.balance, "TON-002"),
+            codeHash: point(account.code, "TON-003"),
+          }),
+        }),
+        limitations: ["TON account data is read-only and does not by itself prove token balances or contract source."],
+      });
+    }
+  } else if (adapter.type === "tron-rest") {
+    const body = await requestJsonGet(`${adapter.endpoint}/v1/accounts/${encodeURIComponent(address)}`, timeoutMs);
+    const account = Array.isArray(body.data) ? body.data[0] : null;
+    exists = body.success === true && account && typeof account === "object";
+    if (exists) {
+      const context = { providerId: "tron-native-rest", adapterVersion: NATIVE_ADAPTER_VERSION, retrievedAt: new Date().toISOString() };
+      nativeResult = normalizedResult({
+        providerId: context.providerId,
+        adapterVersion: context.adapterVersion,
+        status: PROVIDER_RESULT_STATUS.VALID,
+        retrievedAt: context.retrievedAt,
+        evidence: nativeEvidence({
+          context, network, address, accountType: "TRON_ACCOUNT",
+          fields: (point) => ({
+            balanceSun: point(account.balance, "TRX-001"),
+            accountResource: point(account.account_resource || null, "TRX-002"),
+            hasPermissions: point(Array.isArray(account.active_permission) && account.active_permission.length > 0, "TRX-003"),
+          }),
+        }),
+        limitations: ["TRON account evidence does not include contract source verification or complete token-holder distribution."],
+      });
+    }
+  } else if (adapter.type === "xrpl-json-rpc") {
+    const body = await requestJson(adapter.endpoint, {
+      method: "account_info",
+      params: [{ account: address, ledger_index: "validated", strict: true }],
+    }, timeoutMs);
+    const account = body.result?.account_data;
+    if (body.result?.status === "error" || body.error?.error === "actNotFound") {
+      exists = false;
+    } else {
+      exists = Boolean(account && typeof account === "object");
+    }
+    if (exists) {
+      const context = { providerId: "xrpl-native-rpc", adapterVersion: NATIVE_ADAPTER_VERSION, retrievedAt: new Date().toISOString() };
+      nativeResult = normalizedResult({
+        providerId: context.providerId,
+        adapterVersion: context.adapterVersion,
+        status: PROVIDER_RESULT_STATUS.VALID,
+        retrievedAt: context.retrievedAt,
+        evidence: nativeEvidence({
+          context, network, address, accountType: "XRPL_ACCOUNT_ROOT",
+          fields: (point) => ({
+            balanceDrops: point(account.Balance, "XRPL-001"),
+            sequence: point(account.Sequence, "XRPL-002"),
+            ownerCount: point(account.OwnerCount, "XRPL-003"),
+            flags: point(account.Flags, "XRPL-004"),
+          }),
+        }),
+        limitations: ["XRPL account root evidence does not include trust-line totals or issuer risk without separate ledger queries."],
+      });
+    }
+  } else if (adapter.type === "starknet-json-rpc") {
+    const body = await requestJson(adapter.endpoint, {
+      jsonrpc: "2.0", id: 1, method: "starknet_getClassAt",
+      params: ["latest", address],
+    }, timeoutMs);
+    const result = body.result;
+    const isNotFound = body.error && [20, "20"].includes(body.error.code);
+    exists = !isNotFound && Boolean(result && typeof result === "object");
+    if (body.error && !isNotFound) {
+      throw Object.assign(new Error("Starknet RPC returned an error."), { code: "NATIVE_PROVIDER_ERROR" });
+    }
+    if (exists) {
+      const context = { providerId: "starknet-native-rpc", adapterVersion: NATIVE_ADAPTER_VERSION, retrievedAt: new Date().toISOString() };
+      nativeResult = normalizedResult({
+        providerId: context.providerId,
+        adapterVersion: context.adapterVersion,
+        status: PROVIDER_RESULT_STATUS.VALID,
+        retrievedAt: context.retrievedAt,
+        evidence: nativeEvidence({
+          context, network, address, accountType: "STARKNET_CONTRACT",
+          fields: (point) => ({
+            classHash: point(result.class_hash || result.sierra_class_hash || null, "STRK-001"),
+            casmHash: point(result.casm_class_hash || null, "STRK-002"),
+          }),
+        }),
+        limitations: ["Starknet class evidence proves deployed contract state; source verification and token metadata require a separate indexer."],
+      });
+    }
+  } else if (adapter.type === "cosmos-lcd") {
+    const body = await requestJsonGet(
+      `${adapter.endpoint}/cosmos/auth/v1beta1/accounts/${encodeURIComponent(address)}`,
+      timeoutMs,
+    );
+    const account = body.account;
+    exists = !body.notFound && account && typeof account === "object";
+    if (exists) {
+      const context = { providerId: `${network.id}-native-lcd`, adapterVersion: NATIVE_ADAPTER_VERSION, retrievedAt: new Date().toISOString() };
+      nativeResult = normalizedResult({
+        providerId: context.providerId,
+        adapterVersion: context.adapterVersion,
+        status: PROVIDER_RESULT_STATUS.VALID,
+        retrievedAt: context.retrievedAt,
+        evidence: nativeEvidence({
+          context, network, address, accountType: "COSMOS_ACCOUNT",
+          fields: (point) => ({
+            accountType: point(account["@type"] || account.type || null, "COSMOS-001"),
+            accountNumber: point(account.account_number, "COSMOS-002"),
+            sequence: point(account.sequence, "COSMOS-003"),
+            pubkey: point(account.pub_key || null, "COSMOS-004"),
+          }),
+        }),
+        limitations: ["Cosmos account evidence does not include module-specific token balances or contract code."],
+      });
+    }
+  } else if (adapter.type === "cardano-koios") {
+    const body = await requestJson(`${adapter.endpoint}/address_info`, [{ address }], timeoutMs);
+    const account = Array.isArray(body) ? body[0] : null;
+    exists = Boolean(account && typeof account === "object");
+    if (exists) {
+      const context = { providerId: "cardano-native-koios", adapterVersion: NATIVE_ADAPTER_VERSION, retrievedAt: new Date().toISOString() };
+      nativeResult = normalizedResult({
+        providerId: context.providerId,
+        adapterVersion: context.adapterVersion,
+        status: PROVIDER_RESULT_STATUS.VALID,
+        retrievedAt: context.retrievedAt,
+        evidence: nativeEvidence({
+          context, network, address, accountType: "CARDANO_ADDRESS",
+          fields: (point) => ({
+            stakeAddress: point(account.stake_address || null, "ADA-001"),
+            balanceLovelace: point(account.balance, "ADA-002"),
+            utxoCount: point(account.utxo_count, "ADA-003"),
+          }),
+        }),
+        limitations: ["Cardano address evidence is read-only; native asset policy and token distribution require separate asset queries."],
       });
     }
   } else if (adapter.type === "sui-rpc") {

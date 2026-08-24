@@ -108,6 +108,61 @@ const NATIVE_NETWORK_METADATA = Object.freeze({
     explorer: "https://solscan.io/account/",
     nativeAdapter: "solana-rpc",
   },
+  ton: {
+    rpcUrl: "https://toncenter.com/api/v2",
+    explorer: "https://tonscan.org/address/",
+    nativeAdapter: "ton-http",
+  },
+  tron: {
+    rpcUrl: "https://api.trongrid.io",
+    explorer: "https://tronscan.org/#/address/",
+    nativeAdapter: "tron-rest",
+  },
+  xrpl: {
+    rpcUrl: "https://xrplcluster.com",
+    explorer: "https://livenet.xrpl.org/accounts/",
+    nativeAdapter: "xrpl-json-rpc",
+  },
+  starknet: {
+    rpcUrl: "https://rpc.starknet.lava.build",
+    explorer: "https://starkscan.co/contract/",
+    nativeAdapter: "starknet-json-rpc",
+  },
+  sei: {
+    rpcUrl: "https://rest.sei-apis.com",
+    explorer: "https://www.seitrace.com/pacific-1/account/",
+    nativeAdapter: "cosmos-lcd",
+    addressPrefix: "sei",
+  },
+  injective: {
+    rpcUrl: "https://sentry.lcd.injective.network",
+    explorer: "https://explorer.injective.network/account/",
+    nativeAdapter: "cosmos-lcd",
+    addressPrefix: "inj",
+  },
+  celestia: {
+    rpcUrl: "https://api-celestia-01.stakeflow.io",
+    explorer: "https://celenium.io/address/",
+    nativeAdapter: "cosmos-lcd",
+    addressPrefix: "celestia",
+  },
+  dymension: {
+    rpcUrl: "https://dymension.api.onfinality.io/rest/public",
+    explorer: "https://dymension.explorers.guru/account/",
+    nativeAdapter: "cosmos-lcd",
+    addressPrefix: "dym",
+  },
+  kava: {
+    rpcUrl: "https://kava-rest.publicnode.com",
+    explorer: "https://kavascan.com/account/",
+    nativeAdapter: "cosmos-lcd",
+    addressPrefix: "kava",
+  },
+  cardano: {
+    rpcUrl: "https://api.koios.rest/api/v1",
+    explorer: "https://cardanoscan.io/address/",
+    nativeAdapter: "cardano-koios",
+  },
 });
 
 const NETWORKS = Object.freeze([
