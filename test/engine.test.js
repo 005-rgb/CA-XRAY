@@ -102,7 +102,7 @@ test("native catalog exposes protocol-specific adapters and rejects cross-chain 
     assert.equal(network.providerSupport["native-rpc"], true);
     assert.equal(validateNativeAddress("not-a-native-address", network).valid, false);
   }
-  assert.equal(validateNativeAddress("T" + "1".repeat(33), NETWORKS.find((item) => item.id === "tron")).valid, true);
+  assert.equal(validateNativeAddress("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", NETWORKS.find((item) => item.id === "tron")).valid, true);
   assert.equal(validateNativeAddress("rG1QQv2nh2gr7RCZ1P8YYcBUKCCN633jCn", NETWORKS.find((item) => item.id === "xrpl")).valid, true);
   assert.equal(validateNativeAddress("EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c", NETWORKS.find((item) => item.id === "ton")).valid, true);
 });

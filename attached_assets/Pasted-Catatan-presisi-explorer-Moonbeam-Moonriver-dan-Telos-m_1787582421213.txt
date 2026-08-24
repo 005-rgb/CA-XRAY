@@ -1,0 +1,91 @@
+Catatan presisi: explorer Moonbeam, Moonriver, dan Telos menggunakan MoonScan/Teloscan, bukan endpoint Blockscout API v2 yang kompatibel dengan adapter ABI saat ini. Karena itu sistem tidak mengarang verified ABI, ownership, atau source evidence untuk network tersebut; field itu tetap ditandai unavailable jika tidak tersedia. RPC bytecode dan market evidence tetap berjalan nyata.
+
+
+
+Worked for 2 minutes
+
+Checkpoint made
+9 minutes ago
+sekarang Lengkapi native adapter TON, Tron, XRPL, Starknet, Cosmos-based chains, Cardano. completed, real work dan full feature.
+
+Free
+8 minutes ago
+Saya akan memperluas adapter native dengan kontrak yang sama seperti Solana: validasi alamat chain-specific, verifikasi keberadaan akun/contract melalui endpoint resmi, evidence normalisasi, dan status fail-closed. Saya mulai dengan memetakan pipeline native yang sudah ada serta menentukan subset Cosmos yang benar-benar ada di katalog agar implementasinya tidak memakai fallback atau endpoint fiktif.
+
+
+
+4 actions
+Scope ini mencakup enam keluarga chain dengan format address dan API berbeda, jadi saya tidak akan menyamakan semuanya sebagai “RPC JSON”. Saya akan memakai adapter per protokol: TON Center, TronGrid, XRPL JSON-RPC, Starknet JSON-RPC, Cosmos LCD, dan Koios Cardano; setiap hasil akan membawa evidence spesifik serta error not found/provider error yang terpisah.
+
+
+
+Verified native chain endpoint references
+
+Searched the web for "official public mainnet API endpoints TON Tron XRPL Starknet Cosmos Sei Injective Celestia Dymension Cardano"
+
+Processed text
+Saya akan memasukkan dukungan native secara bertahap tetapi dalam satu kontrak yang konsisten: validasi format + checksum bila protokol memilikinya, request read-only, normalisasi evidence, lalu integrasi ke katalog network. Untuk Cosmos-based, saya cakup network Cosmos yang memang ada di katalog saat ini: Sei, Injective, Celestia, Dymension, dan Kava.
+
+
+
+Show less
+
+Edited engine.js
+
+Edited native-network-adapters.js
+Implementing functions
+
+Implementing functions
+
+Edited native-network-adapters.js
+Modifying requests
+
+Modifying requests
+
+Edited native-network-adapters.js
+
+Edited native-network-adapters.js
+Verifying order of branches
+
+Verifying order of branches
+Adapter logic inti sudah masuk untuk TON, Tron, XRPL, Starknet, Cosmos LCD, dan Cardano Koios. Saya sekarang akan menjalankan test/syntax check; kemungkinan yang perlu disesuaikan adalah bentuk response provider nyata atau validasi checksum address, dan saya akan menutupnya sebelum menyatakan selesai.
+
+
+
+4 actions
+Regresi menemukan satu test lama yang memang mengasumsikan TON belum didukung; implementasi baru justru membuat test itu tidak relevan. Saya akan mengubah test tersebut agar memakai network yang tetap belum memiliki native adapter, lalu menambahkan test kontrak untuk validasi address family dan normalizer response supaya adapter baru punya coverage nyata.
+
+
+
+5 actions
+Ada satu kegagalan test karena 0x1234 memang format Starknet yang valid secara sintaks (meskipun belum tentu akun deployed). Itu bukan bug adapter; assertion test-nya terlalu umum. Saya mengganti fixture cross-chain menjadi format yang invalid untuk semua keluarga, lalu mengulang regresi.
+
+
+
+4 actions
+Seluruh test unit/regresi lulus 73/73. Sebelum final, saya akan melakukan smoke probe read-only ke endpoint nyata untuk tiap keluarga (tanpa transaksi, key, atau mutasi), karena adapter native baru paling rawan gagal pada bentuk response HTTP/RPC yang berbeda. Setelah itu saya restart workflow dan cek preview/log.
+
+
+
+2 actions
+Probe pertama gagal karena fixture Starknet yang saya tulis memiliki literal hex yang tidak tertutup dengan benar; tidak ada request yang terkirim dan tidak ada perubahan kode. Saya perbaiki probe menjadi fixture sintaks-valid, lalu jalankan ulang.
+
+
+
+2 actions
+Smoke probe memberi temuan penting yang harus diperbaiki sebelum selesai: Starknet endpoint merespons tetapi menolak bentuk block_id yang saya kirim, dan beberapa LCD Cosmos publik menolak endpoint health yang saya pakai (bukan bukti account API invalid). Saya akan memperbaiki parameter Starknet ke format RPC resmi, lalu menguji langsung endpoint account yang relevan dan menambah mock-contract tests untuk semua adapter baru.
+
+
+
+7 actions
+
+Searched the web for "official REST LCD API endpoint mainnet account Cosmos Sei Injective Celestia Dymension Kava"
+
+3 actions
+
+Searched the web for "Dymension mainnet REST LCD endpoint cosmos auth accounts"
+
+8 actions
+
+Worked for 4 minutes
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.

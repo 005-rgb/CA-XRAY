@@ -1,3 +1,4 @@
+const crypto = require("node:crypto");
 const NATIVE_ADAPTER_VERSION = "1.1.0";
 const { normalizedPoint, normalizedResult, PROVIDER_RESULT_STATUS } = require("./contracts");
 
@@ -40,7 +41,7 @@ const ADAPTERS = Object.freeze({
 function nativeAddressPattern(networkId) {
   switch (networkId) {
     case "solana": return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-    case "ton": return /^(?:(?:-?1|0):[0-9a-f]{64}|[A-Za-z0-9_-]{48})$/;
+    case "ton": return /^(?:(?:-1|0):[0-9a-f]{64}|[A-Za-z0-9_-]{48})$/;
     case "xrpl": return /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/;
     case "cardano": return /^addr1[0-9a-z]+$/;
     case "sui":
@@ -83,6 +84,89 @@ function validBech32Address(address, expectedPrefix) {
     ...[...expectedPrefix].map((character) => character.charCodeAt(0) & 31),
     ...values,
   ]) === 1;
+}
+
+function bech32PayloadBytes(address, expectedPrefix) {
+  const separator = address.lastIndexOf("1");
+  if (separator < 1 || address.slice(0, separator) !== expectedPrefix) return null;
+  const values = [...address.slice(separator + 1)]
+    .map((character) => BECH32_CHARSET.indexOf(character));
+  if (values.some((value) => value < 0) || values.length < 7) return null;
+  const payload = values.slice(0, -6);
+  const output = [];
+  let accumulator = 0;
+  let bits = 0;
+  for (const value of payload) {
+    accumulator = (accumulator << 5) | value;
+    bits += 5;
+    while (bits >= 8) {
+      bits -= 8;
+      output.push((accumulator >>> bits) & 0xff);
+    }
+  }
+  if (bits >= 5 || ((accumulator << (8 - bits)) & 0xff) !== 0) return null;
+  return Buffer.from(output);
+}
+
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const XRPL_BASE58_ALPHABET = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
+
+function decodeBase58(value, alphabet = BASE58_ALPHABET) {
+  if (typeof value !== "string" || !value || ![...value].every((character) => alphabet.includes(character))) return null;
+  const bytes = [0];
+  for (const character of value) {
+    let carry = alphabet.indexOf(character);
+    for (let index = 0; index < bytes.length; index += 1) {
+      carry += bytes[index] * 58;
+      bytes[index] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  const leadingZeroes = [...value].findIndex((character) => character !== alphabet[0]);
+  const zeroPrefixLength = leadingZeroes < 0 ? value.length : leadingZeroes;
+  const decoded = bytes.reverse();
+  return Buffer.concat([
+    Buffer.alloc(Math.max(0, zeroPrefixLength - (decoded[0] === 0 ? 1 : 0))),
+    Buffer.from(decoded),
+  ]);
+}
+
+function sha256Twice(value) {
+  const first = crypto.createHash("sha256").update(value).digest();
+  return crypto.createHash("sha256").update(first).digest();
+}
+
+function validBase58CheckAddress(address, version, alphabet = BASE58_ALPHABET) {
+  const decoded = decodeBase58(address, alphabet);
+  if (!decoded || decoded.length !== 25 || decoded[0] !== version) return false;
+  return decoded.subarray(21).equals(sha256Twice(decoded.subarray(0, 21)).subarray(0, 4));
+}
+
+function crc16Ccitt(value) {
+  let crc = 0;
+  for (const byte of value) {
+    crc ^= byte << 8;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+    }
+  }
+  return crc;
+}
+
+function validTonFriendlyAddress(address) {
+  if (!/^[A-Za-z0-9_-]{48}$/.test(address)) return false;
+  let decoded;
+  try {
+    decoded = Buffer.from(address.replaceAll("-", "+").replaceAll("_", "/"), "base64");
+  } catch {
+    return false;
+  }
+  if (decoded.length !== 36) return false;
+  return crc16Ccitt(decoded.subarray(0, 34)) === decoded.readUInt16BE(34);
 }
 
 function nativeEvidence({ context, network, address, fields, accountType = null }) {
@@ -246,11 +330,22 @@ function validateNativeAddress(address, network) {
       message: nativeAddressMessage(network.name),
     };
   }
-  if (["sei", "injective", "celestia", "dymension", "kava"].includes(network.id)
-    && !validBech32Address(address, network.addressPrefix)) {
+  if (network.id === "ton" && !address.includes(":") && !validTonFriendlyAddress(address)) {
     return { valid: false, code: "INVALID_ADDRESS", message: nativeAddressMessage(network.name) };
   }
-  if (network.id === "cardano" && !validBech32Address(address, "addr")) {
+  if (network.id === "tron" && !validBase58CheckAddress(address, 0x41)) {
+    return { valid: false, code: "INVALID_ADDRESS", message: nativeAddressMessage(network.name) };
+  }
+  if (network.id === "xrpl" && !validBase58CheckAddress(address, 0x00, XRPL_BASE58_ALPHABET)) {
+    return { valid: false, code: "INVALID_ADDRESS", message: nativeAddressMessage(network.name) };
+  }
+  if (["sei", "injective", "celestia", "dymension", "kava"].includes(network.id)
+    && (!validBech32Address(address, network.addressPrefix)
+      || bech32PayloadBytes(address, network.addressPrefix)?.length !== 20)) {
+    return { valid: false, code: "INVALID_ADDRESS", message: nativeAddressMessage(network.name) };
+  }
+  if (network.id === "cardano" && (!validBech32Address(address, "addr")
+    || ![29, 57].includes(bech32PayloadBytes(address, "addr")?.length))) {
     return { valid: false, code: "INVALID_ADDRESS", message: nativeAddressMessage(network.name) };
   }
   return { valid: true, normalized: address };
