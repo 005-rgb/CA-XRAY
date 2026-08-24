@@ -1317,6 +1317,48 @@ html[data-theme="light"] .forensic-backdrop::before { background: radial-gradien
 html[data-theme="light"] .public-home .scan-form-card { background: rgba(255,255,255,.84); box-shadow: 0 24px 70px rgba(37,70,77,.12), inset 0 1px rgba(255,255,255,.9); }
 html[data-theme="light"] .public-home .network-pulse, html[data-theme="light"] .public-home .signal-board { background: rgba(255,255,255,.72); }
 html[data-theme="light"] .public-home .dashboard-heading h1 { text-shadow: 0 1px 0 rgba(255,255,255,.8); }
+html[data-theme="light"] .public-header { border-bottom-color: rgba(19,65,75,.18); }
+html[data-theme="light"] .public-header .brand-mark { color: var(--joben-cyan); border-color: var(--joben-cyan); background: rgba(0,125,120,.07); }
+html[data-theme="light"] .auth-entry { color: var(--joben-text); border-bottom-color: var(--joben-line-bright); }
+html[data-theme="light"] .auth-entry span { color: var(--joben-cyan); }
+html[data-theme="light"] .public-home .scan-form-card,
+html[data-theme="light"] .public-home .network-pulse,
+html[data-theme="light"] .public-home .signal-board {
+  color: var(--joben-text);
+  border-color: var(--joben-line);
+}
+html[data-theme="light"] .form-field select,
+html[data-theme="light"] .form-field input,
+html[data-theme="light"] .scan-mode-card input {
+  color: var(--joben-text);
+  background: #ffffff;
+  border-color: var(--joben-line-bright);
+}
+html[data-theme="light"] .form-field select option { color: var(--joben-text); background: #ffffff; }
+html[data-theme="light"] .form-field label,
+html[data-theme="light"] .scan-mode-card label,
+html[data-theme="light"] .privacy-note,
+html[data-theme="light"] .hero-proof-row { color: var(--joben-muted); }
+html[data-theme="light"] .pulse-intro,
+html[data-theme="light"] .pulse-stat,
+html[data-theme="light"] .signal-preview {
+  color: var(--joben-text);
+  background: rgba(255,255,255,.94);
+  border-color: var(--joben-line);
+}
+html[data-theme="light"] .pulse-intro strong,
+html[data-theme="light"] .pulse-stat strong,
+html[data-theme="light"] .signal-preview strong,
+html[data-theme="light"] .signal-board-heading h2 { color: var(--joben-text); }
+html[data-theme="light"] .pulse-stat span,
+html[data-theme="light"] .pulse-stat small,
+html[data-theme="light"] .signal-preview p,
+html[data-theme="light"] .signal-board .card-kicker { color: var(--joben-muted); }
+html[data-theme="light"] .signal-preview:hover { background: #f0f8f7; border-color: var(--joben-cyan); }
+html[data-theme="light"] .primary-button { color: #ffffff; background: #006f6b; border-color: #006f6b; }
+html[data-theme="light"] .primary-button:hover { color: #ffffff; background: #005a57; }
+html[data-theme="light"] .network-pulse { background: var(--joben-line); }
+html[data-theme="light"] .signal-board { background: rgba(255,255,255,.88); }
 
 @media (max-width: 760px) {
   .public-nav { display: none; }

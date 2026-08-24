@@ -2335,7 +2335,8 @@ function applyTheme(theme) {
   themeToggle.querySelector(".theme-label").textContent = lightMode ? "Dark" : "Light";
 }
 
-applyTheme(localStorage.getItem("joben-theme") || "dark");
+const previewTheme = new URLSearchParams(window.location.search).get("theme");
+applyTheme(previewTheme === "light" || previewTheme === "dark" ? previewTheme : (localStorage.getItem("joben-theme") || "dark"));
 themeToggle?.addEventListener("click", () => {
   const nextTheme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
   localStorage.setItem("joben-theme", nextTheme);

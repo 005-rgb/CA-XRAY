@@ -8,3 +8,9 @@ JOBEN NETWORK should feel like a calm, precise on-chain investigation environmen
 **Why:** The product's differentiator is evidence-backed contract intelligence; a memorable visual system must reinforce trust, provenance, and actionable signals.
 
 **How to apply:** Keep the dark graphite/cyan/green/amber/red signal vocabulary consistent across homepage, private dashboard, reports, and notifications. Preserve readable mobile behavior and reduced-motion support.
+
+For the light theme, every descendant surface must explicitly replace dark translucent fills and hard-coded dark inputs; theme variables alone are insufficient when component rules use rgba or hex backgrounds.
+
+**Why:** The landing page's telemetry and signal cards retained navy backgrounds in light mode, making their muted text unreadable until their child surfaces were overridden.
+
+**How to apply:** When adding a light theme, audit cards, inputs, selects, hover states, and nested status blocks—not only the page shell—and verify both themes with screenshots.
