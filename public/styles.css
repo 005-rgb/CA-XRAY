@@ -1468,3 +1468,66 @@ html[data-theme="light"] .map-node { background: rgba(255,255,255,.96); }.map-no
 html[data-theme="light"] .evidence-map-visual { background: radial-gradient(circle at 50% 52%, rgba(0,125,120,.07), transparent 42%); }
 @media (max-width: 900px) { .evidence-command-grid { grid-template-columns: 1fr 1fr; }.evidence-map-card { grid-row: span 2; } }
 @media (max-width: 640px) { .evidence-command-heading { align-items: flex-start; flex-direction: column; gap: 9px; }.evidence-command-grid { grid-template-columns: 1fr; }.evidence-map-card { grid-row: auto; }.evidence-command { margin-top: 52px; } }
+
+/* Evidence map: the central CA status is a readable monitoring signal, not a
+   decorative white tile. The four phases intentionally map to the product's
+   evidence vocabulary: verified, watch, elevated, and critical. */
+.evidence-map-card {
+  min-height: 346px;
+  background: linear-gradient(145deg, rgba(13, 27, 34, .96), rgba(8, 15, 23, .98));
+}
+.evidence-map-visual { height: 226px; }
+.evidence-map-visual::before {
+  inset: 18px 10px;
+  border-color: rgba(77,225,208,.13);
+  box-shadow: 0 0 0 30px rgba(77,225,208,.022), 0 0 0 63px rgba(77,225,208,.016);
+}
+.map-orbit { position: absolute; border: 1px dashed rgba(77,225,208,.12); border-radius: 50%; pointer-events: none; }
+.map-orbit-outer { width: 94%; height: 80%; left: 3%; top: 10%; transform: rotate(-8deg); }
+.map-orbit-inner { width: 66%; height: 59%; left: 17%; top: 21%; border-style: solid; border-color: rgba(77,225,208,.08); }
+.map-line { z-index: 1; opacity: .8; }
+.map-node { z-index: 2; width: 96px; height: 47px; padding: 7px 9px; background: rgba(8,16,24,.94); }
+.map-node b { font-size: 7px; letter-spacing: .1em; }
+.map-node small { white-space: nowrap; font-size: 6px; }
+.map-node-contract {
+  left: 31%; top: 38%; width: 150px; height: 64px; gap: 3px; align-items: center;
+  border-color: transparent;
+  background: #65e6a2;
+  color: #092018;
+  box-shadow: 0 0 0 3px rgba(101,230,162,.13), 0 0 30px rgba(101,230,162,.28);
+  animation: ca-status-cycle 16s ease-in-out infinite;
+}
+.map-node-contract b, .map-node-contract small { color: inherit; }
+.map-node-contract b { font-size: 8px; }
+.map-node-contract small { font-size: 7px; font-weight: 800; letter-spacing: .08em; }
+.node-pulse { position: absolute; left: 10px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(9,32,24,.12); animation: node-blink 1.7s ease-in-out infinite; }
+.map-node-owner { left: 1%; top: 10%; }
+.map-node-market { right: 1%; top: 7%; border-color: rgba(155,140,255,.5); }
+.map-node-holders { right: 1%; bottom: 7%; }
+.map-node-source { left: 1%; bottom: 7%; border-color: rgba(77,225,208,.3); }
+.map-node-tax { left: 21%; top: 5%; border-color: rgba(242,184,102,.45); }
+.map-node-liquidity { right: 19%; bottom: 5%; border-color: rgba(255,107,107,.4); }
+.map-line-d { width: 20%; left: 30%; top: 43%; transform: rotate(-55deg); background: linear-gradient(90deg, rgba(77,225,208,.36), rgba(77,225,208,.06)); }
+.map-line-e { width: 22%; left: 44%; top: 58%; transform: rotate(56deg); background: linear-gradient(90deg, rgba(242,184,102,.36), rgba(242,184,102,.06)); }
+.map-line-f { width: 22%; left: 49%; top: 52%; transform: rotate(-57deg); background: linear-gradient(90deg, rgba(255,107,107,.3), rgba(255,107,107,.04)); }
+.map-status-row { display: flex; justify-content: center; gap: 10px; margin: -1px 0 11px; color: var(--joben-dim); font-size: 6px; font-weight: 800; letter-spacing: .08em; }
+.status-swatch { display: inline-block; width: 5px; height: 5px; margin-right: 4px; border-radius: 50%; }
+.swatch-green { background: #65e6a2; }.swatch-yellow { background: #f4d35e; }.swatch-orange { background: #f2a35e; }.swatch-red { background: #ff6b6b; }
+@keyframes ca-status-cycle {
+  0%, 20% { background: #65e6a2; color: #092018; border-color: #65e6a2; box-shadow: 0 0 0 3px rgba(101,230,162,.13), 0 0 30px rgba(101,230,162,.28); }
+  25%, 45% { background: #f4d35e; color: #302705; border-color: #f4d35e; box-shadow: 0 0 0 3px rgba(244,211,94,.14), 0 0 30px rgba(244,211,94,.25); }
+  50%, 70% { background: #f2a35e; color: #321b08; border-color: #f2a35e; box-shadow: 0 0 0 3px rgba(242,163,94,.14), 0 0 30px rgba(242,163,94,.27); }
+  75%, 95% { background: #ff6b6b; color: #350b0b; border-color: #ff6b6b; box-shadow: 0 0 0 3px rgba(255,107,107,.14), 0 0 30px rgba(255,107,107,.27); }
+  100% { background: #65e6a2; color: #092018; border-color: #65e6a2; box-shadow: 0 0 0 3px rgba(101,230,162,.13), 0 0 30px rgba(101,230,162,.28); }
+}
+html[data-theme="light"] .evidence-map-card { background: linear-gradient(145deg, #f5fbfa, #edf5f5); }
+html[data-theme="light"] .map-node { background: rgba(255,255,255,.96); }
+html[data-theme="light"] .map-node-contract { background: #65e6a2; }
+@media (max-width: 640px) {
+  .evidence-map-card { min-height: 364px; }
+  .evidence-map-visual { height: 236px; }
+  .map-node { transform: scale(.88); transform-origin: center; }
+  .map-node-contract { left: 24%; width: 150px; transform: none; }
+  .map-node-tax { left: 19%; }.map-node-liquidity { right: 15%; }
+  .map-status-row { gap: 6px; font-size: 5px; }
+}
