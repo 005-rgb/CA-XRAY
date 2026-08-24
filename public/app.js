@@ -31,6 +31,7 @@ const publicHeader = document.querySelector("#public-header");
 const privateTopbar = document.querySelector("#private-topbar");
 const sidebar = document.querySelector("#sidebar");
 const authEntry = document.querySelector("#auth-entry");
+const themeToggle = document.querySelector("#theme-toggle");
 const scanHistory = document.querySelector("#scan-history");
 const scanHistoryList = document.querySelector("#scan-history-list");
 const historyStatus = document.querySelector("#history-status");
@@ -483,7 +484,7 @@ function showLanding({ privateView = false } = {}) {
     watchtower: ["Watchtower", "Review scheduled monitoring and evidence alerts."],
     "api-access": ["API Access", "Programmatic access to evidence-backed contract analysis."],
     settings: ["Settings", "Manage your identity, security, preferences, and active workspace."],
-    public: ["Know what a contract can do before it touches your wallet.", "Evidence-based smart contract intelligence across supported networks."],
+    public: ["Kenali kemampuan kontrak sebelum menyentuh wallet Anda.", "Baca risiko kontrak dengan bukti nyata, sebelum keputusan menyentuh wallet Anda."],
   };
   document.querySelectorAll(".primary-nav .nav-item[data-route]").forEach((item) => {
     item.classList.toggle("active", privateView && item.dataset.route === `/dashboard${page === "dashboard" ? "" : `/${page}`}`);
@@ -2321,6 +2322,24 @@ document.querySelectorAll("[data-demo]").forEach((button) => button.addEventList
 document.querySelector("#mobile-menu")?.addEventListener("click", (event) => {
   const open = sidebar.classList.toggle("open");
   event.currentTarget.setAttribute("aria-expanded", String(open));
+});
+
+function applyTheme(theme) {
+  const nextTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = nextTheme;
+  if (!themeToggle) return;
+  const lightMode = nextTheme === "light";
+  themeToggle.setAttribute("aria-pressed", String(lightMode));
+  themeToggle.setAttribute("aria-label", lightMode ? "Switch to dark mode" : "Switch to light mode");
+  themeToggle.querySelector(".theme-icon").textContent = lightMode ? "☾" : "☼";
+  themeToggle.querySelector(".theme-label").textContent = lightMode ? "Dark" : "Light";
+}
+
+applyTheme(localStorage.getItem("joben-theme") || "dark");
+themeToggle?.addEventListener("click", () => {
+  const nextTheme = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  localStorage.setItem("joben-theme", nextTheme);
+  applyTheme(nextTheme);
 });
 
 window.addEventListener("popstate", () => {
