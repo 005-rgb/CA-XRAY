@@ -1,0 +1,58 @@
+Probe Solana mainnet berhasil dan memberi temuan penting: mint USDC terbukti sebagai Token Program dengan decimals 6, supply, mint authority, freeze authority, serta explorer URL; akun yang tidak ada ditolak fail-closed. Probe juga mengungkap alamat system program 111… salah ditolak oleh decoder base58 karena kasus seluruh karakter leading-zero belum ditangani. Saya akan menutup edge case itu sebelum final verification.
+
+
+
+4 actions
+Seluruh test lulus 70/70 setelah perbaikan decoder base58. Saya sekarang me-restart workflow, membaca log startup, lalu mengambil screenshot preview sebagai pemeriksaan akhir aplikasi yang terlihat pengguna.
+
+
+
+3 actions
+Workflow sekarang berjalan normal di port 5000 dan preview homepage tampil. Saya akan melakukan penutupan administratif yang diperlukan: memperbarui dokumentasi proyek agar dukungan Solana dan batas evidence tercatat, memeriksa diff akhir, lalu mengusulkan follow-up kecil hanya jika memang ada pekerjaan lanjutan yang terpisah.
+
+
+
+4 actions
+Implementasi dan verifikasi utama selesai. Dukungan Solana sekarang mencakup validasi base58 32-byte yang benar termasuk system program, verifikasi akun native fail-closed, deteksi SPL Token/Token-2022, metadata mint, status executable/lamports/data size bila tersedia, evidence explorer, serta pemisahan tegas dari provider EVM. Saya akan cek diff akhir dan mengajukan satu follow-up yang memang bernilai untuk tahap berikutnya sebelum menutup task.
+
+
+
+Viewed code changes
+Ada satu pekerjaan lanjutan yang sengaja tidak saya campurkan ke core adapter ini: bukti distribusi holder Solana yang independen dan konsisten. Saya akan mencatatnya sebagai follow-up, lalu menutup task setelah semua verifikasi utama selesai.
+
+
+
+Recorded follow-up and closed task
+Marked task #1 (Set up the imported project) complete
+
+Worked for 3 minutes
+
+Checkpoint made
+6 minutes ago
+lanjutkan ini bukti distribusi holder Solana yang independen dan konsisten
+
+Free
+6 minutes ago
+
+2 actions
+Saya lanjutkan ke Task #2. Pendekatan yang aman adalah memakai RPC Solana langsung (getProgramAccounts) untuk mint yang sudah terbukti, bukan mengambil angka holder dari DexScreener. Saya akan mengagregasi token accounts menjadi pemilik unik, menghitung top-1/top-5/top-10 terhadap supply mint, mempertahankan burn/program scope secara eksplisit, dan menandai hasil tidak lengkap bila total account tidak konsisten atau RPC gagal.
+
+
+Patch pertama tidak diterapkan karena konteks file berubah dari snapshot yang saya gunakan; tidak ada perubahan parsial yang masuk. Saya akan membaca potongan file yang tepat dan menerapkan perubahan dalam beberapa hunk kecil agar tidak berisiko menimpa logika native Solana yang sudah tervalidasi.
+
+
+
+12 actions
+Holder-normalization logic sudah masuk dengan aturan konservatif: agregasi berdasarkan owner unik, burn address dikeluarkan, persentase memakai supply mint, dan rekonsiliasi supply diberi ambang eksplisit 0,1%. Jika endpoint holder gagal atau hasil tidak lengkap, bukti account/mint tetap valid tetapi distribusi diberi limitation—tidak ada fallback angka. Saya akan menjalankan regresi dan probe live untuk memastikan RPC publik tidak merusak scan mint.
+
+
+
+4 actions
+Probe live menemukan bug integrasi yang tidak terlihat oleh unit test: saya mengubah nativeResult dari function-scope menjadi block-scope, sehingga hasil scan mint gagal saat dikembalikan. Ini murni bug wiring; saya perbaiki dengan deklarasi scope yang benar, lalu ulangi test dan probe mint nyata.
+
+
+
+Edited native-network-adapters.js
+
+Worked for 2 minutes
+You've reached your monthly free quota limit. It will reset on August 29, 2026.
