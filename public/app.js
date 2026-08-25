@@ -1572,8 +1572,7 @@ function renderWatchlistList(watchlists) {
     <div class="intelligence-row">
       <div><strong>${escapeHtml(item.label || truncateAddress(item.address))}</strong><span>${escapeHtml(item.networkId)} · every ${escapeHtml(item.intervalHours)}h</span></div>
       <div class="intelligence-row-action"><span class="watch-status ${statusClass(item.status)}">${escapeHtml(item.status)}</span><span>Next ${escapeHtml(formatDate(item.nextCheckAt))}</span>
-        <button type="button" class="text-button" data-watch-toggle="${escapeHtml(item.id)}" data-watch-next="${item.status === "active" ? "paused" : "active"}">${item.status === "active" ? "Pause" : "Resume"}</button>
-        <button type="button" class="text-button danger-text" data-watch-delete="${escapeHtml(item.id)}">Remove</button>
+        ${item.status !== "archived" ? `<button type="button" class="text-button" data-watch-edit="${escapeHtml(item.id)}">Edit</button><button type="button" class="text-button" data-watch-toggle="${escapeHtml(item.id)}" data-watch-next="${item.status === "active" ? "paused" : "active"}">${item.status === "active" ? "Pause" : "Resume"}</button><button type="button" class="text-button danger-text" data-watch-archive="${escapeHtml(item.id)}">Archive</button>` : `<span>History retained</span>`}
       </div>
     </div>`).join("") : `<div class="unknown-message">WATCHTOWER IS EMPTY. Add a contract to begin scheduled checks.</div>`;
   watchlistList.querySelectorAll("[data-watch-toggle]").forEach((button) => button.addEventListener("click", async () => {
@@ -1583,9 +1582,29 @@ function renderWatchlistList(watchlists) {
     });
     await loadIntelligenceDashboard();
   }));
-  watchlistList.querySelectorAll("[data-watch-delete]").forEach((button) => button.addEventListener("click", async () => {
-    await apiJson(`/api/watchlists/${encodeURIComponent(button.dataset.watchDelete)}`, { method: "DELETE" });
-    await loadIntelligenceDashboard();
+  watchlistList.querySelectorAll("[data-watch-edit]").forEach((button) => button.addEventListener("click", async () => {
+    const item = watchlists.find((candidate) => candidate.id === button.dataset.watchEdit);
+    if (!item) return;
+    const label = window.prompt("Target label (optional):", item.label || "");
+    if (label === null) return;
+    const interval = window.prompt("Check interval in hours (1, 6, 12, 24, or 168):", String(item.intervalHours));
+    if (interval === null) return;
+    try {
+      await apiJson(`/api/watchlists/${encodeURIComponent(item.id)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label, intervalHours: Number(interval) }),
+      });
+      await loadIntelligenceDashboard();
+    } catch (error) { button.title = error.message; }
+  }));
+  watchlistList.querySelectorAll("[data-watch-archive]").forEach((button) => button.addEventListener("click", async () => {
+    try {
+      await apiJson(`/api/watchlists/${encodeURIComponent(button.dataset.watchArchive)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "archived" }),
+      });
+      await loadIntelligenceDashboard();
+    } catch (error) { button.title = error.message; }
   }));
   JobenI18n.translate(watchlistList);
 }

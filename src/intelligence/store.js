@@ -762,7 +762,7 @@ class IntelligenceStore {
     }
     if (patch.label !== undefined) item.label = String(patch.label).slice(0, 120);
     if (patch.status !== undefined) {
-      if (!["active", "paused"].includes(patch.status)) invalid("INVALID_WATCHLIST_STATUS", "Watchlist status is invalid.");
+      if (!["active", "paused", "archived"].includes(patch.status)) invalid("INVALID_WATCHLIST_STATUS", "Watchlist status is invalid.");
       item.status = patch.status;
       if (item.status === "active" && !item.nextCheckAt) item.nextCheckAt = this.clock().toISOString();
     }
