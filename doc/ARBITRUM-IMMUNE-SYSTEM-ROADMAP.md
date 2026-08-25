@@ -2,9 +2,9 @@
 
 ## Competition product: Transaction Intent Firewall for Autonomous Finance
 
-**Status:** Approved for implementation planning  
+**Status:** Approved for implementation planning; eligibility gaps explicitly tracked  
 **Created:** 2026-08-25  
-**Target environment:** Arbitrum Sepolia first, Arbitrum One verification path  
+**Target environment:** Arbitrum Sepolia first; Arbitrum One required if the final rules do not accept Sepolia for submission  
 **Competition window used for planning:** 2026-09-14 through 2026-10-04  
 **Primary product:** Arbitrum Immune System  
 **MVP wedge:** Transaction Intent Firewall for AI agents and protocol automation  
@@ -43,6 +43,87 @@ the first product market, not a permanent deletion of other network support.
 
 ---
 
+## 0. Eligibility truth table
+
+This section is the source of truth for competition readiness. A roadmap item is
+not complete because it exists in a document or because the UI mentions
+Arbitrum. It is complete only when the required evidence artifact exists and
+can be reproduced by an evaluator.
+
+| Requirement | Current baseline at roadmap creation | Required proof | Release status |
+|---|---|---|---|
+| Existing project/codebase may be used | JOBEN is an existing Node.js/JavaScript project with a multichain evidence engine | Repository/codebase plus a documented existing-project statement | **READY** |
+| Project must deploy on Arbitrum One or accepted Arbitrum environment | No Solidity/Stylus contract, deployment address, or transaction hash currently exists in the project | Deployed product contract, chain ID, address, transaction hash, explorer URL, and reproducible interaction | **BLOCKED** |
+| Solidity or Stylus may be used | Current runtime is JavaScript; `src/contracts/trust.js` is an internal trust contract, not an on-chain contract | Solidity/Stylus source, compiler configuration, tests, deployment script, and verified source where supported | **BLOCKED** |
+| Individual or team participation | Product can be developed by one person or a team | Participant/team registration completed on the official platform | **EXTERNAL ACTION** |
+| Arbitrum Sepolia testnet | No deployment or funded test account is recorded | Testnet contract deployment and at least one successful read/write verification | **NOT STARTED** |
+| Required feedback/workshops | Not represented by the repository | Registration, attendance, notes/action items, and evidence of required sessions | **EXTERNAL ACTION** |
+
+### 0.1 Meaning of “compliant”
+
+The project may be described as **competition-ready** only when all of the
+following are true:
+
+```text
+existing-project proof
+  + supported-language contract
+  + accepted Arbitrum deployment
+  + product path uses the deployment
+  + public verification evidence
+  + participant/program obligations tracked
+= competition-ready
+```
+
+The following are not sufficient on their own:
+
+- selecting `Arbitrum` in the scanner;
+- querying an Arbitrum RPC;
+- showing an Arbitrum explorer link for a target contract;
+- storing a hash only in the Node.js database;
+- deploying a contract that is not called by the product;
+- writing a roadmap or pitch that says “deployed”;
+- using a local mock with no chain transaction.
+
+### 0.2 Deployment decision gate
+
+The team must check the final HackQuest rules before locking the submission
+network. The roadmap uses this decision tree:
+
+```text
+Does the final rule explicitly accept Arbitrum Sepolia?
+  yes -> Sepolia is the minimum demo deployment; One remains optional
+  no/unclear -> deploy the same reviewed contract to Arbitrum One
+  final rule requires One/Orbit -> One deployment is mandatory
+```
+
+No eligibility claim may rely on an assumption about testnet acceptance. The
+submission record must include a dated official reference for the accepted
+network wording.
+
+### 0.3 Evidence package required for submission
+
+Create a single documented `competition-evidence/` package containing:
+
+1. official rule reference and last checked date;
+2. participant/team confirmation;
+3. target network and chain ID;
+4. contract source and compiler version;
+5. deployment transaction hash;
+6. deployed contract address;
+7. explorer URL;
+8. contract verification URL, if available;
+9. one attestation transaction hash;
+10. one invalidation transaction hash;
+11. one admission-gate interaction/result;
+12. screenshots or recording showing the same chain/network;
+13. known limitations and testnet/production labels;
+14. session/workshop participation log.
+
+The package must never contain private keys, seed phrases, API keys, or raw
+secrets. Deployment credentials must be managed outside the repository.
+
+---
+
 ## 2. Recommendations before implementation
 
 ### 2.1 Build one complete path, not ten disconnected features
@@ -73,11 +154,17 @@ added only after the core decision contract is stable.
 This avoids making wallet permissions, browser-extension behavior, and user
 signatures the critical path for the competition build.
 
-### 2.3 Use Arbitrum Sepolia for writes and Arbitrum One for evidence
+### 2.3 Use Arbitrum Sepolia for writes, with an explicit Arbitrum One fallback
 
-All mutable demo writes and the registry deployment should initially use
-Arbitrum Sepolia. Arbitrum One should be used for read/evidence verification
-where the target contract and provider data are available.
+All development writes and the first registry deployment should use Arbitrum
+Sepolia. This is the safe engineering path, not a final eligibility claim.
+Arbitrum One must be added before submission if the final competition wording
+does not explicitly accept Sepolia, or if the organizer requires One/Orbit for
+the relevant category.
+
+The contract must be network-agnostic in source but network-specific in
+configuration. Never reuse a Sepolia address as if it were an Arbitrum One
+deployment.
 
 No production claim may be made from testnet data without clearly labeling:
 
@@ -115,6 +202,20 @@ Avoid:
 never silently become `ALLOW`. The existing trust contract in
 `src/contracts/trust.js` is the semantic authority for evidence status and
 freshness.
+
+### 2.6 Separate engineering completion from program obligations
+
+Engineering cannot mark the workshop and feedback requirement complete. The
+participant/team must maintain an external participation log containing:
+
+- session name and official date;
+- attendee(s);
+- key feedback;
+- resulting product decision;
+- link or screenshot proving attendance where the platform provides one.
+
+If a required session is missed, the team must follow the organizer's recovery
+process and record the outcome before submission.
 
 ---
 
@@ -645,6 +746,10 @@ The gate should:
 - define reason codes;
 - define evidence-to-policy mapping;
 - define Arbitrum One/Sepolia network IDs and explorer links;
+- confirm the final competition rule for accepted deployment networks and record
+  the official source and check date;
+- register the participant or team;
+- create the competition evidence checklist and assign ownership;
 - define canonical bridge adapter scope;
 - write threat model for intent spoofing, replay, stale evidence, and issuer
   compromise;
@@ -657,7 +762,10 @@ The gate should:
 - every MVP field has an evidence source or is clearly marked unavailable;
 - unsupported calldata returns `INTENT_DECODE_UNAVAILABLE`, never an optimistic
   result;
-- product scope fits one end-to-end demo.
+- product scope fits one end-to-end demo;
+- deployment status is explicitly `SEPOLIA_ACCEPTED`, `ARBITRUM_ONE_REQUIRED`,
+  or `AWAITING_OFFICIAL_CLARIFICATION`; “probably accepted” is not a valid
+  release status.
 
 ## Phase 1 — Intent and permission analysis
 
@@ -734,6 +842,10 @@ The gate should:
 - expose registry verification page/API;
 - verify emitted events through explorer/RPC.
 
+If the deployment decision gate says Arbitrum One is mandatory, repeat the
+deployment using the same reviewed source and compiler configuration. The One
+deployment is a separate immutable record, not a configuration alias.
+
 ### Done looks like
 
 - an `ALLOW` passport is written once and retrievable by ID;
@@ -743,6 +855,9 @@ The gate should:
 - unauthorized issuer cannot write or invalidate;
 - admission gate accepts valid passport and rejects invalid/stale passport;
 - all on-chain values match the off-chain verification page.
+- deployment evidence contains network, chain ID, address, transaction hash,
+  explorer link, and source verification state;
+- if One is mandatory, the exact same behavior is demonstrated on One.
 
 ## Phase 4 — Watchtower and immune-system behavior
 
@@ -820,6 +935,12 @@ The gate should:
 - prepare limitations and threat model;
 - prepare README/submission text;
 - freeze demo data and runbook;
+- verify Arbitrum One deployment if the deployment decision gate requires it;
+- attach the eligibility evidence package;
+- attach the workshop/feedback participation log;
+- perform a final rule check against the official platform page;
+- confirm every pitch claim maps to a source, transaction, or reproducible
+  application behavior.
 - submit before the official platform deadline.
 
 ### Done looks like
@@ -1104,6 +1225,17 @@ The judge should see prevention and containment, not only analysis.
 - duplicate, expiry, invalidation, and authorization tests pass;
 - SafeVault/AssetAdmissionGate consumes registry state.
 
+### Gate C1 — Competition eligibility
+
+- final rule source and check date are recorded;
+- participant/team registration is complete;
+- accepted deployment network is resolved;
+- the required chain has a live product contract;
+- deployment transaction is publicly inspectable;
+- product behavior calls the deployed contract;
+- no deployment credential is committed or exposed;
+- evidence package is complete.
+
 ### Gate D — Immune response
 
 - monitored change is detected;
@@ -1121,6 +1253,8 @@ The judge should see prevention and containment, not only analysis.
 - two-minute demo;
 - architecture and limitation documents;
 - deployed contract addresses;
+- eligibility evidence package;
+- workshop/feedback participation log;
 - final submission artifacts.
 
 ---
