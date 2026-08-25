@@ -1,0 +1,149 @@
+Berikut informasi lengkap Arbitrum Open House Singapore: Online Buildathon 2026 berdasarkan sumber resmi Arbitrum Foundation dan halaman pendaftaran HackQuest.
+
+1. Info Umum
+	
+Penyelenggara	Arbitrum Foundation bersama Robinhood Chain
+Platform pendaftaran	HackQuest — arbitrum-singapore.hackquest.io
+Format	100% online (Buildathon), dilanjutkan Founder House tatap muka di Singapura (opsional, hanya untuk pemenang)
+Periode Buildathon	14 September – 4 Oktober 2026 (3 minggu)
+Founder House (IRL)	~1 bulan setelah Buildathon selesai, 3 hari, di Singapura — hanya untuk tim terpilih
+Total dana program	$415,000 (Buildathon + Founder House)
+Tech stack	Solidity, Rust (Stylus)
+Status saat ini	Open — pendaftaran sedang berjalan
+2. Total Hadiah — hingga $115,000 (fase Buildathon)
+
+Open Category — $70,000
+
+Juara 1: $40,000 USDC
+Juara 2: $20,000 USDC
+Juara 3: $10,000 USDC
+Minimal 1 dari 3 posisi ini wajib direservasi untuk proyek yang dibangun di Robinhood Chain
+
+Promising Products Track — $15,000
+
+Juara 1: $7,000 USDC
+Juara 2: $5,000 USDC
+Juara 3: $3,000 USDC
+Kategori khusus untuk produk baru di area frontier seperti AI agents dan financial primitives baru — ini paling relevan untuk JOBEN
+Minimal 1 dari 3 posisi juga direservasi untuk proyek Robinhood Chain
+
+Grants — $30,000 USDC
+
+Diberikan Arbitrum Foundation ke tim pemenang secara case-by-case, di luar hadiah utama
+
+Kecuali di Promising Products Track, semua hadiah dibagi 50/50 antara pembayaran di muka dan milestone-based payout (jadi tidak cair 100% langsung).
+
+3. Syarat & Ketentuan
+Peserta boleh membawa proyek yang sudah ada (existing project/codebase) atau mulai dari nol
+Proyek harus deploy di Arbitrum One atau custom Orbit chain
+Boleh pakai Solidity, atau Rust/C++/Python via Stylus
+Peserta bisa individu atau tim
+Tersedia testnet: Arbitrum Sepolia (ambil ETH testnet dari Sepolia faucet lalu bridge ke Arbitrum Sepolia)
+Selama program, tim wajib ikut sesi feedback berkala dan workshop founder (product development, go-to-market, UX, agentic commerce, wallet infra, dll)
+4. Kriteria Penilaian
+
+Berdasarkan pola konsisten dari seluruh seri Open House (NYC, London, India — kemungkinan besar sama untuk Singapura):
+
+Smart contract quality — kode mengikuti best practice, terstruktur logis dan efisien, minim kerentanan keamanan
+Product-Market Fit — potensi jelas untuk menarik dan mempertahankan pengguna
+Innovation and Creativity — pendekatan orisinal yang mendorong batas baru
+Real Problem Solving — aplikasi yang menjawab kebutuhan pasar yang nyata
+
+Catatan: HackQuest sebagai penyedia platform tidak terlibat dalam keputusan final judging/distribusi hadiah kecuali dinyatakan lain — keputusan ada di tangan Arbitrum Foundation.
+
+5. Prosedur Pelaksanaan (Teknikal)
+Registrasi di arbitrum-singapore.hackquest.io
+Fase Buildathon (14 Sept–4 Okt): bangun/kembangkan produk sambil mengikuti sesi feedback rutin dan workshop founder
+Submission: submit proyek melalui platform HackQuest sebelum deadline penutupan (tanggal pasti submission belum diumumkan resmi di laman — cek kalender HackQuest mendekati 4 Okt)
+Judging: dinilai berdasarkan 4 kriteria di atas
+Pengumuman pemenang Buildathon
+Founder House (IRL, Singapura): tim terpilih diundang untuk sesi mentorship, product refinement, go-to-market, dan pitching langsung dengan tim Arbitrum Foundation, Offchain Labs, dan mitra ekosistem
+Catatan penting untuk JOBEN
+
+JOBEN saat ini adalah multi-chain contract intelligence tool, bukan produk yang di-deploy sebagai smart contract di satu chain tertentu. Syarat "harus deploy di Arbitrum One/Orbit chain" berarti JOBEN perlu punya komponen onchain di Arbitrum — misalnya kontrak untuk menyimpan hash evidence/Risk Passport secara on-chain, atau modul verifikasi on-chain khusus Arbitrum — supaya technically eligible, bukan cuma "mendukung Arbitrum sebagai salah satu network yang discan".
+
+Track Promising Products (AI agents, financial primitives baru) kemungkinan paling cocok untuk positioning JOBEN sebagai "AI-powered evidence-based risk intelligence", dibanding Open Category yang lebih condong ke DeFi/consumer app biasa.
+
+Mau saya bantu susun konsep bagaimana JOBEN bisa punya komponen on-chain di Arbitrum (misal: smart contract untuk anchoring evidence hash / Risk Passport) supaya eligible ikut, sekaligus draf pitch untuk submission-nya?
+
+produk ini multinetrok tapi saya bisa khusus hanya untuk net abitrum. bagaimana peluangna
+
+Peluangnya cukup realistis — bahkan ini strategi yang masuk akal, karena JOBEN sudah punya sebagian besar "otak"-nya (scoring engine, evidence system, provider adapter) selesai. Yang perlu dilakukan hanyalah mempersempit fokus network, bukan membangun dari nol. Berikut analisis peluangnya secara jujur.
+
+Kenapa ini peluang bagus
+
+1. Arbitrum sangat butuh tooling seperti ini
+Arbitrum One adalah EVM chain dengan ribuan token/kontrak baru tiap bulan, dan sejauh ini belum ada "juara" jelas untuk contract risk intelligence yang native/fokus di Arbitrum (GoPlus, DexScreener dsb sifatnya multi-chain generik, bukan spesialis). Positioning "risk scanner khusus untuk ekosistem Arbitrum" itu niche yang jelas dan mudah dijelaskan ke juri dalam 2 menit pitch.
+
+2. Cocok dengan brief hackathon
+Track Promising Products eksplisit menyebut "AI agents, new financial primitives" — JOBEN sebagai "AI-assisted evidence-based risk scoring" pas masuk kategori ini, bukan dipaksakan ke DeFi app biasa.
+
+3. Modal sudah ada
+Anda sudah punya:
+
+Contract intelligence engine (capability, trading, holder, liquidity analysis)
+Evidence-based risk scoring + reliability score (fitur pembeda kuat — kompetitor kebanyakan cuma kasih 1 angka "safe/unsafe")
+Provider adapter system, scan job system, Risk Passport
+Tinggal arahkan semua provider & scanner ke Arbitrum One/Sepolia, tidak perlu bangun scoring engine baru.
+Yang perlu ditambahkan (gap teknikal)
+
+Karena syarat wajib "deploy di Arbitrum One atau Orbit chain", JOBEN butuh komponen on-chain, bukan cuma backend yang query data dari luar. Opsi realistis:
+
+Opsi	Effort	Dampak ke kriteria judging
+Smart contract untuk anchoring evidence hash (Risk Passport snapshot di-hash lalu disimpan on-chain di Arbitrum)	Sedang	Kuat — jadi bukti "verifiable & immutable", nyambung ke poin provenance yang sudah jadi kekuatan JOBEN
+Kontrak sederhana untuk registry watchlist on-chain (opsional, siapa saja bisa cek status risk kontrak on-chain)	Sedang-tinggi	Bagus untuk "product-market fit" karena bisa dipakai kontrak lain (composability)
+Sekadar deploy dummy contract supaya "teknikal eligible" tanpa fungsi nyata	Rendah	Lemah — juri kemungkinan menganggap ini gimmick
+
+Saran saya: opsi pertama (anchoring evidence hash on-chain) paling murah untuk dibangun dalam 3 minggu, dan justru memperkuat narasi produk, bukan sekadar syarat administratif.
+
+Risiko yang perlu diwaspadai
+Kriteria "Smart contract quality" dinilai dari kode Solidity/Stylus-nya — kalau kontrak anchoring-nya terlalu sepele, poin ini bisa lemah. Perlu dibuat cukup solid (misal: upgradeable, ada access control, event logs yang jelas).
+Kompetisi: Buildathon global terbuka untuk siapa saja (209+ peserta sudah terdaftar per data terakhir), banyak tim datang dengan produk DeFi/trading yang lebih "onchain-native" daripada tooling analitik. JOBEN perlu jelas menunjukkan kenapa "security & trust layer" itu penting buat pertumbuhan ekosistem Arbitrum — bukan cuma "keren secara teknis".
+Reservasi slot Robinhood Chain: minimal 1 dari 3 posisi juara di tiap kategori direservasi untuk proyek Robinhood Chain, jadi secara matematis, kalau JOBEN masuk Open Category, sebenarnya bersaing untuk 2 dari 3 slot, bukan 3 (kecuali JOBEN juga deploy ke Robinhood Chain, yang mungkin di luar scope).
+Milestone-based payout: 50% hadiah cair belakangan berdasarkan milestone — bukan cash instan penuh, jadi perlu siap komitmen jangka menengah kalau menang.
+Kesimpulan peluang
+
+Realistis cukup kuat untuk lolos ke babak awal dan menarik perhatian juri, terutama di track Promising Products, karena:
+
+Ceruk (contract security/trust) belum jenuh di ekosistem Arbitrum
+Fitur pembeda (evidence + reliability score terpisah) jarang dimiliki kompetitor
+Effort scoping ulang ke satu network relatif kecil dibanding membangun dari nol
+
+Yang jadi penentu utama adalah eksekusi 3 minggu: seberapa cepat bisa bikin smart contract anchoring yang solid + narasi pitch yang menonjolkan "kenapa Arbitrum butuh ini sekarang".
+
+Mau saya bantu susun rencana teknis 3 minggu (breakdown minggu ke minggu: smart contract, integrasi backend, demo) plus draf pitch deck singkat untuk submission-nya?
+
+14 Sept–4 Okt ini apakah fase buildnya, sebelum itu apakah tidak boleh?
+
+Pertanyaan bagus, dan jawabannya: boleh, bahkan dianjurkan — bukan dilarang.
+
+Yang dimaksud periode 14 Sept–4 Okt
+
+Itu adalah fase resmi program Buildathon-nya — periode di mana:
+
+Sesi feedback rutin dengan tim Arbitrum/Offchain berlangsung
+Workshop founder (product, go-to-market, dll) diadakan
+Submission final harus dikumpulkan (menjelang 4 Okt)
+Judging dan penentuan pemenang dilakukan berdasarkan progress selama periode ini
+Tapi soal "boleh mulai kapan"
+
+Dari halaman resmi Arbitrum: "builders can develop an existing project or codebase" — ini eksplisit menyatakan peserta boleh membawa proyek yang sudah dikembangkan sebelumnya, tidak wajib mulai dari nol tanggal 14 September. Ini pola yang konsisten di seluruh seri Open House (NYC, London, India semua bilang "bring an existing project or start from scratch").
+
+Artinya untuk kasus JOBEN:
+
+Aktivitas	Kapan boleh dilakukan
+Pengembangan core JOBEN (yang sudah jalan sekarang)	Sudah sah dilakukan sebelum 14 Sept — ini justru keunggulan Anda
+Registrasi/apply ke program	Sekarang (sudah dibuka)
+Bangun smart contract anchoring khusus Arbitrum	Bisa mulai kapan saja, tapi progres selama 14 Sept–4 Okt yang akan dinilai dan didiskusikan di sesi feedback
+Submission final	Sebelum deadline mendekati 4 Okt
+Implikasi strategis untuk Anda
+
+Karena JOBEN sudah punya fondasi besar (engine, scoring, evidence system), Anda sebenarnya diuntungkan dibanding tim yang baru mulai dari nol tanggal 14 September. Periode 3 minggu itu bisa difokuskan murni untuk:
+
+Menyesuaikan/mempersempit scope ke Arbitrum One
+Membangun komponen on-chain (smart contract anchoring evidence)
+Menyiapkan demo dan materi pitch
+
+Sementara tim lain mungkin masih struggling membangun MVP dari nol di periode yang sama.
+
+Satu hal yang perlu dipastikan sendiri: cek halaman resmi HackQuest untuk detail tanggal registrasi ditutup dan apakah ada proses seleksi/aplikasi sebelum bisa "resmi" ikut Buildathon (beberapa event Open House sebelumnya bersifat application-based, bukan open registration bebas). Saya sarankan langsung daftar sekarang di link resminya supaya statusnya jelas sebelum program dimulai.
