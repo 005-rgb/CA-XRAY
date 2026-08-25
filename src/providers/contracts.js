@@ -1,5 +1,12 @@
 const ENGINE_VERSION = "2.0.0";
 const EVIDENCE_SCHEMA_VERSION = "1.0.0";
+const {
+  TRUST_CONTRACT_VERSION,
+  EVIDENCE_STATUS,
+  CAPABILITY_STATE,
+  FRESHNESS_POLICY_HOURS,
+  normalizeCapabilityProfile,
+} = require("../contracts/trust");
 
 const PROVIDER_RESULT_STATUS = Object.freeze({
   VALID: "valid",
@@ -112,7 +119,12 @@ function normalizedResult({
 module.exports = {
   ENGINE_VERSION,
   EVIDENCE_SCHEMA_VERSION,
+  TRUST_CONTRACT_VERSION,
   PROVIDER_RESULT_STATUS,
+  EVIDENCE_STATUS,
+  CAPABILITY_STATE,
+  FRESHNESS_POLICY_HOURS,
+  normalizeCapabilityProfile,
   normalizedPoint,
   unverifiedSignalPoint,
   normalizedResult,

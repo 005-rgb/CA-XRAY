@@ -7,6 +7,7 @@ const {
   buildCluster, buildNetworkHypotheses, extractDeployerObservation, fingerprintKey, publicFingerprint,
 } = require("./deployer-cluster");
 const { compareSnapshots } = require("../watchtower/materiality");
+const { FRESHNESS_POLICY_HOURS, assertSnapshotEnvelope } = require("../contracts/trust");
 
 const WATCH_INTERVALS = Object.freeze([1, 6, 12, 24, 168]);
 const ALERT_TYPES = Object.freeze([
@@ -30,17 +31,7 @@ const ALERT_TRANSITIONS = Object.freeze({
   INVESTIGATING: new Set(["SNOOZED", "RESOLVED", "OPEN"]),
   RESOLVED: new Set(["OPEN"]),
 });
-const EVIDENCE_FRESHNESS_TTL_HOURS = Object.freeze({
-  liquidity: 24,
-  market: 6,
-  trading: 6,
-  holders: 24,
-  control: 168,
-  owner: 168,
-  deployer: 720,
-  contract: 720,
-  default: 24,
-});
+const EVIDENCE_FRESHNESS_TTL_HOURS = FRESHNESS_POLICY_HOURS;
 const REVIEW_TRANSITIONS = Object.freeze({
   OPEN: new Set(["ACKNOWLEDGED", "DEFERRED", "RESOLVED"]),
   ACKNOWLEDGED: new Set(["DEFERRED", "RESOLVED", "OPEN"]),
@@ -147,8 +138,9 @@ function snapshotFromScan({ scan, jobId, capturedAt }) {
     changes,
     consensus,
   };
-  return {
+  const snapshot = {
     id: id("snapshot"),
+    targetId: scan.targetId || `target:${scan.network?.id || "unknown"}:${String(scan.contract?.address || "").toLowerCase()}`,
     jobId: jobId || scan.scanId || null,
     capturedAt: capturedAt || scan.timestamp || new Date().toISOString(),
     address: scan.contract?.address,
@@ -178,6 +170,8 @@ function snapshotFromScan({ scan, jobId, capturedAt }) {
     evidenceHash: hash(comparable),
     comparable,
   };
+  assertSnapshotEnvelope(snapshot);
+  return snapshot;
 }
 
 function snapshotFieldValue(snapshot, field) {

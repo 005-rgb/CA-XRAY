@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
+const { isComparableEvidenceStatus } = require("../contracts/trust");
 
 const MATERIALITY = Object.freeze(["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]);
-const EVIDENCE_STATUS = new Set(["UNKNOWN", "UNAVAILABLE", "UNVERIFIED", "CONFLICT"]);
 
 const FIELD_REGISTRY = Object.freeze({
   riskScore: { unit: "points", kind: "number", absolute: 5, relative: 10, direction: "higher-risk", explanationKey: "pulse.riskScore.changed" },
@@ -80,7 +80,7 @@ function compareSnapshots(before, after, { minimumConfidence = 0, minimumFreshne
     const changed = JSON.stringify(beforeValue) !== JSON.stringify(afterValue)
       || beforeStatus !== afterStatus;
     if (!changed) continue;
-    const comparable = before && after && !EVIDENCE_STATUS.has(beforeStatus) && !EVIDENCE_STATUS.has(afterStatus)
+    const comparable = before && after && isComparableEvidenceStatus(beforeStatus) && isComparableEvidenceStatus(afterStatus)
       && beforeValue !== null && afterValue !== null && beforeValue !== undefined && afterValue !== undefined;
     const numeric = comparable && typeof beforeValue === "number" && typeof afterValue === "number"
       && Number.isFinite(beforeValue) && Number.isFinite(afterValue);

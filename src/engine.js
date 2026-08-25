@@ -2,6 +2,8 @@ const {
   ENGINE_VERSION,
   EVIDENCE_SCHEMA_VERSION,
   PROVIDER_RESULT_STATUS,
+  TRUST_CONTRACT_VERSION,
+  normalizeCapabilityProfile,
 } = require("./providers/contracts");
 const { createDefaultProviderRegistry } = require("./providers/default-adapters");
 const { validateNativeAddress, verifyNativeNetwork } = require("./providers/native-network-adapters");
@@ -283,12 +285,18 @@ function getNetworkCapabilityMatrix(network) {
     },
   ];
   const supported = capabilities.filter((item) => item.support === "supported").length;
+  const capabilityProfile = normalizeCapabilityProfile(capabilities);
   return {
     networkClass: hasIndexer ? "evm-rpc-blockscout" : isEvm ? "evm-rpc" : isNative ? "native-adapter" : "metadata-only",
     freshnessPolicy: "PER_SCAN",
+    capabilityProfileVersion: TRUST_CONTRACT_VERSION,
     supportedCount: supported,
     totalCount: capabilities.length,
-    capabilities,
+    capabilities: capabilityProfile.capabilities.map((capability, index) => ({
+      ...capabilities[index],
+      state: capability.state,
+      evidenceStatus: capability.evidenceStatus,
+    })),
   };
 }
 
