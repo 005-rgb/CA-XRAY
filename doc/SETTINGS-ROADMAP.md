@@ -487,6 +487,284 @@ and operational backup/restore.
 authorization, and production security gates. Tidak boleh memakai fake payment,
 placeholder secret, atau production key di client.
 
+## 6A. Priority tranche yang diminta
+
+Tiga jalur berikut adalah fokus pengembangan setelah roadmap disetujui. Ketiganya
+harus dikerjakan sebagai satu program, bukan tiga halaman terpisah, karena
+credential, notification, sharing, entitlement, dan audit saling memengaruhi.
+
+### Track 1 — Secure Settings Foundation
+
+**Tujuan bisnis:** pengguna dapat mempercayai Settings sebagai tempat
+mengamankan akun dan workspace, bukan hanya menyimpan pilihan tampilan.
+
+#### Paket pekerjaan
+
+**A. Settings contract**
+
+- schema registry untuk account preference, workspace policy, notification
+  policy, security state, sharing default, retention, API policy, dan billing
+  entitlement;
+- `schemaVersion`, `updatedAt`, `effectiveAt`, `updatedBy`, `scope`, `source`,
+  `status`, dan `changeReason`;
+- allowlist field, type/range validation, unknown-field rejection, payload
+  size limit, dan migration strategy;
+- distinction antara personal preference, workspace-enforced policy, platform
+  constraint, dan temporary view state;
+- effective-setting resolver dengan precedence dan conflict explanation;
+- optimistic concurrency token agar perubahan stale tidak menimpa perubahan
+  admin/member lain.
+
+**B. Security center**
+
+- security posture scorecard berbasis kontrol nyata, bukan angka kosmetik;
+- MFA setup, recovery, backup-code rotation, MFA reset dengan proofing;
+- recent security activity yang dapat difilter dan diekspor sesuai permission;
+- per-device session revoke, revoke-all, suspicious-session review;
+- password change dan email change dengan re-authentication, cooldown, dan
+  verification lifecycle;
+- step-up policy matrix: API key, webhook, report share, export, deletion,
+  ownership, billing, dan emergency lockdown;
+- emergency lockdown dengan staged confirmation, blast-radius preview,
+  revoke sessions/keys/webhooks/shares/invites, dan recovery runbook.
+
+**C. Governance and audit**
+
+- immutable audit event dengan actor, workspace, target, operation, redacted
+  before/after diff, reason, correlation ID, result, dan timestamp;
+- audit read policy agar user hanya melihat event yang relevan dengan scope-nya;
+- admin/platform event tetap terpisah dari tenant audit;
+- change history memiliki “who / what / why / impact / rollback”;
+- audit retention dan export mengikuti data-class policy, bukan hardcoded
+  delete dari UI.
+
+**D. User experience**
+
+- Settings Overview menampilkan “Needs attention” berbasis kontrol yang gagal,
+  pending, expired, atau unavailable;
+- setiap kartu settings memiliki scope badge, effective value, source,
+  “applies to”, dan recovery action;
+- destructive action memakai impact preview, typed confirmation bila perlu,
+  dan tidak mengandalkan `window.confirm`;
+- unsaved change guard, retry state, conflict resolution, dan reset-safe-default;
+- seluruh flow memiliki keyboard, mobile, reduced-motion, loading, empty,
+  error, dan bilingual state.
+
+**Output wajib Track 1**
+
+1. Secure Settings domain contract dan effective-setting contract.
+2. Security Center production flow.
+3. Workspace governance baseline.
+4. Audit and recovery runbook.
+5. Authorization/security/data-lifecycle acceptance suite.
+
+**Blocker yang harus diselesaikan sebelum Track 2/3 bergantung padanya:**
+
+- siapa owner policy per setting;
+- role matrix dan step-up TTL;
+- persistent store dan queue yang digunakan untuk audit/export;
+- canonical event taxonomy;
+- secret-redaction policy.
+
+### Track 2 — Notification Control Plane
+
+**Tujuan bisnis:** pengguna dapat mengurangi noise tanpa kehilangan sinyal
+forensik, security, compliance, atau delivery yang penting.
+
+#### Paket pekerjaan
+
+**A. Event catalog**
+
+Setiap event harus memiliki `eventType`, `severity`, `sourceModule`,
+`subjectType`, `workspaceScope`, `evidenceReference`, `dedupeKey`,
+`createdAt`, dan lifecycle. Catalog awal:
+
+- scan accepted/completed/failed/unavailable/stale;
+- Watchtower material change, provider degradation, acknowledgement reminder,
+  escalation, dan case handoff;
+- Passport freshness/coverage change;
+- Compare completed atau comparison source unavailable;
+- Case assignment, mention, evidence request, review due, approval, expiry;
+- report published, accessed, expiring, expired, revoked, revised;
+- API key created/expiring/used anomalously/revoked, quota, and webhook failure;
+- community peer review, dispute, moderation, revision, and appeal;
+- billing usage, invoice, payment, plan, entitlement, and downgrade blocker;
+- security login, recovery, password, MFA, session, export, deletion, and
+  lockdown.
+
+**B. Preference and routing engine**
+
+- matrix `event × severity × channel × role × workspace`;
+- in-app inbox sebagai immutable notification intent/source of truth;
+- email/webhook/push sebagai delivery projections, bukan source evidence;
+- immediate, digest, quiet hours, scheduled delivery, escalation;
+- workspace policy dapat menetapkan minimum delivery; user dapat memilih
+  presentation/channel dalam batas policy;
+- non-disableable events: account security, evidence integrity incident,
+  compliance deadline, destructive lifecycle, API/webhook compromise signal,
+  dan delivery dead-letter;
+- channel redaction profile agar judul/email/webhook tidak membocorkan private
+  note, internal ID, atau hidden workspace metadata.
+
+**C. Evidence Pulse operations**
+
+- grouping berdasarkan satu perubahan material dan evidence lineage;
+- deduplication/idempotency untuk scheduler retry dan multi-channel delivery;
+- suppression dengan reason, actor, expiry, dan undo;
+- escalation chain ke role/case tanpa mengubah evidence;
+- notification state: `CREATED`, `QUEUED`, `SENT`, `DELIVERED`, `ACKNOWLEDGED`,
+  `DEFERRED`, `RETRYING`, `DEAD_LETTER`, `CANCELLED`;
+- delivery detail menjelaskan channel, attempt, next retry, failure class,
+  redaction policy, dan correlation ID;
+- dead-letter review, replay yang authorized, dan replay audit;
+- test notification tidak memakai live evidence atau mengirim secret.
+
+**D. User experience**
+
+- inbox dengan filter module, severity, unread, assigned-to-me, and evidence
+  freshness;
+- notification center menampilkan “why am I receiving this?” dan policy source;
+- preference matrix yang usable di desktop dan berubah menjadi grouped cards
+  di mobile;
+- quiet-hours preview dalam timezone aktif;
+- digest preview sebelum save;
+- alert-to-case action mempertahankan evidence reference dan audit lineage;
+- satu-click acknowledge tidak sama dengan resolve atau dismiss;
+- bulk actions dibatasi oleh role dan tidak boleh menghapus audit.
+
+**Output wajib Track 2**
+
+1. Event catalog dan notification policy schema.
+2. In-app inbox/source of truth.
+3. Reliable channel delivery dengan retry/dead-letter.
+4. Watchtower Evidence Pulse grouping, suppression, escalation.
+5. Notification audit, test delivery, and incident runbook.
+
+**Dependency:** Track 1 untuk policy/effective setting/audit; Watchtower W0–W3
+untuk materiality; durable queue untuk delivery semantics; integration setup
+untuk email/webhook/push.
+
+### Track 3 — API Access, Sharing, and Billing Integration
+
+**Tujuan bisnis:** owner dapat menghubungkan JOBEN secara aman, membagikan
+evidence secara terkendali, dan memahami konsekuensi plan tanpa fake state.
+
+#### Paket pekerjaan
+
+**A. API Access control plane**
+
+- key inventory dengan masked prefix, owner, scope, environment, created,
+  last-used, expiry, status, usage, dan anomaly;
+- create dengan one-time reveal; hash-only persistence; rotate dengan overlap
+  window; revoke individual; emergency revoke-all;
+- scopes yang dijelaskan per capability dan tidak dapat melewati workspace;
+- per-key quota/rate policy, reservation, idempotency, replay protection,
+  metering, and anomaly response;
+- signed report verification metadata, issuer/version, canonical payload,
+  and key rotation;
+- webhook endpoint registry dengan ownership, SSRF-safe validation, signature
+  rotation, test delivery, retry, dead-letter, and replay policy;
+- API version, SDK, OpenAPI, changelog, deprecation, status, and sandbox;
+- copy-safe setup instructions: secret manager examples, no plaintext key in
+  URL, browser storage, source, telemetry, or logs.
+
+**B. Shared Reports integration**
+
+- workspace defaults untuk visibility, audience, redaction, sections, locale,
+  expiry, and access notification;
+- publication manifest preview sebelum publish;
+- “preview as recipient” yang tidak pernah melewati server-side redaction;
+- immutable revision, latest-vs-issued indicator, revoke, rotate, expire,
+  archive, and access event;
+- report-to-case, report-to-compare, report-to-community, and report-to-API
+  handoff dengan lineage;
+- signed/export package dengan checksum, snapshot timestamp, schema version,
+  and verification instructions;
+- recipient access tidak dapat menemukan workspace/resource lain melalui
+  enumeration.
+
+**C. Billing and entitlement integration**
+
+- capability-based plan catalog sebagai source of truth;
+- usage dashboard: consumed, reserved, available, reset date, projected
+  usage, and blocked reason;
+- plan change impact preview terhadap scans, Watchtower targets, API quota,
+  seats, retention, reports, exports, and community;
+- checkout/payment method/invoice hanya setelah billing provider authorized;
+- owner-only billing mutation dengan step-up dan audit;
+- upgrade/downgrade/proration state machine dan webhook reconciliation;
+- downgrade blocker untuk active resources yang melampaui entitlement;
+- grace period, failed payment, cancellation, and restore flow yang eksplisit;
+- billing data tidak pernah dicampur dengan evidence truth atau security status.
+
+**D. Unified integration UX**
+
+- overview card: API health, share exposure, usage, billing, and attention;
+- preflight impact simulator sebelum key/share/plan mutation;
+- “effective access preview” untuk user, member, API key, recipient, dan role;
+- dry-run untuk sharing, key rotation, plan downgrade, dan webhook changes;
+- consistent success/pending/blocked/failed/retry status;
+- incident banner jika provider/API/billing unavailable tanpa menyamarkan
+  evidence sebagai aman;
+- exportable integration manifest tanpa secrets;
+- bilingual docs dan in-product guidance.
+
+**Output wajib Track 3**
+
+1. API Access UI production-grade sesuai API Access roadmap A0–A8.
+2. Shared Report policy console sesuai S1–S12.
+3. Billing entitlement and usage console dengan provider truth.
+4. Unified impact preview, audit, and recovery.
+5. Contract/security/load/replay/provider-outage acceptance suite.
+
+**Dependency:** Track 1 untuk security, scope, audit, effective settings;
+Track 2 untuk delivery and incident signals; API Access A0–A8; Shared Report
+S1–S12; billing provider authorization; production durable persistence/queue.
+
+## 6B. Recommended execution order
+
+```text
+S0 contract/inventory
+  → Track 1A + Track 1C (schema, precedence, audit)
+  → Track 1B + Track 1D (security center UX)
+  → Track 2A + Track 2B (event/policy/inbox)
+  → Track 2C (delivery and Evidence Pulse)
+  → Track 3A (API key/access control plane)
+  → Track 3B (sharing/report policy)
+  → Track 3C (billing/entitlement)
+  → Track 3D (unified impact simulation and release hardening)
+```
+
+Track 1A/1C dapat berjalan paralel dengan threat modeling. Track 2A dapat mulai
+setelah event taxonomy disepakati, tetapi delivery production tidak boleh
+dirilis sebelum durable queue, retry, and dead-letter tersedia. Track 3A–3C
+dapat berjalan paralel setelah Track 1 security/audit contract stabil; Track 3D
+menjadi final integration gate.
+
+## 6C. Non-negotiable integration scenarios
+
+Sebelum tiga track dianggap selesai, skenario berikut wajib terbukti:
+
+1. API key hampir expired → user menerima warning → rotate → overlap aman →
+   key lama revoked → semua event/audit konsisten.
+2. Shared report berisi private note → preflight menandai redaction →
+   recipient preview tidak menampilkan note → access event tercatat.
+3. Watchtower menghasilkan satu perubahan dengan tiga channel → satu pulse,
+   grouped delivery, retry hanya yang gagal, dan acknowledgment tidak
+   mengubah source evidence.
+4. Workspace owner downgrade plan → impact preview menunjukkan watchlist,
+   API quota, member, report, dan retention yang terdampak → downgrade blocked
+   atau approved sesuai policy, tanpa silent deletion.
+5. User mengaktifkan quiet hours → critical security/API compromise event tetap
+   terlihat → event biasa masuk digest dalam timezone yang benar.
+6. Dua admin menyimpan policy bersamaan → stale write ditolak dengan diff →
+   tidak ada policy lost update.
+7. Emergency lockdown → sessions, API keys, webhooks, shares, and invites
+   dicabut sesuai scope → recovery path tersedia → audit tidak dapat dihapus.
+8. Provider/billing/notification outage → Settings menampilkan `UNAVAILABLE`
+   atau `DEGRADED` dengan tindakan yang aman; tidak ada fake success dan tidak
+   ada evidence status yang diratakan.
+
 ### S7 — Advanced intelligence and long-term adaptability (LATER)
 
 Directional capabilities setelah fondasi aman:
