@@ -2273,3 +2273,251 @@ html:not([data-theme="light"]) .verification-trail-card {
   html:not([data-theme="light"]) .scan-form-card form { grid-template-columns: 1fr; gap: 5px; }
   html:not([data-theme="light"]) .scan-form-card .primary-button { margin-top: 12px; }
 }
+
+/* Full analysis report — dark mode surface and reading hierarchy.
+   This block intentionally comes after the legacy report rules so every
+   report-only hardcoded light surface is neutralized in one place. */
+html:not([data-theme="light"]) .dashboard-report {
+  color: var(--joben-text);
+  background: #0d1721;
+  border-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .dashboard-deep {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .report-section {
+  background: #111d28;
+  border-color: var(--joben-line);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .18);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .section-heading {
+  border-bottom-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .section-heading h2,
+html:not([data-theme="light"]) .dashboard-deep .subheading,
+html:not([data-theme="light"]) .dashboard-deep .metric .data-value,
+html:not([data-theme="light"]) .dashboard-deep .power-node > strong,
+html:not([data-theme="light"]) .dashboard-deep .exit-level,
+html:not([data-theme="light"]) .dashboard-deep .impact-card h3,
+html:not([data-theme="light"]) .dashboard-deep .capability-card h3,
+html:not([data-theme="light"]) .dashboard-deep .compound-card h3,
+html:not([data-theme="light"]) .dashboard-deep .context-card-head strong,
+html:not([data-theme="light"]) .dashboard-deep .history-card strong,
+html:not([data-theme="light"]) .dashboard-deep .timeline-item strong,
+html:not([data-theme="light"]) .dashboard-deep .relationship-list strong,
+html:not([data-theme="light"]) .dashboard-deep .evidence-detail summary {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .section-number,
+html:not([data-theme="light"]) .dashboard-deep .section-intro,
+html:not([data-theme="light"]) .dashboard-deep .summary-copy,
+html:not([data-theme="light"]) .dashboard-deep .breakdown-note,
+html:not([data-theme="light"]) .dashboard-deep .pair-note,
+html:not([data-theme="light"]) .dashboard-deep .impact-detail span,
+html:not([data-theme="light"]) .dashboard-deep .capability-card > p,
+html:not([data-theme="light"]) .dashboard-deep .compound-card > p,
+html:not([data-theme="light"]) .dashboard-deep .context-card p,
+html:not([data-theme="light"]) .dashboard-deep .disclaimer,
+html:not([data-theme="light"]) .dashboard-deep .coverage-summary p,
+html:not([data-theme="light"]) .dashboard-deep .coverage-status {
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .data-label,
+html:not([data-theme="light"]) .dashboard-deep .impact-detail strong,
+html:not([data-theme="light"]) .dashboard-deep .evidence-detail .detail-grid strong {
+  color: var(--joben-dim);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .metric-grid,
+html:not([data-theme="light"]) .dashboard-deep .metric,
+html:not([data-theme="light"]) .dashboard-deep .signal-list li,
+html:not([data-theme="light"]) .dashboard-deep .exit-signals,
+html:not([data-theme="light"]) .dashboard-deep .exit-signal,
+html:not([data-theme="light"]) .dashboard-deep .context-market-strip,
+html:not([data-theme="light"]) .dashboard-deep .coverage-summary,
+html:not([data-theme="light"]) .dashboard-deep .timeline,
+html:not([data-theme="light"]) .dashboard-deep .relationship-list,
+html:not([data-theme="light"]) .dashboard-deep .section-heading,
+html:not([data-theme="light"]) .dashboard-deep .disclaimer,
+html:not([data-theme="light"]) .dashboard-deep details.evidence-detail {
+  border-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .context-status-card,
+html:not([data-theme="light"]) .dashboard-deep .consistency-note,
+html:not([data-theme="light"]) .dashboard-deep .profile-card,
+html:not([data-theme="light"]) .dashboard-deep .capability-card,
+html:not([data-theme="light"]) .dashboard-deep .power-node,
+html:not([data-theme="light"]) .dashboard-deep .impact-card,
+html:not([data-theme="light"]) .dashboard-deep .compound-card,
+html:not([data-theme="light"]) .dashboard-deep .context-card,
+html:not([data-theme="light"]) .dashboard-deep .investigation-switch,
+html:not([data-theme="light"]) .dashboard-deep .coverage-cards > div,
+html:not([data-theme="light"]) .dashboard-deep .history-card {
+  background: #162431;
+  border-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .signal-list li,
+html:not([data-theme="light"]) .dashboard-deep .limitation-list li,
+html:not([data-theme="light"]) .dashboard-deep .compact-list li,
+html:not([data-theme="light"]) .dashboard-deep .finding-why,
+html:not([data-theme="light"]) .dashboard-deep .impact,
+html:not([data-theme="light"]) .dashboard-deep .power-tag,
+html:not([data-theme="light"]) .dashboard-deep .timeline-item span,
+html:not([data-theme="light"]) .dashboard-deep .relationship-list span {
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .dashboard-deep table th {
+  color: var(--joben-dim);
+  border-bottom-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .dashboard-deep table td {
+  color: var(--joben-muted);
+  border-bottom-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .dashboard-deep table td strong,
+html:not([data-theme="light"]) .dashboard-deep .finding-title,
+html:not([data-theme="light"]) .dashboard-deep .score-total,
+html:not([data-theme="light"]) .dashboard-deep .score-line strong,
+html:not([data-theme="light"]) .dashboard-deep .score-line b,
+html:not([data-theme="light"]) .dashboard-deep .main-driver {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .calculation,
+html:not([data-theme="light"]) .dashboard-deep .score-explanation {
+  background: #0b151f;
+  border-color: var(--joben-line-bright);
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .calculation strong,
+html:not([data-theme="light"]) .dashboard-deep .calc-total {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .unknown-message {
+  background: #172530;
+  border-color: var(--joben-line-bright);
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .coverage-cards,
+html:not([data-theme="light"]) .dashboard-deep .checklist {
+  background: var(--joben-line);
+  border-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .checklist div {
+  background: #162431;
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .checklist div:before {
+  color: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .status-pill.unknown,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.unavailable,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.error {
+  color: var(--joben-muted);
+  background: #1a2935;
+  border-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .status-pill.detected,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.high,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.very-high,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.critical {
+  color: #ff9696;
+  background: rgba(255, 107, 107, .14);
+  border-color: rgba(255, 119, 119, .45);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .status-pill.verified,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.positive,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.low-risk,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.low {
+  color: var(--joben-green);
+  background: rgba(101, 230, 162, .13);
+  border-color: rgba(101, 230, 162, .4);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .status-pill.demo,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.moderate,
+html:not([data-theme="light"]) .dashboard-deep .status-pill.elevated {
+  color: var(--joben-amber);
+  background: rgba(242, 184, 102, .14);
+  border-color: rgba(242, 184, 102, .42);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .evidence-id {
+  color: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .main-driver {
+  border-left-color: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .main-driver .data-label,
+html:not([data-theme="light"]) .dashboard-deep .status-note {
+  color: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .risk-bar,
+html:not([data-theme="light"]) .dashboard-deep .coverage-track {
+  background: #243744;
+}
+
+html:not([data-theme="light"]) .dashboard-deep .risk-bar > span,
+html:not([data-theme="light"]) .dashboard-deep .coverage-track i {
+  background: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .view-all {
+  color: var(--joben-text);
+  background: #162431;
+  border-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .view-all:hover {
+  color: var(--joben-cyan);
+  background: #1b3440;
+  border-color: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .evidence-detail .detail-grid {
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .dashboard-deep .evidence-detail .detail-grid span {
+  color: var(--joben-text);
+}
+
+@media (max-width: 760px) {
+  html:not([data-theme="light"]) .dashboard-deep .report-section {
+    padding: 20px 17px;
+  }
+
+  html:not([data-theme="light"]) .dashboard-deep .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  html:not([data-theme="light"]) .dashboard-deep .context-overview-grid,
+  html:not([data-theme="light"]) .dashboard-deep .consistency-grid,
+  html:not([data-theme="light"]) .dashboard-deep .coverage-lower {
+    grid-template-columns: 1fr;
+  }
+}

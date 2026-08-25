@@ -26,3 +26,15 @@ The JOBEN NETWORK mark is an abstract interlocking J/N signal glyph, not literal
 **Why:** A geometric monogram scales more clearly from favicon to navigation than raw initials and reinforces the product's network/evidence identity.
 
 **How to apply:** Reuse the SVG monogram and preserve its restrained stroke-flow, orbit, and node motion across brand surfaces; respect reduced-motion settings.
+
+Full analysis reports need a late, report-scoped dark-mode pass that replaces
+legacy light hardcodes in section surfaces, tables, calculations, status pills,
+and nested evidence cards.
+
+**Why:** The report was assembled from an older light presentation layer, so
+global dark variables alone left executive analysis sections white and low
+contrast.
+
+**How to apply:** Add report overrides after legacy report rules, keep distinct
+surface levels for sections and calculations, and verify the full expanded
+report at desktop and mobile sizes—not only the collapsed dashboard summary.
