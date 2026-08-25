@@ -41,6 +41,11 @@ const cancelScanButton = document.querySelector("#cancel-scan");
 const intelligenceDashboard = document.querySelector("#intelligence-dashboard");
 const passportList = document.querySelector("#passport-list");
 const passportCount = document.querySelector("#passport-count");
+const passportWorkspace = document.querySelector("#passport-workspace");
+const passportSelector = document.querySelector("#passport-selector");
+const passportAreaContent = document.querySelector("#passport-area-content");
+const passportWorkspaceTitle = document.querySelector("#passport-workspace-title");
+const passportWorkspaceMeta = document.querySelector("#passport-workspace-meta");
 const watchlistList = document.querySelector("#watchlist-list");
 const watchlistCount = document.querySelector("#watchlist-count");
 const alertList = document.querySelector("#alert-list");
@@ -1395,18 +1400,74 @@ async function cancelScan(jobId) {
   }
 }
 
+let passportCatalog = [];
+
 function renderPassportList(passports) {
+  passportCatalog = passports;
   passportCount.textContent = `${passports.length} PASSPORT${passports.length === 1 ? "" : "S"}`;
   passportList.innerHTML = passports.length ? passports.map((passport) => {
     const current = passport.current || {};
     const score = current.risk?.score;
-    return `<div class="intelligence-row">
+    return `<button type="button" class="intelligence-row passport-row" data-passport-index="${passports.indexOf(passport)}">
       <div><strong>${escapeHtml(truncateAddress(passport.address))}</strong><span>${escapeHtml(passport.networkId)} · ${escapeHtml(formatDate(current.capturedAt))}</span></div>
       <div class="intelligence-row-value"><b class="${scoreTone(score)}">${escapeHtml(score ?? "UNKNOWN")}</b><span>${escapeHtml(current.risk?.level || "UNKNOWN")} · ${passport.snapshotCount} snapshot${passport.snapshotCount === 1 ? "" : "s"}</span></div>
-    </div>`;
+    </button>`;
   }).join("") : `<div class="unknown-message">NO RISK PASSPORTS YET. A completed live scan will create one.</div>`;
+  if (passportSelector) {
+    passportSelector.innerHTML = passports.map((passport, index) => `<option value="${index}">${escapeHtml(passport.networkId)} · ${escapeHtml(truncateAddress(passport.address))}</option>`).join("");
+  }
+  passportList.querySelectorAll("[data-passport-index]").forEach((row) => row.addEventListener("click", () => {
+    if (passportSelector) passportSelector.value = row.dataset.passportIndex;
+    openPassportWorkspace(passports[Number(row.dataset.passportIndex)]);
+  }));
   JobenI18n.translate(passportList);
 }
+
+let passportWorkspaceData = null;
+let passportArea = "overview";
+function passportMetric(label, value, tone = "") {
+  return `<div class="passport-metric"><span>${escapeHtml(label)}</span><strong class="${tone}">${escapeHtml(value ?? "UNKNOWN")}</strong></div>`;
+}
+function renderPassportArea() {
+  const data = passportWorkspaceData;
+  if (!data || !passportAreaContent) return;
+  const current = data.passport.current || {};
+  const risk = current.risk || {};
+  const evidence = current.evidence || [];
+  const trajectory = current.trajectory || {};
+  const changes = current.changes || {};
+  const timeline = data.timeline || [];
+  const graph = data.graph || { nodes: [], edges: [] };
+  const watch = data.watchlists?.[0];
+  const openAlerts = (data.alerts || []).filter((item) => item.status !== "ACKNOWLEDGED");
+  const area = {
+    overview: `<div class="passport-metric-grid">${passportMetric("Risk score", risk.score, scoreTone(risk.score))}${passportMetric("Reliability", current.reliabilityScore)}${passportMetric("Evidence points", evidence.length)}${passportMetric("Snapshots", timeline.length)}${passportMetric("Posture", risk.score == null ? "INSUFFICIENT EVIDENCE" : risk.score >= 70 ? "HIGH PRIORITY REVIEW" : risk.score >= 45 ? "CONTINUE WITH CAUTION" : "MONITOR CLOSELY")}${passportMetric("Last captured", formatDate(current.capturedAt))}</div><div class="passport-callout"><strong>Evidence posture</strong><p>${risk.score == null ? "No reliable final risk score is available. Complete a live scan with sufficient evidence before making a review decision." : `Current posture is derived from the latest completed snapshot. Risk (${risk.score}) is separate from reliability (${current.reliabilityScore ?? "UNKNOWN"}); this is not financial advice.`}</p></div>`,
+    evidence: `<div class="passport-metric-grid">${passportMetric("Risk", risk.score)}${passportMetric("Reliability", current.reliabilityScore)}${passportMetric("Evidence coverage", evidence.length ? `${evidence.length} recorded` : "UNKNOWN")}${passportMetric("Data status", current.dataStatus)}</div><div class="passport-table">${evidence.length ? evidence.slice(0, 12).map((item) => `<div class="passport-evidence-row"><strong>${escapeHtml(item.label || item.id || item.key || "Evidence point")}</strong><span class="evidence-state">${escapeHtml(item.status || item.evidenceStatus || "UNKNOWN")}</span><small>${escapeHtml(item.evidenceId || item.source || "Reference unavailable")}</small></div>`).join("") : `<div class="unknown-message">No evidence points are available in this snapshot.</div>`}</div>`,
+    changes: `<div class="passport-metric-grid">${passportMetric("Trajectory", trajectory.status || "INSUFFICIENT_HISTORY")}${passportMetric("Change events", changes ? Object.keys(changes).length : 0)}${passportMetric("Elapsed", trajectory.elapsedHours == null ? "—" : `${trajectory.elapsedHours}h`)}${passportMetric("Momentum", trajectory.changes?.length ? "CHANGE DETECTED" : "STABLE")}</div><div class="passport-table">${timeline.slice(0, 8).map((item) => `<div class="passport-evidence-row"><strong>${escapeHtml(item.trajectory?.status || "SNAPSHOT")}</strong><span>${escapeHtml(formatDate(item.capturedAt))}</span><small>${escapeHtml(item.why || "Initial evidence snapshot.")}</small></div>`).join("") || `<div class="unknown-message">A second completed snapshot is required for trajectory analysis.</div>`}</div>`,
+    control: `<div class="passport-metric-grid">${passportMetric("Observed relations", graph.edges.length)}${passportMetric("Control nodes", graph.nodes.filter((n) => ["owner", "proxy"].includes(n.type)).length)}${passportMetric("Watch status", watch?.status || "NOT MONITORED")}${passportMetric("Network", data.passport.networkId)}</div><div class="passport-table">${graph.edges.length ? graph.edges.map((edge) => `<div class="passport-evidence-row"><strong>${escapeHtml(edge.relation)}</strong><span>${escapeHtml(edge.evidenceStatus || "UNKNOWN")}</span><small>${escapeHtml(edge.source)} → ${escapeHtml(edge.target)}</small></div>`).join("") : `<div class="unknown-message">No observed control or market relationship is available.</div>`}</div><div class="passport-callout"><strong>Relationship boundary</strong><p>Only direct observations are shown here. Inferred relationships require independent verification and are never treated as ownership claims.</p></div>`,
+    review: `<div class="passport-metric-grid">${passportMetric("Open alerts", openAlerts.length)}${passportMetric("Monitoring", watch?.status || "NOT MONITORED")}${passportMetric("Next check", watch?.nextCheckAt ? formatDate(watch.nextCheckAt) : "Not scheduled")}${passportMetric("Recommended action", risk.score == null ? "REFRESH EVIDENCE" : openAlerts.length ? "REVIEW ALERT" : "NO OPEN ALERT")}</div><div class="passport-table">${openAlerts.length ? openAlerts.map((item) => `<div class="passport-evidence-row"><strong>${escapeHtml(item.message)}</strong><span>${escapeHtml(item.status)}</span><small>${escapeHtml(formatDate(item.createdAt))} · before/after snapshot linked</small></div>`).join("") : `<div class="unknown-message">No open evidence-backed alerts. Use Watchtower to schedule monitoring.</div>`}</div>`,
+    audit: `<div class="passport-metric-grid">${passportMetric("Evidence hash", current.evidenceHash ? current.evidenceHash.slice(0, 16) + "…" : "UNKNOWN")}${passportMetric("Engine version", current.engineVersion)}${passportMetric("Schema version", current.evidenceSchemaVersion)}${passportMetric("Immutable snapshots", timeline.length)}</div><div class="passport-table">${timeline.map((item) => `<div class="passport-evidence-row"><strong>${escapeHtml(item.id)}</strong><span>${escapeHtml(formatDate(item.capturedAt))}</span><small>Hash ${escapeHtml(item.evidenceHash || "UNKNOWN")} · replay-safe snapshot</small></div>`).join("")}</div><div class="passport-callout"><strong>Audit boundary</strong><p>Passport history is append-only. Comparison and replay expose the recorded state; they do not rewrite historical evidence.</p></div>`,
+  };
+  passportAreaContent.innerHTML = `<div class="passport-area-heading"><div><span class="card-kicker">WORKSPACE AREA</span><h4>${escapeHtml({ overview: "Overview", evidence: "Risk & Evidence", changes: "Changes & Trajectory", control: "Control & Market", review: "Review & Monitoring", audit: "Compare & Audit" }[passportArea])}</h4></div><span class="data-label">LIVE PASSPORT DATA</span></div>${area[passportArea]}`;
+}
+async function openPassportWorkspace(passport) {
+  if (!passport || !passportWorkspace) return;
+  passportWorkspace.hidden = false;
+  passportWorkspaceTitle.textContent = `${passport.networkId} · ${truncateAddress(passport.address)}`;
+  passportWorkspaceMeta.textContent = `${passport.status} · ${passport.snapshotCount} snapshot${passport.snapshotCount === 1 ? "" : "s"} · updated ${formatDate(passport.updatedAt)}`;
+  passportArea = "overview";
+  passportAreaContent.innerHTML = `<div class="unknown-message">Loading Passport workspace…</div>`;
+  try {
+    passportWorkspaceData = await apiJson(`/api/risk-passports/${encodeURIComponent(passport.networkId)}/${encodeURIComponent(passport.address)}/workspace`);
+    renderPassportArea();
+  } catch (error) { passportAreaContent.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`; }
+}
+passportSelector?.addEventListener("change", () => openPassportWorkspace(passportCatalog[Number(passportSelector.value)]));
+document.querySelectorAll("[data-passport-area]").forEach((button) => button.addEventListener("click", () => {
+  passportArea = button.dataset.passportArea;
+  document.querySelectorAll("[data-passport-area]").forEach((item) => item.classList.toggle("active", item === button));
+  renderPassportArea();
+}));
 
 function renderWatchlistList(watchlists) {
   const active = watchlists.filter((item) => item.status === "active").length;
@@ -1478,6 +1539,7 @@ async function loadIntelligenceDashboard() {
       apiJson("/api/cases"),
     ]);
     renderPassportList(passports.passports || []);
+    if ((passports.passports || []).length) openPassportWorkspace(passports.passports[0]);
     renderWatchlistList(watchlists.watchlists || []);
     renderAlertList(alerts.events || []);
     renderCaseList(cases.cases || []);

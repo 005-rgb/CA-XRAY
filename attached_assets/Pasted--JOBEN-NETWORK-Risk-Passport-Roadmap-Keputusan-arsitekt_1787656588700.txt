@@ -1,0 +1,662 @@
+# JOBEN NETWORK — Risk Passport Roadmap
+
+## Keputusan arsitektur
+
+Risk Passport memiliki roadmap dan dokumen sendiri.
+
+**Alasan:**
+
+- Core Scan menghasilkan evidence dan satu snapshot analisis.
+- Risk Passport mengelola identitas contract secara longitudinal.
+- Passport memiliki lifecycle, timeline, alerting, comparison, notes, dan
+  sharing yang tidak dimiliki Core Scan.
+- Pemisahan ini memungkinkan Core Scan berkembang tanpa menjadikan dashboard
+  Passport sebagai tempat logika provider.
+- Passport tetap bergantung langsung pada kontrak output Core Scan dan tidak
+  boleh membuat evidence baru secara diam-diam.
+
+Hubungan modul:
+
+```text
+Core Scan
+  validation → provider evidence → normalization → risk analysis
+      ↓
+Passport Snapshot
+      ↓
+Risk Passport
+  history → change intelligence → monitoring → review decisions
+```
+
+Roadmap Core Scan tetap menjadi sumber kebenaran untuk scan dan evidence:
+`doc/CORE-SCAN-ROADMAP.md`.
+
+Watchtower adalah submodul Risk Passport dengan roadmap operasional tersendiri:
+`doc/WATCHTOWER-ROADMAP.md`.
+
+---
+
+## 1. Jumlah submodul
+
+Risk Passport terdiri dari **12 submodul** yang dikelompokkan dalam tiga
+lapisan:
+
+### Lapisan A — Foundation
+
+1. Passport Identity & Lifecycle
+2. Snapshot and Evidence Ledger
+3. Risk Fingerprint
+4. Reliability, Coverage & Uncertainty
+
+### Lapisan B — Intelligence
+
+5. Freshness & Passport Health
+6. Material Change Intelligence
+7. Risk Trajectory & Momentum
+8. Control, Ownership & Relationship Map
+9. Distribution, Liquidity & Exitability
+
+### Lapisan C — Action and Collaboration
+
+10. Evidence-Based Review Queue
+11. Watchtower and Alert Rules
+12. Comparison, Replay, Notes & Audit Package
+
+Jumlah ini adalah batas yang paling baik untuk v1:
+
+- cukup kecil untuk dibangun sebagai satu produk terpadu
+- cukup terpisah agar setiap kemampuan dapat diuji dan dioperasikan
+- tidak memecah fitur visual menjadi submodul palsu
+- tetap memungkinkan fase delivery yang jelas
+
+---
+
+## 2. Prinsip non-negotiable
+
+1. Passport tidak pernah mengubah evidence Core Scan.
+2. Passport tidak membuat klaim keamanan baru dari histori.
+3. Risk score, reliability, coverage, freshness, dan uncertainty selalu
+   ditampilkan sebagai dimensi terpisah.
+4. `UNKNOWN`, `UNAVAILABLE`, `UNVERIFIED`, `CONFLICT`, `PARTIAL`, dan
+   `VERIFIED` tetap berbeda di seluruh timeline.
+5. Perubahan hanya disebut material jika memiliki rule, delta, dan evidence
+   reference.
+6. Data lama tidak dihapus hanya karena snapshot baru masuk.
+7. Snapshot immutable; koreksi dilakukan melalui snapshot atau event baru.
+8. Semua rekomendasi review harus dapat ditelusuri ke evidence.
+9. Cross-network relationship boleh berupa hipotesis, tidak boleh dianggap
+   common ownership tanpa verification.
+10. Passport public view tidak membocorkan provider identity internal,
+    workspace data, atau catatan investigator.
+11. Semua user-facing module baru harus tersedia dalam English dan Bahasa
+    Indonesia.
+12. Tampilan mobile tidak boleh menghilangkan status uncertainty atau
+    provenance summary.
+
+---
+
+## 3. Definisi objek utama
+
+### Passport
+
+Identitas longitudinal untuk pasangan:
+
+```text
+workspace + network + canonical address
+```
+
+Passport memiliki status lifecycle:
+
+- `ACTIVE`
+- `MONITORING`
+- `REVIEW_REQUIRED`
+- `STALE`
+- `ARCHIVED`
+
+### Snapshot
+
+Immutable capture dari satu hasil Core Scan pada waktu tertentu.
+
+Minimum metadata:
+
+- snapshot ID
+- scan/job ID
+- network dan address
+- captured-at
+- engine version
+- evidence schema version
+- data status
+- risk score dan level
+- reliability
+- coverage
+- findings
+- changes
+- evidence hash
+
+### Material Change
+
+Perubahan antar snapshot yang:
+
+- melewati threshold yang ditentukan
+- mengubah decision posture
+- menyentuh control/ownership
+- menurunkan evidence health
+- atau merupakan kombinasi beberapa sinyal.
+
+### Review Posture
+
+Output tindakan yang tidak menjadi nasihat finansial:
+
+- `NO DECISION — INSUFFICIENT EVIDENCE`
+- `REVIEW REQUIRED`
+- `CONTINUE WITH CAUTION`
+- `MONITOR CLOSELY`
+- `HIGH PRIORITY REVIEW`
+- `EVIDENCE STALE — REFRESH REQUIRED`
+
+---
+
+## 4. Spesifikasi 12 submodul
+
+## 4.1 Passport Identity & Lifecycle
+
+### Fungsi
+
+- Membuat atau menemukan Passport berdasarkan workspace, network, dan
+  canonical address.
+- Menjaga identity tidak bercampur antar network.
+- Menetapkan lifecycle Passport.
+- Mendeteksi address normalization dan identity conflict.
+
+### Inovasi
+
+**Canonical Identity Guard** memastikan pair address, proxy address, token
+address, dan network tidak tercampur menjadi satu Passport yang salah.
+
+### Done criteria
+
+- Passport Ethereum dan Base untuk address sama tetap terpisah.
+- Duplicate scan tidak membuat Passport baru.
+- Invalid identity tidak dapat masuk ke timeline.
+- Ownership transfer tidak mengubah canonical contract identity.
+
+---
+
+## 4.2 Snapshot and Evidence Ledger
+
+### Fungsi
+
+- Menyimpan snapshot immutable.
+- Menghubungkan snapshot dengan scan job dan evidence hash.
+- Menyimpan status, confidence, freshness timestamp, dan schema version.
+- Menyediakan append-only timeline.
+
+### Inovasi
+
+**Evidence Replay** memungkinkan investigator melihat persis apa yang diketahui
+pada tanggal tertentu, bukan hanya kondisi terbaru.
+
+### Done criteria
+
+- Snapshot lama tidak di-overwrite.
+- Repeated scan dengan evidence identik dapat dideduplikasi secara aman.
+- Perubahan engine/schema tidak menghapus konteks snapshot lama.
+- Evidence hash dapat digunakan untuk mendeteksi perubahan isi.
+
+---
+
+## 4.3 Risk Fingerprint
+
+### Fungsi
+
+Mengubah hasil scan menjadi profil multidimensi:
+
+- control risk
+- trading risk
+- holder concentration
+- liquidity fragility
+- deployer risk
+- market/project risk
+
+### Inovasi
+
+Dua contract dengan total risk score sama tetap dapat dibedakan berdasarkan
+jenis risiko dominannya.
+
+### Done criteria
+
+- Risk score bukan satu-satunya visual utama.
+- Setiap dimensi memiliki input evidence yang jelas.
+- Kategori unknown tidak dipaksa menjadi nilai nol.
+- Fingerprint menampilkan status confidence dan coverage.
+
+---
+
+## 4.4 Reliability, Coverage & Uncertainty
+
+### Fungsi
+
+Menjawab tiga pertanyaan berbeda:
+
+1. Seberapa besar risiko yang terlihat?
+2. Seberapa kuat bukti yang mendukungnya?
+3. Berapa bagian yang belum dapat dinilai?
+
+### Inovasi
+
+**Uncertainty Budget** menampilkan persentase weighted risk yang belum dapat
+dinilai, termasuk kategori dan evidence penyebabnya.
+
+Contoh:
+
+```text
+Risk: 63
+Reliability: 88
+Coverage: 74%
+Uncertainty budget: 26%
+```
+
+### Done criteria
+
+- Reliability tidak naik hanya karena banyak provider mengembalikan data
+  kosong.
+- Uncertainty dapat ditelusuri ke field/category tertentu.
+- Partial holder history tidak dipresentasikan sebagai full distribution.
+- Passport dapat menyatakan “insufficient evidence” meskipun score parsial
+  tersedia.
+
+---
+
+## 4.5 Freshness & Passport Health
+
+### Fungsi
+
+- Mengukur umur evidence per kategori.
+- Membedakan evidence immutable dan volatile.
+- Menentukan kapan Passport stale.
+- Menghasilkan Passport Health Score yang bukan safety score.
+
+### Inovasi
+
+**Freshness-aware reliability**: liquidity, tax, holder, owner, dan deployment
+memiliki expiry behavior yang berbeda.
+
+### Done criteria
+
+- Liquidity lama tidak diperlakukan sama dengan deployment metadata lama.
+- Stale critical evidence menurunkan health atau decision posture.
+- User melihat kapan setiap evidence terakhir diambil.
+- Refresh recommendation memiliki alasan yang spesifik.
+
+---
+
+## 4.6 Material Change Intelligence
+
+### Fungsi
+
+- Membandingkan snapshot berurutan.
+- Menghasilkan before/after/delta.
+- Mengklasifikasikan informational, material, dan critical change.
+- Menghindari alert untuk noise.
+
+### Inovasi
+
+**Compound Change Detection** mendeteksi rangkaian perubahan yang berbahaya
+ketika digabung, misalnya:
+
+```text
+owner change
+  + proxy change
+  + liquidity drop
+  = critical review event
+```
+
+### Done criteria
+
+- Semua material change menyertakan rule dan evidence reference.
+- Perubahan unknown tidak dianggap sebagai improvement atau deterioration.
+- Threshold berbeda untuk risk score, liquidity, tax, owner, dan holders.
+- Change event idempotent dan tidak menggandakan alert.
+
+---
+
+## 4.7 Risk Trajectory & Momentum
+
+### Fungsi
+
+- Mengukur arah perubahan risiko.
+- Menghitung delta dan relative delta.
+- Menentukan trend:
+  - `IMPROVING`
+  - `STABLE`
+  - `WORSENING`
+  - `VOLATILE`
+  - `INSUFFICIENT_HISTORY`
+
+### Inovasi
+
+**Risk Momentum** memprioritaskan contract yang memburuk cepat, bukan hanya
+contract dengan score tertinggi.
+
+### Done criteria
+
+- Minimal dua snapshot diperlukan untuk trajectory.
+- Interval waktu ditampilkan.
+- Missing evidence tidak menghasilkan delta palsu.
+- Momentum tidak mengubah risk score historis.
+
+---
+
+## 4.8 Control, Ownership & Relationship Map
+
+### Fungsi
+
+- Menampilkan owner, proxy, implementation, deployer, dan privileged roles.
+- Menunjukkan hubungan langsung versus inferred.
+- Menyimpan ownership change timeline.
+
+### Inovasi
+
+**Control Path** menunjukkan jalur pengaruh:
+
+```text
+owner → proxy admin → implementation → trading logic
+```
+
+### Done criteria
+
+- Direct observation diberi label `OBSERVED`.
+- Hipotesis diberi label `INFERRED`.
+- Tidak ada klaim common ownership tanpa verification.
+- Owner renounced tidak otomatis berarti seluruh control hilang.
+
+---
+
+## 4.9 Distribution, Liquidity & Exitability
+
+### Fungsi
+
+- Menghubungkan holder concentration, liquidity, taxes, restrictions, dan
+  read-only exit simulation.
+- Menampilkan dampak praktis tanpa memberi rekomendasi trading.
+
+### Inovasi
+
+**Exitability Context** menggabungkan:
+
+- sell restriction
+- tax
+- liquidity depth
+- holder concentration
+- quote result
+- quote limitations.
+
+### Done criteria
+
+- Quote tidak disebut sebagai bukti transaksi berhasil.
+- Liquidity dan holder data memiliki freshness masing-masing.
+- Burn address dan contract balance tidak salah dihitung sebagai wallet
+  concentration.
+- Unknown exitability tetap tampil sebagai unknown.
+
+---
+
+## 4.10 Evidence-Based Review Queue
+
+### Fungsi
+
+Menghasilkan daftar review berikutnya berdasarkan evidence:
+
+- review owner privileges
+- refresh stale liquidity
+- inspect top holder
+- wait for complete lifetime history
+- resolve provider disagreement
+
+### Inovasi
+
+Passport bukan hanya dashboard pasif; ia menjawab **apa yang harus dilakukan
+berikutnya** tanpa menggantikan investigator.
+
+### Done criteria
+
+- Setiap item memiliki evidence reference dan reason.
+- Item dapat diprioritaskan.
+- Investigator dapat acknowledge, defer, resolve, atau reopen.
+- AI atau rule engine tidak boleh membuat task tanpa evidence anchor.
+
+---
+
+## 4.11 Watchtower and Alert Rules
+
+### Fungsi
+
+- Menjalankan periodic re-scan.
+- Memantau event material.
+- Mengirim alert sesuai rule yang dipilih user.
+- Mencegah duplicate alert.
+
+### Inovasi
+
+**Monitoring Thesis**: user menentukan hipotesis yang ingin dipantau:
+
+- owner change
+- proxy implementation change
+- tax change
+- liquidity drop
+- holder concentration increase
+- deployer-linked behavior
+
+### Done criteria
+
+- Watch rule tenant-scoped.
+- Interval memiliki batas minimum dan maksimum.
+- Alert menyimpan before/after snapshot.
+- Alert dapat di-acknowledge tanpa menghapus evidence.
+- Provider failure tidak menghasilkan alert perubahan palsu.
+
+---
+
+## 4.12 Comparison, Replay, Notes & Audit Package
+
+### Fungsi
+
+- Membandingkan Passport lintas contract/network.
+- Membuka Replay View pada tanggal tertentu.
+- Menyimpan investigator notes dengan evidence anchor.
+- Mengekspor audit package.
+
+### Inovasi
+
+**Decision Context Export** berisi bukan hanya score terbaru, tetapi:
+
+- snapshot yang dipakai
+- evidence coverage
+- unresolved uncertainty
+- material changes
+- notes
+- decision posture
+- timestamp dan schema version.
+
+### Done criteria
+
+- Comparison tidak mengklaim contract A lebih aman tanpa context.
+- Replay tidak mengubah histori.
+- Note yang evidence-nya berubah diberi warning.
+- Export public menghapus private workspace notes.
+- Audit package dapat diverifikasi dengan evidence hash.
+
+---
+
+## 5. Delivery roadmap
+
+### Phase P0 — Passport truth layer
+
+Submodul:
+
+- 1. Identity & Lifecycle
+- 2. Snapshot and Evidence Ledger
+- 3. Risk Fingerprint
+- 4. Reliability, Coverage & Uncertainty
+
+Release gate:
+
+- Passport dapat dibuat dari completed live scan.
+- Snapshot immutable.
+- Latest view dan historical view konsisten.
+- Risk score tidak dipisahkan dari coverage dan reliability.
+
+### Phase P1 — Change intelligence
+
+Submodul:
+
+- 5. Freshness & Passport Health
+- 6. Material Change Intelligence
+- 7. Risk Trajectory & Momentum
+
+Release gate:
+
+- User dapat melihat apa yang berubah dan kapan.
+- Stale evidence terlihat.
+- Trend tidak dibuat dari data incomplete.
+- Material change tidak menghasilkan duplicate event.
+
+### Phase P2 — Investigation depth
+
+Submodul:
+
+- 8. Control, Ownership & Relationship Map
+- 9. Distribution, Liquidity & Exitability
+- 10. Evidence-Based Review Queue
+
+Release gate:
+
+- Passport menghubungkan sinyal ke review action.
+- Direct observation dan inference berbeda.
+- Setiap action memiliki evidence anchor.
+
+### Phase P3 — Monitoring and collaboration
+
+Submodul:
+
+- 11. Watchtower and Alert Rules
+- 12. Comparison, Replay, Notes & Audit Package
+
+Release gate:
+
+- Watchtower memantau thesis yang dipilih user.
+- Alert memiliki before/after evidence.
+- Replay dan audit export dapat dipakai untuk review formal.
+
+---
+
+## 6. UX blueprint
+
+Urutan halaman Passport:
+
+1. Contract identity dan network
+2. Review posture
+3. Risk Fingerprint
+4. Risk / Reliability / Coverage / Health
+5. Uncertainty Budget
+6. Material Changes Since Last Review
+7. Why This Score?
+8. Control Path dan Ownership
+9. Distribution, Liquidity, dan Exitability
+10. Risk Momentum
+11. Recommended Next Checks
+12. Evidence Timeline
+13. Watchtower rules dan alerts
+14. Comparison / Replay
+15. Investigator notes dan audit package
+
+Pada mobile:
+
+- bagian dapat collapse tanpa menyembunyikan status
+- evidence table memakai horizontal scroll container yang jelas
+- primary review action tetap terlihat
+- risk posture dan uncertainty muncul sebelum detail panjang
+- tidak ada informasi penting yang hanya tersedia lewat hover
+
+---
+
+## 7. Quality gates
+
+### Truth gate
+
+- Tidak ada synthetic fallback.
+- Tidak ada implicit zero.
+- Semua score memiliki coverage context.
+- Semua material changes memiliki evidence reference.
+
+### Temporal gate
+
+- Snapshot immutable.
+- Timeline append-only.
+- Replay menghasilkan state historis yang konsisten.
+- Stale evidence tidak menghilang dari histori.
+
+### Security gate
+
+- Passport workspace-scoped.
+- Public view tidak membocorkan notes atau provider internals.
+- Audit event append-only.
+- Cross-network inference tidak menjadi ownership claim.
+
+### Responsive gate
+
+- Desktop dan mobile visual regression.
+- Minimum width 390px.
+- Tidak ada horizontal overflow.
+- Loading, empty, partial, stale, error, dan completed states diuji.
+
+### Localization gate
+
+- English dan Bahasa Indonesia tersedia bersamaan.
+- Status evidence tetap memiliki makna yang sama.
+- Technical terms tidak diterjemahkan secara ambigu.
+
+---
+
+## 8. Definition of Done Risk Passport
+
+Risk Passport disebut **completed, valid, dan siap dipakai** apabila:
+
+1. Identity contract konsisten.
+2. Minimal satu completed live snapshot tersedia.
+3. Snapshot dan evidence hash tersimpan immutable.
+4. Risk fingerprint tersedia bersama reliability dan coverage.
+5. Uncertainty terlihat dan tidak disamarkan.
+6. Latest state dapat dibandingkan dengan snapshot sebelumnya.
+7. Material change mempunyai before/after dan reference.
+8. Freshness setiap evidence kritis diketahui.
+9. Review posture tidak menjadi financial recommendation.
+10. Review queue hanya berisi action yang evidence-backed.
+11. Watchtower tidak membuat false alert dari provider failure.
+12. Public/private boundary berjalan.
+13. English dan Bahasa Indonesia tersedia.
+14. Desktop/mobile flow lulus responsive gate.
+15. Audit export dapat menjelaskan mengapa posture tersebut muncul.
+
+---
+
+## 9. Batasan dan keputusan yang ditunda
+
+Tidak masuk ke Risk Passport v1:
+
+- wallet connection
+- automatic trading action
+- financial recommendation
+- probabilistic scam verdict
+- popularity leaderboard
+- opaque AI-generated safety score
+- common ownership claim tanpa verification
+- penghapusan snapshot historis
+
+Keputusan teknis yang harus dibuat sebelum P1:
+
+- freshness TTL per evidence family
+- materiality thresholds
+- retention policy
+- notification channels
+- durable continuation queue untuk long history
+- provider cost budget per watch rule

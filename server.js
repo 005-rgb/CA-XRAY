@@ -953,6 +953,24 @@ async function handleApiUnsafe(req, res, url, context) {
   }
 
   const passportMatch = url.pathname.match(/^\/api\/risk-passports\/([^/]+)\/(0x[a-fA-F0-9]{40})$/);
+  const passportWorkspaceMatch = url.pathname.match(/^\/api\/risk-passports\/([^/]+)\/(0x[a-fA-F0-9]{40})\/workspace$/);
+  if (req.method === "GET" && passportWorkspaceMatch) {
+    const authenticated = requireAuthenticated(context);
+    const [, networkId, address] = passportWorkspaceMatch;
+    const passport = intelligenceStore.getPassport(authenticated.workspaceId, networkId, address);
+    if (!passport) {
+      sendJson(res, 404, { error: "PASSPORT_NOT_FOUND", message: "Risk Passport not found." }, { context });
+      return true;
+    }
+    const timeline = intelligenceStore.listTimeline(authenticated.workspaceId, networkId, address);
+    const graph = intelligenceStore.getGraph(authenticated.workspaceId, networkId, address);
+    const watchlists = intelligenceStore.listWatchlists(authenticated.workspaceId)
+      .filter((item) => item.networkId === networkId && item.address === address.toLowerCase());
+    const alerts = intelligenceStore.listAlerts(authenticated.workspaceId)
+      .filter((item) => item.networkId === networkId && item.address === address.toLowerCase());
+    sendJson(res, 200, { passport, timeline, graph, watchlists, alerts }, { context });
+    return true;
+  }
   if (req.method === "GET" && passportMatch) {
     const authenticated = requireAuthenticated(context);
     const passport = intelligenceStore.getPassport(authenticated.workspaceId, passportMatch[1], passportMatch[2]);

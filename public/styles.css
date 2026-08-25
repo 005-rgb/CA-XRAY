@@ -1573,6 +1573,43 @@ body, body.private-view { background: var(--joben-void); color: var(--joben-text
 @keyframes signal-drift { 0%, 100% { opacity: .2; transform: rotate(-17deg) translateX(-2%); } 50% { opacity: .8; transform: rotate(-17deg) translateX(3%); } }
 @keyframes node-blink { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 
+/* Risk Passport workspace */
+.passport-row { width: 100%; border: 0; border-bottom: 1px solid var(--joben-line); color: inherit; text-align: left; cursor: pointer; }
+.passport-row:hover { background: rgba(77,225,208,.06); }
+.passport-workspace { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--joben-line-bright); }
+.passport-workspace-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+.passport-workspace-head h3 { margin: 5px 0 4px; color: var(--joben-text); }
+.passport-workspace-head p { margin: 0; color: var(--joben-muted); font-size: 11px; }
+.passport-select-label { display: grid; gap: 6px; min-width: 190px; color: var(--joben-dim); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
+.passport-select-label select { padding: 9px 10px; border: 1px solid var(--joben-line-bright); border-radius: 4px; color: var(--joben-text); background: #09121b; font: inherit; letter-spacing: normal; }
+.passport-area-nav { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 9px; border-bottom: 1px solid var(--joben-line); }
+.passport-area-nav button { flex: 0 0 auto; padding: 9px 11px; border: 1px solid transparent; border-radius: 4px; color: var(--joben-muted); background: transparent; font: inherit; font-size: 10px; cursor: pointer; }
+.passport-area-nav button:hover, .passport-area-nav button.active { color: var(--joben-cyan); background: rgba(77,225,208,.08); border-color: rgba(77,225,208,.24); }
+.passport-area-content { padding-top: 16px; }
+.passport-area-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 13px; }
+.passport-area-heading h4 { margin: 5px 0 0; color: var(--joben-text); font-size: 15px; }
+.passport-metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.passport-metric { min-width: 0; padding: 12px; border: 1px solid var(--joben-line); border-radius: 5px; background: rgba(255,255,255,.018); }
+.passport-metric span, .passport-metric strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.passport-metric span { color: var(--joben-dim); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+.passport-metric strong { margin-top: 7px; color: var(--joben-text); font-size: 13px; }
+.passport-callout { margin-top: 12px; padding: 13px 15px; border-left: 2px solid var(--joben-cyan); background: rgba(77,225,208,.05); }
+.passport-callout strong { color: var(--joben-text); font-size: 11px; }
+.passport-callout p { margin: 6px 0 0; color: var(--joben-muted); font-size: 10px; line-height: 1.5; }
+.passport-table { margin-top: 12px; border-top: 1px solid var(--joben-line); }
+.passport-evidence-row { display: grid; grid-template-columns: 1.2fr auto 1.5fr; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--joben-line); }
+.passport-evidence-row strong { min-width: 0; overflow: hidden; color: var(--joben-text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.passport-evidence-row span, .passport-evidence-row small { color: var(--joben-muted); font-size: 9px; }
+.passport-evidence-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evidence-state { color: var(--joben-cyan) !important; font-weight: 700; }
+@media (max-width: 620px) {
+  .passport-workspace-head { display: grid; }
+  .passport-select-label { min-width: 0; }
+  .passport-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .passport-evidence-row { grid-template-columns: 1fr auto; }
+  .passport-evidence-row small { grid-column: 1 / -1; }
+}
+
 html[data-theme="light"] {
   --joben-void: #f5f8fa; --joben-panel: #ffffff; --joben-panel-2: #eef4f5; --joben-text: #13232b;
   --joben-muted: #52636a; --joben-dim: #71848a; --joben-line: rgba(19,65,75,.16); --joben-line-bright: rgba(19,65,75,.3);
