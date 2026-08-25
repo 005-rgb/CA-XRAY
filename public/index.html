@@ -415,7 +415,10 @@
             <section id="intelligence-dashboard" class="intelligence-dashboard" hidden>
               <div class="intelligence-heading">
                 <div></div>
-                <button type="button" class="secondary-button" id="watchtower-tick">Run due checks</button>
+                <div class="intelligence-heading-action">
+                  <span id="watchtower-tick-status" class="intelligence-action-status" role="status" aria-live="polite"></span>
+                  <button type="button" class="secondary-button" id="watchtower-tick">Run due checks</button>
+                </div>
               </div>
               <div class="intelligence-grid">
                 <section class="intelligence-card" id="risk-passport">
@@ -426,6 +429,7 @@
                       <div><span class="card-kicker">PASSPORT WORKSPACE</span><h3 id="passport-workspace-title">Select a contract</h3><p id="passport-workspace-meta"></p></div>
                       <label class="passport-select-label" for="passport-selector">OPEN PASSPORT<select id="passport-selector"></select></label>
                     </div>
+                    <p class="passport-workspace-help">Select an area to inspect the latest immutable snapshot. Each card opens a live view of the evidence-backed data below.</p>
                     <div class="passport-area-nav" aria-label="Risk Passport areas">
                       <div class="passport-area-grid">
                         <button type="button" class="passport-area-card active" data-passport-area="overview"><span class="passport-area-number">01</span><span class="passport-area-icon">◈</span><strong>Overview</strong><small>Posture &amp; health</small></button>

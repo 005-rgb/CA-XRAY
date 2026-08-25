@@ -706,10 +706,12 @@ class IntelligenceStore {
       if (!nodes.some((node) => node.id === nodeId)) nodes.push({ id: nodeId, type, label: String(value), status: pointStatus(point) });
       edges.push({ source: "contract", target: nodeId, relation, evidenceStatus: pointStatus(point) });
     };
-    addEvidenceNode("owner", snapshot.changes.owner, "owned_by");
-    addEvidenceNode("proxy", snapshot.changes.proxy, "delegates_to");
-    addEvidenceNode("pair", snapshot.changes.pair, "trades_on");
-    addEvidenceNode("holder_cluster", snapshot.changes.holderConcentration, "holder_concentration");
+    // changePoints preserve the evidence point status/value pair. The
+    // flattened `changes` object is intentionally value-only for comparison.
+    addEvidenceNode("owner", snapshot.changePoints?.owner, "owned_by");
+    addEvidenceNode("proxy", snapshot.changePoints?.proxy, "delegates_to");
+    addEvidenceNode("pair", snapshot.changePoints?.pair, "trades_on");
+    addEvidenceNode("holder_cluster", snapshot.changePoints?.holderConcentration, "holder_concentration");
     return { networkId, address: address.toLowerCase(), snapshotId: snapshot.id, nodes, edges, generatedAt: snapshot.capturedAt };
   }
 

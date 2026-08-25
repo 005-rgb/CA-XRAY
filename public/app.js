@@ -46,6 +46,7 @@ const passportSelector = document.querySelector("#passport-selector");
 const passportAreaContent = document.querySelector("#passport-area-content");
 const passportWorkspaceTitle = document.querySelector("#passport-workspace-title");
 const passportWorkspaceMeta = document.querySelector("#passport-workspace-meta");
+const watchtowerTickStatus = document.querySelector("#watchtower-tick-status");
 const watchlistList = document.querySelector("#watchlist-list");
 const watchlistCount = document.querySelector("#watchlist-count");
 const alertList = document.querySelector("#alert-list");
@@ -1410,7 +1411,7 @@ function renderPassportList(passports) {
   passportList.innerHTML = passports.length ? passports.map((passport) => {
     const current = passport.current || {};
     const score = current.risk?.score;
-    return `<button type="button" class="intelligence-row passport-row" data-passport-index="${passports.indexOf(passport)}">
+    return `<button type="button" class="intelligence-row passport-row" data-passport-index="${passports.indexOf(passport)}" aria-label="Open Risk Passport for ${escapeHtml(passport.networkId)} ${escapeHtml(truncateAddress(passport.address))}">
       <div><strong>${escapeHtml(truncateAddress(passport.address))}</strong><span>${escapeHtml(passport.networkId)} · ${escapeHtml(formatDate(current.capturedAt))}</span></div>
       <div class="intelligence-row-value"><b class="${scoreTone(score)}">${escapeHtml(score ?? "UNKNOWN")}</b><span>${escapeHtml(current.risk?.level || "UNKNOWN")} · ${passport.snapshotCount} snapshot${passport.snapshotCount === 1 ? "" : "s"}</span></div>
     </button>`;
@@ -1782,11 +1783,20 @@ watchlistForm?.addEventListener("submit", async (event) => {
 
 document.querySelector("#watchtower-tick")?.addEventListener("click", async (event) => {
   event.currentTarget.disabled = true;
+  if (watchtowerTickStatus) watchtowerTickStatus.textContent = "Checking scheduled contracts…";
   try {
-    await apiJson("/api/watchtower/tick", { method: "POST" });
+    const body = await apiJson("/api/watchtower/tick", { method: "POST" });
+    const tick = body.tick || {};
+    const processed = Number(tick.processed) || 0;
+    if (watchtowerTickStatus) {
+      watchtowerTickStatus.textContent = processed
+        ? `${processed} due check${processed === 1 ? "" : "s"} queued.`
+        : "No due checks right now.";
+    }
     await loadIntelligenceDashboard();
   } catch (error) {
-    watchlistStatus.textContent = error.message;
+    if (watchtowerTickStatus) watchtowerTickStatus.textContent = `Check failed: ${error.message}`;
+    if (watchlistStatus) watchlistStatus.textContent = error.message;
   } finally {
     event.currentTarget.disabled = false;
   }
