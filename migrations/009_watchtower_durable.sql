@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS watchtower_runs (
   lease_owner TEXT,
   lease_until TIMESTAMPTZ,
   next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  payload JSONB,
   error_json JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
