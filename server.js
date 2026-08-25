@@ -80,16 +80,18 @@ const scanQueue = createScanJobQueue({
     }
     if (job.status === "SUCCEEDED") {
       intelligenceStore.recordMonitoringJobStatus(job.id, "SUCCEEDED");
-      return Promise.resolve(persistence.markJobSucceeded(job)).then(() => {
-        if (job.scan?.mode === "LIVE" && job.workspaceId) {
-          intelligenceStore.recordSnapshot({
-            workspaceId: job.workspaceId,
-            scan: job.scan,
-            jobId: job.id,
-            capturedAt: job.completedAt,
-          });
-        }
-      });
+      // Publish the Passport snapshot before exposing the terminal job state.
+      // Otherwise the UI can observe SUCCEEDED and navigate to Passport while
+      // the fire-and-forget persistence callback has not attached the snapshot.
+      if (job.scan?.mode === "LIVE" && job.workspaceId) {
+        intelligenceStore.recordSnapshot({
+          workspaceId: job.workspaceId,
+          scan: job.scan,
+          jobId: job.id,
+          capturedAt: job.completedAt,
+        });
+      }
+      return persistence.markJobSucceeded(job);
     }
     if (job.status === "PARTIAL") return persistence.markJobPartial(job);
     if (job.status === "FAILED") {
