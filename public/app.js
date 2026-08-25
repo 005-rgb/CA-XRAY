@@ -2402,15 +2402,35 @@ function renderDashboardReport(scan) {
           </section>
         </aside>
       </div>
-       <div class="report-tabs" role="tablist" aria-label="Report sections">
-         <button class="active" type="button" role="tab" aria-selected="true" data-report-target="report-overview">Overview</button>
-         <button type="button" role="tab" aria-selected="false" data-report-target="report-contract">Contract Forensics</button>
-         <button type="button" role="tab" aria-selected="false" data-report-target="report-trading">Trading Safety</button>
-         <button type="button" role="tab" aria-selected="false" data-report-target="report-liquidity">Liquidity</button>
-         <button type="button" role="tab" aria-selected="false" data-report-target="report-holder">Holder Analysis</button>
-         <button type="button" role="tab" aria-selected="false" data-report-target="report-market-data">Market</button>
-         <button type="button" role="tab" aria-selected="false" data-report-target="report-evidence">Evidence</button>
-      </div>
+        <div class="report-navigation" aria-label="Report navigation">
+          <div class="report-category-control">
+            <label for="report-category-select">REPORT SECTION</label>
+            <select id="report-category-select">
+              <option value="all">All sections</option>
+              <option value="0">01 · Executive Summary</option>
+              <option value="1">02 · Project Context</option>
+              <option value="2">03 · Data Consistency</option>
+              <option value="3">04 · Risk Profile</option>
+              <option value="4">05 · Contract Capabilities</option>
+              <option value="5">06 · Contract Power Map</option>
+              <option value="6">07 · Exitability</option>
+              <option value="7">08 · User Impact</option>
+              <option value="8">09 · Risk Breakdown</option>
+              <option value="9">10 · Contract &amp; Trading Forensics</option>
+              <option value="10">11 · Holder &amp; Liquidity Analysis</option>
+              <option value="11">12 · Market &amp; Deployer Signals</option>
+              <option value="12">13 · Key Findings</option>
+              <option value="13">14 · Evidence Register</option>
+              <option value="14">15 · Data Coverage &amp; Limitations</option>
+              <option value="15">16 · Evidence Intelligence</option>
+              <option value="16">17 · Final Assessment</option>
+            </select>
+          </div>
+          <div class="report-navigation-actions">
+            <button type="button" class="report-show-all" id="show-all-analysis">Show All <span>↓</span></button>
+            <span class="report-navigation-note">17 sections · full evidence review</span>
+          </div>
+       </div>
       <div class="dashboard-lower-grid">
         <section class="report-table-card">
           <div class="card-heading"><div class="card-kicker">TOP RISKS</div><button type="button" class="side-link" id="open-findings">View All Findings <span>→</span></button></div>
@@ -2578,6 +2598,8 @@ function renderReport(scan) {
       deep.hidden = false;
       restoreDeepAfterPrint = true;
     }
+    const categorySelect = document.querySelector("#report-category-select");
+    if (categorySelect) categorySelect.value = "all";
     window.requestAnimationFrame(() => window.print());
   });
   window.addEventListener("afterprint", () => {
@@ -2589,22 +2611,34 @@ function renderReport(scan) {
     window.history.pushState({}, "", "/dashboard");
     showLanding({ privateView: true });
   });
-  document.querySelectorAll("[data-report-target]").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      const target = document.getElementById(tab.dataset.reportTarget);
-      if (!target) return;
-      if (deep) deep.hidden = false;
-      document.querySelectorAll("[data-report-target]").forEach((item) => {
-        const selected = item === tab;
-        item.classList.toggle("active", selected);
-        item.setAttribute("aria-selected", String(selected));
-      });
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+  const reportSections = () => deep ? Array.from(deep.querySelectorAll(":scope > .report-section")) : [];
+  const showAllAnalysis = () => {
+    if (!deep) return;
+    deep.hidden = false;
+    document.querySelector("#report-category-select")?.setAttribute("aria-label", "Report section — all sections shown");
+  };
+  document.querySelector("#show-all-analysis")?.addEventListener("click", () => {
+    showAllAnalysis();
+    const categorySelect = document.querySelector("#report-category-select");
+    if (categorySelect) categorySelect.value = "all";
+    deep?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  document.querySelector("#report-category-select")?.addEventListener("change", (event) => {
+    if (event.target.value === "all") {
+      showAllAnalysis();
+      deep?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const target = reportSections()[Number(event.target.value)];
+    if (!target) return;
+    if (deep) deep.hidden = false;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   const openDeep = () => {
     if (!deep) return;
     deep.hidden = false;
+    const categorySelect = document.querySelector("#report-category-select");
+    if (categorySelect) categorySelect.value = "all";
     deep.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   document.querySelector("#open-full-analysis")?.addEventListener("click", openDeep);

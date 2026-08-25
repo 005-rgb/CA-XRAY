@@ -717,7 +717,7 @@ body { background: var(--dashboard-bg); color: #17191c; }
 }
 
 @media print {
-  .sidebar, .topbar, .scan-workbench, .dashboard-heading, .report-tabs, .download-button { display: none !important; }
+  .sidebar, .topbar, .scan-workbench, .dashboard-heading, .report-tabs, .report-navigation, .download-button { display: none !important; }
   .dashboard-page { padding: 0; }
   .dashboard-report { border: 0; }
   .dashboard-deep { display: block !important; margin-top: 0; }
@@ -902,6 +902,171 @@ body:before {
   .signal-board-heading { align-items: flex-start; flex-direction: column; }
   .signal-preview { min-height: 125px; }
   .signal-toast-region { right: 14px; bottom: 14px; }
+}
+
+/* Long report navigation — calm, compact, and easy to scan. */
+.report-navigation {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 15px;
+  padding: 12px 14px;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.report-category-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.report-category-control label {
+  flex: 0 0 auto;
+  margin: 0;
+  color: #81878c;
+  font-size: 8px;
+  letter-spacing: .12em;
+}
+
+.report-category-control select {
+  width: min(330px, 48vw);
+  min-width: 220px;
+  height: 34px;
+  margin: 0;
+  padding: 7px 30px 7px 10px;
+  border: 1px solid #d9dcde;
+  border-radius: 5px;
+  color: #343a3f;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .01em;
+  cursor: pointer;
+}
+
+.report-category-control select:focus {
+  border-color: var(--joben-cyan);
+  box-shadow: 0 0 0 3px rgba(77, 225, 208, .12);
+}
+
+.report-navigation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 13px;
+  min-width: 0;
+}
+
+.report-show-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid #cfd5d8;
+  border-radius: 5px;
+  color: #3b454b;
+  background: #f8faf9;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  transition: color .2s ease, background .2s ease, border-color .2s ease, transform .2s ease;
+}
+
+.report-show-all:hover {
+  color: #06201d;
+  background: var(--joben-cyan);
+  border-color: var(--joben-cyan);
+  transform: translateY(-1px);
+}
+
+.report-show-all span {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.report-navigation-note {
+  color: #92999e;
+  font-size: 8px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+.dashboard-deep:not([hidden]) .report-section {
+  animation: report-section-reveal .42s ease both;
+}
+
+.dashboard-deep:not([hidden]) .report-section:nth-child(2n) { animation-delay: .04s; }
+.dashboard-deep:not([hidden]) .report-section:nth-child(3n) { animation-delay: .08s; }
+
+@keyframes report-section-reveal {
+  from { opacity: .72; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-deep:not([hidden]) .report-section,
+  .report-show-all {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
+
+html:not([data-theme="light"]) .report-navigation {
+  border-color: var(--joben-line);
+  background: #111d28;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .14);
+}
+
+html:not([data-theme="light"]) .report-category-control label {
+  color: var(--joben-dim);
+}
+
+html:not([data-theme="light"]) .report-category-control select {
+  color: var(--joben-text);
+  background: #0b151f;
+  border-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .report-show-all {
+  color: var(--joben-text);
+  background: #162431;
+  border-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .report-navigation-note {
+  color: var(--joben-dim);
+}
+
+@media (max-width: 760px) {
+  .report-navigation {
+    display: block;
+    padding: 12px;
+  }
+
+  .report-category-control {
+    display: block;
+  }
+
+  .report-category-control label {
+    display: block;
+    margin-bottom: 7px;
+  }
+
+  .report-category-control select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .report-navigation-actions {
+    justify-content: space-between;
+    margin-top: 10px;
+  }
 }
 
 /* Public entry boundary: the analyzer is public; workspace navigation and
