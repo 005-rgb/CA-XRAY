@@ -1840,3 +1840,23 @@ html[data-theme="light"] .map-value-pitch > a { color: #08766f; }
   .map-value-points { gap: 5px; }
   .map-value-points span { font-size: 6px; }
 }
+
+.comparison-inputs, .report-create-list, .report-issued-list { display: grid; gap: 10px; }
+.comparison-option, .report-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid var(--joben-line); background: rgba(255,255,255,.025); }
+.comparison-option { justify-content: flex-start; cursor: pointer; }
+.comparison-option input { accent-color: var(--joben-cyan); }
+.comparison-option span, .report-row > div { display: grid; gap: 4px; }
+.comparison-option small, .report-row span, .comparison-table small { color: var(--joben-muted); }
+.comparison-actions, .report-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.comparison-result { margin-top: 18px; overflow: hidden; }
+.comparison-table-wrap { overflow-x: auto; }
+.comparison-table { width: 100%; border-collapse: collapse; min-width: 620px; }
+.comparison-table th, .comparison-table td { padding: 13px 12px; border-bottom: 1px solid var(--joben-line); text-align: left; vertical-align: top; }
+.comparison-table th { color: var(--joben-muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+.comparison-table td strong, .comparison-table td small { display: block; }
+.report-issued-list { margin-top: 22px; }
+.report-row .secondary-button { white-space: nowrap; }
+@media (max-width: 640px) {
+  .comparison-actions, .report-row { align-items: stretch; flex-direction: column; }
+  .report-row .secondary-button { width: 100%; }
+}

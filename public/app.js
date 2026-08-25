@@ -46,6 +46,14 @@ const alertList = document.querySelector("#alert-list");
 const alertCount = document.querySelector("#alert-count");
 const watchlistForm = document.querySelector("#watchlist-form");
 const watchlistStatus = document.querySelector("#watchlist-status");
+const comparisonPanel = document.querySelector("#comparison");
+const comparisonForm = document.querySelector("#comparison-form");
+const comparisonInputs = document.querySelector("#comparison-inputs");
+const comparisonResult = document.querySelector("#comparison-result");
+const comparisonStatus = document.querySelector("#comparison-status");
+const reportsPanel = document.querySelector("#reports");
+const reportsList = document.querySelector("#reports-list");
+const reportStatus = document.querySelector("#report-status");
 const adminPanel = document.querySelector("#admin-panel");
 const adminNav = document.querySelector("#admin-nav");
 const adminStepupForm = document.querySelector("#admin-stepup-form");
@@ -111,12 +119,14 @@ const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
 const isAdminRoute = () => pathName() === "/admin";
 const reportRouteMatch = () => pathName().match(/^\/dashboard\/scans\/([^/]+)$/);
-const isPrivateRoute = () => pathName() === "/dashboard" || /^\/dashboard\/(?:new-scan|history|passport|watchtower|api-access|settings)$/.test(pathName()) || pathName().startsWith("/dashboard/scans/");
+const isPrivateRoute = () => pathName() === "/dashboard" || /^\/dashboard\/(?:new-scan|history|passport|watchtower|compare|reports|api-access|settings)$/.test(pathName()) || pathName().startsWith("/dashboard/scans/");
 const privatePage = () => {
   if (pathName() === "/dashboard/new-scan") return "new-scan";
   if (pathName() === "/dashboard/history") return "history";
   if (pathName() === "/dashboard/passport") return "passport";
   if (pathName() === "/dashboard/watchtower") return "watchtower";
+  if (pathName() === "/dashboard/compare") return "compare";
+  if (pathName() === "/dashboard/reports") return "reports";
   if (pathName() === "/dashboard/api-access") return "api-access";
   if (pathName() === "/dashboard/settings") return "settings";
   return "dashboard";
@@ -165,6 +175,27 @@ function setShell({ privateView = false, authView = false } = {}) {
     landing.classList.add("public-home");
   }
   document.body.classList.toggle("private-view", privateView);
+}
+
+function navigateAppRoute(destination) {
+  const next = new URL(destination, window.location.origin);
+  if (next.origin !== window.location.origin) return;
+  const target = `${next.pathname}${next.search}${next.hash}`;
+  if (next.pathname.startsWith("/dashboard") && !authState?.authenticated) {
+    authRequested = true;
+    window.location.assign(`/login?lang=${encodeURIComponent(JobenI18n.locale)}&returnTo=${encodeURIComponent(target)}`);
+    return;
+  }
+  window.history.pushState({}, "", target);
+  authRequested = isAuthRoute();
+  if (authState?.authenticated && isPrivateRoute()) {
+    loadPrivateRoute();
+  } else if (!authState?.authenticated) {
+    configureAuthRoute();
+    setShell({ authView: authRequested });
+  } else {
+    showLanding({ privateView: false });
+  }
 }
 
 function pendingScan() {
@@ -393,6 +424,15 @@ document.querySelector(".logout-button")?.addEventListener("click", async () => 
   await refreshAuth();
 });
 
+document.querySelectorAll(".primary-nav .nav-item[data-route]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    navigateAppRoute(link.dataset.route);
+    sidebar.classList.remove("open");
+    document.querySelector("#mobile-menu")?.setAttribute("aria-expanded", "false");
+  });
+});
+
 const categoryLabels = {
   contract: "Contract Control",
   trading: "Trading",
@@ -488,6 +528,8 @@ function showLanding({ privateView = false } = {}) {
     history: ["Scan History", "Previous analyses available to this workspace."],
     passport: ["Risk Passport", "Track evidence-backed changes across monitored contracts."],
     watchtower: ["Watchtower", "Review scheduled monitoring and evidence alerts."],
+    compare: ["Compare Contracts", "Compare saved contract evidence side by side without hiding unknowns."],
+    reports: ["Shared Reports", "Create and manage safe, expiring public report links."],
     "api-access": ["API Access", "Programmatic access to evidence-backed contract analysis."],
     settings: ["Settings", "Manage your identity, security, preferences, and active workspace."],
     public: ["Know what a contract can do before it touches your wallet.", "Read contract risk through real evidence before a decision reaches your wallet."],
@@ -512,6 +554,8 @@ function showLanding({ privateView = false } = {}) {
   scanHistory.hidden = !privateView || page !== "history";
   intelligenceDashboard.hidden = !privateView || !["passport", "watchtower"].includes(page);
   document.querySelector("#api-access").hidden = !privateView || page !== "api-access";
+  if (comparisonPanel) comparisonPanel.hidden = !privateView || page !== "compare";
+  if (reportsPanel) reportsPanel.hidden = !privateView || page !== "reports";
   settingsPanel.hidden = !privateView || page !== "settings";
   document.querySelector("#risk-passport").hidden = page !== "passport";
   document.querySelector("#watchtower").hidden = page !== "watchtower";
@@ -519,6 +563,8 @@ function showLanding({ privateView = false } = {}) {
   if (privateView) {
     if (page === "history") loadScanHistory();
     if (["passport", "watchtower"].includes(page)) loadIntelligenceDashboard();
+    if (page === "compare") loadComparisonInputs();
+    if (page === "reports") loadReports();
     if (page === "settings") loadSettings();
   }
   JobenI18n.translate(landing);
@@ -1379,6 +1425,87 @@ async function loadIntelligenceDashboard() {
     renderAlertList(alerts.events || []);
   } catch (error) {
     passportList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+let comparisonPassports = [];
+
+function renderComparisonInputs() {
+  if (!comparisonInputs) return;
+  comparisonInputs.innerHTML = comparisonPassports.length
+    ? comparisonPassports.map((passport, index) => `
+      <label class="comparison-option">
+        <input type="checkbox" name="comparison-contract" value="${index}" />
+        <span><strong>${escapeHtml(truncateAddress(passport.address))}</strong><small>${escapeHtml(passport.networkId)} · ${passport.snapshotCount} snapshot${passport.snapshotCount === 1 ? "" : "s"}</small></span>
+      </label>`).join("")
+    : `<div class="unknown-message">No completed passport snapshots are available yet. Complete a live scan first.</div>`;
+}
+
+async function loadComparisonInputs() {
+  if (!comparisonInputs) return;
+  try {
+    const body = await apiJson("/api/risk-passports");
+    comparisonPassports = body.passports || [];
+    renderComparisonInputs();
+  } catch (error) {
+    comparisonInputs.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderComparisonResult(items) {
+  if (!comparisonResult) return;
+  comparisonResult.hidden = false;
+  comparisonResult.innerHTML = `<div class="card-heading"><div><span class="card-kicker">COMPARISON RESULT</span><h3>Latest evidence side by side</h3></div><span class="data-label">${items.length} CONTRACTS</span></div>
+    <div class="comparison-table-wrap"><table class="comparison-table"><thead><tr><th>Contract</th><th>Risk</th><th>Reliability</th><th>Findings</th><th>Captured</th></tr></thead><tbody>${items.map((item) => {
+      const risk = item.risk?.score;
+      return `<tr><td><strong>${escapeHtml(truncateAddress(item.address))}</strong><span>${escapeHtml(item.networkId)}${item.found ? "" : " · NOT FOUND"}</span></td><td>${item.found ? `<b class="${scoreTone(risk)}">${escapeHtml(risk ?? "UNKNOWN")}</b><small>${escapeHtml(item.risk?.level || "UNKNOWN")}</small>` : "UNKNOWN"}</td><td>${item.found ? escapeHtml(item.reliabilityScore ?? "UNKNOWN") : "UNKNOWN"}</td><td>${item.found ? escapeHtml(item.findingCount) : "—"}</td><td>${item.found ? escapeHtml(formatDate(item.capturedAt)) : "—"}</td></tr>`;
+    }).join("")}</tbody></table></div>`;
+}
+
+comparisonForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const selected = [...comparisonForm.querySelectorAll("input[name='comparison-contract']:checked")];
+  comparisonStatus.textContent = "";
+  if (selected.length < 2 || selected.length > 5) {
+    comparisonStatus.textContent = "Select between two and five contracts.";
+    return;
+  }
+  try {
+    const body = await apiJson("/api/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contracts: selected.map((input) => {
+        const passport = comparisonPassports[Number(input.value)];
+        return { networkId: passport.networkId, address: passport.address };
+      }) }),
+    });
+    renderComparisonResult(body.comparison || []);
+  } catch (error) {
+    comparisonStatus.textContent = error.message;
+  }
+});
+
+async function loadReports() {
+  if (!reportsList) return;
+  try {
+    const passportsBody = await apiJson("/api/risk-passports");
+    const reportsBody = await apiJson("/api/reports");
+    const passports = passportsBody.passports || [];
+    const reports = reportsBody.reports || [];
+    reportsList.innerHTML = `<div class="card-heading"><div><span class="card-kicker">PUBLIC SNAPSHOTS</span><h3>Create or manage a report link</h3></div><span class="data-label">${reports.length} ISSUED</span></div>
+      <div class="report-create-list">${passports.length ? passports.map((passport, index) => `<div class="report-row"><div><strong>${escapeHtml(truncateAddress(passport.address))}</strong><span>${escapeHtml(passport.networkId)} · ${passport.snapshotCount} snapshot${passport.snapshotCount === 1 ? "" : "s"}</span></div><button type="button" class="secondary-button" data-create-report="${index}">Create 7-day link</button></div>`).join("") : `<div class="unknown-message">Complete a live scan to create a shareable report.</div>`}</div>
+      <div class="report-issued-list">${reports.length ? reports.map((item) => `<div class="report-row"><div><strong>${escapeHtml(truncateAddress(item.address))}</strong><span>${escapeHtml(item.visibility)} · expires ${escapeHtml(formatDate(item.expiresAt))}</span></div><div class="report-actions"><a class="text-button" href="/api/reports/public/${encodeURIComponent(item.id)}" target="_blank" rel="noreferrer">Open API link</a><button type="button" class="text-button" data-revoke-report="${escapeHtml(item.id)}">${item.visibility === "public" ? "Make private" : "Public"}</button></div></div>`).join("") : ""}</div>`;
+    reportsList.querySelectorAll("[data-create-report]").forEach((button) => button.addEventListener("click", async () => {
+      const passport = passports[Number(button.dataset.createReport)];
+      await apiJson("/api/reports", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ network: passport.networkId, address: passport.address, visibility: "public" }) });
+      await loadReports();
+    }));
+    reportsList.querySelectorAll("[data-revoke-report]").forEach((button) => button.addEventListener("click", async () => {
+      await apiJson(`/api/reports/${encodeURIComponent(button.dataset.revokeReport)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visibility: "private" }) });
+      await loadReports();
+    }));
+  } catch (error) {
+    reportsList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
   }
 }
 
