@@ -66,7 +66,7 @@ function decodeCursor(value) {
 
 function normalizePageOptions({ limit = 50, cursor = null, status = null, networkId = null, address = null } = {}) {
   const normalizedLimit = Number.isInteger(Number(limit)) ? Math.min(100, Math.max(1, Number(limit))) : 50;
-  const allowedStatuses = new Set(["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"]);
+  const allowedStatuses = new Set(["QUEUED", "RUNNING", "PARTIAL", "SUCCEEDED", "FAILED", "CANCELLED"]);
   return {
     limit: normalizedLimit,
     cursor: decodeCursor(cursor),
@@ -586,7 +586,7 @@ class PostgresPersistence {
                 $6, $7,
                 created_at, $5, 'ACTIVE'
            FROM scan_jobs
-           WHERE id = $1 AND status IN ('QUEUED', 'RUNNING')
+          WHERE id = $1 AND status IN ('QUEUED', 'RUNNING', 'SUCCEEDED')
          ON CONFLICT (job_id) DO NOTHING
          RETURNING id`,
         [job.id, job.scan?.dataStatus || "unknown", JSON.stringify(job.scan), crypto.createHash("sha256").update(JSON.stringify(job.scan)).digest("hex"), job.completedAt, 1, job.scan?.evidenceSchemaVersion || "1.0.0"],
@@ -615,7 +615,7 @@ class PostgresPersistence {
             SET status = 'SUCCEEDED', completed_at = $2, report_json = $3::jsonb,
                 report_hash = $4, report_version = 1,
                 evidence_schema_version = $5, attempts = GREATEST(attempts, $6)
-          WHERE id = $1 AND status IN ('QUEUED', 'RUNNING')`,
+          WHERE id = $1 AND status IN ('QUEUED', 'RUNNING', 'SUCCEEDED')`,
         [job.id, job.completedAt, JSON.stringify(job.scan),
           crypto.createHash("sha256").update(JSON.stringify(job.scan)).digest("hex"),
           job.scan?.evidenceSchemaVersion || "1.0.0", job.attempts || 1],

@@ -72,6 +72,40 @@ test("persistence status updates preserve tenant isolation and completed reports
   assert.equal((await persistence.listScanJobs("visitor_workspace_b")).length, 0);
 });
 
+test("scan queue resumes partial history and only completes after continuation is exhausted", async () => {
+  const calls = [];
+  const queue = new InMemoryScanJobQueue({
+    processor: async (payload) => {
+      calls.push(payload.previousScan?.continuation?.transferCursor || null);
+      if (calls.length === 1) {
+        return {
+          mode: "LIVE",
+          continuation: { status: "PENDING", transferCursor: "page-2", ownerCursor: null },
+          evidence: [{ id: "transfer-1" }],
+        };
+      }
+      return {
+        mode: "LIVE",
+        continuation: { status: "COMPLETE", transferCursor: null, ownerCursor: null },
+        evidence: [{ id: "transfer-1" }, { id: "transfer-2" }],
+      };
+    },
+    timeoutMs: 1_000,
+  });
+  const first = queue.enqueue({ jobId: "continuation-1", workspaceId: "workspace-a" });
+  assert.ok(["QUEUED", "RUNNING"].includes(first.status));
+  await new Promise((resolve) => {
+    const check = () => queue.get("continuation-1")?.status === "SUCCEEDED"
+      ? resolve()
+      : setTimeout(check, 5);
+    check();
+  });
+  const completed = queue.get("continuation-1");
+  assert.equal(completed.status, "SUCCEEDED");
+  assert.deepEqual(calls, [null, "page-2"]);
+  assert.equal(completed.scan.evidence.length, 2);
+});
+
 test("webhook event and outbox processing are idempotent", async () => {
   const persistence = new MemoryPersistence();
   const first = await persistence.recordWebhookEvent({

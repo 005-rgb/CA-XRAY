@@ -92,7 +92,7 @@ class InMemoryScanJobQueue {
 
   activeForWorkspace(workspaceId) {
     return [...this.jobs.values()].filter(
-      (job) => job.workspaceId === workspaceId && ["QUEUED", "RUNNING"].includes(job.status),
+      (job) => job.workspaceId === workspaceId && ["QUEUED", "RUNNING", "PARTIAL"].includes(job.status),
     ).length;
   }
 
@@ -116,10 +116,16 @@ class InMemoryScanJobQueue {
       return snapshot(job);
     }
     job.cancelRequested = true;
-    if (job.status === JOB_STATUS.QUEUED) {
+    if ([JOB_STATUS.QUEUED, JOB_STATUS.PARTIAL].includes(job.status)) {
+      const wasPartial = job.status === JOB_STATUS.PARTIAL;
       job.status = JOB_STATUS.CANCELLED;
       job.completedAt = this.clock().toISOString();
-      job.error = { code: "SCAN_CANCELLED", message: "The scan was cancelled before processing started." };
+      job.error = {
+        code: "SCAN_CANCELLED",
+        message: wasPartial
+          ? "The scan continuation was cancelled before the next page."
+          : "The scan was cancelled before processing started.",
+      };
       this.pending = this.pending.filter((pendingId) => pendingId !== job.id);
       this.#notify(job);
     } else if (job.controller) {
@@ -156,7 +162,7 @@ class InMemoryScanJobQueue {
       ])
         .then((scan) => {
           if (job.cancelRequested || job.status === JOB_STATUS.CANCELLED) return;
-           job.status = scan?.continuation?.status === "PENDING" ? JOB_STATUS.PARTIAL : JOB_STATUS.SUCCEEDED;
+          job.status = scan?.continuation?.status === "PENDING" ? JOB_STATUS.PARTIAL : JOB_STATUS.SUCCEEDED;
           job.scan = scan;
           job.error = null;
            if (job.status === JOB_STATUS.PARTIAL) {
@@ -343,9 +349,9 @@ class PostgresScanJobQueue {
     try {
       await client.query("BEGIN");
       const result = await client.query(
-        `SELECT id, type, status, created_at, attempts, max_attempts, queue_payload, workspace_id
+      `SELECT id, type, status, created_at, attempts, max_attempts, queue_payload, workspace_id
            FROM scan_jobs
-          WHERE (status = 'QUEUED' OR (status = 'RUNNING' AND lease_until < NOW()))
+          WHERE (status IN ('QUEUED', 'PARTIAL') OR (status = 'RUNNING' AND lease_until < NOW()))
             AND (lease_owner IS NULL OR lease_until < NOW())
           ORDER BY created_at
           FOR UPDATE SKIP LOCKED LIMIT 1`,
@@ -357,7 +363,7 @@ class PostgresScanJobQueue {
       const row = result.rows[0];
       const startedAt = this.clock().toISOString();
       await client.query(
-        `UPDATE scan_jobs
+          `UPDATE scan_jobs
             SET status = 'RUNNING', started_at = COALESCE(started_at, $2),
                 attempts = attempts + 1, max_attempts = $3,
                 lease_owner = $4, lease_until = $5::timestamptz
