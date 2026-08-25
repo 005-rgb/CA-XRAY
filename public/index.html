@@ -421,19 +421,23 @@
                 <section class="intelligence-card" id="risk-passport">
                   <div class="card-heading"><div><span class="card-kicker">RISK PASSPORT</span><h3>Longitudinal contract intelligence</h3></div><span class="data-label" id="passport-count">0 PASSPORTS</span></div>
                   <div id="passport-list" class="intelligence-list"><div class="unknown-message">Loading passports…</div></div>
-                  <div class="passport-workspace" id="passport-workspace" hidden>
+                  <div class="passport-workspace" id="passport-workspace">
                     <div class="passport-workspace-head">
                       <div><span class="card-kicker">PASSPORT WORKSPACE</span><h3 id="passport-workspace-title">Select a contract</h3><p id="passport-workspace-meta"></p></div>
                       <label class="passport-select-label" for="passport-selector">OPEN PASSPORT<select id="passport-selector"></select></label>
                     </div>
-                    <nav class="passport-area-nav" aria-label="Risk Passport areas">
-                      <button type="button" class="active" data-passport-area="overview">Overview</button>
-                      <button type="button" data-passport-area="evidence">Risk &amp; Evidence</button>
-                      <button type="button" data-passport-area="changes">Changes &amp; Trajectory</button>
-                      <button type="button" data-passport-area="control">Control &amp; Market</button>
-                      <button type="button" data-passport-area="review">Review &amp; Monitoring</button>
-                      <button type="button" data-passport-area="audit">Compare &amp; Audit</button>
-                    </nav>
+                    <div class="passport-area-nav" aria-label="Risk Passport areas">
+                      <label for="passport-area-selector">WORKSPACE AREA
+                        <select id="passport-area-selector">
+                          <option value="overview">Overview</option>
+                          <option value="evidence">Risk &amp; Evidence</option>
+                          <option value="changes">Changes &amp; Trajectory</option>
+                          <option value="control">Control &amp; Market</option>
+                          <option value="review">Review &amp; Monitoring</option>
+                          <option value="audit">Compare &amp; Audit</option>
+                        </select>
+                      </label>
+                    </div>
                     <div id="passport-area-content" class="passport-area-content"><div class="unknown-message">Loading Passport workspace…</div></div>
                   </div>
                 </section>

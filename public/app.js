@@ -46,6 +46,7 @@ const passportSelector = document.querySelector("#passport-selector");
 const passportAreaContent = document.querySelector("#passport-area-content");
 const passportWorkspaceTitle = document.querySelector("#passport-workspace-title");
 const passportWorkspaceMeta = document.querySelector("#passport-workspace-meta");
+const passportAreaSelector = document.querySelector("#passport-area-selector");
 const watchlistList = document.querySelector("#watchlist-list");
 const watchlistCount = document.querySelector("#watchlist-count");
 const alertList = document.querySelector("#alert-list");
@@ -1414,13 +1415,22 @@ function renderPassportList(passports) {
     </button>`;
   }).join("") : `<div class="unknown-message">NO RISK PASSPORTS YET. A completed live scan will create one.</div>`;
   if (passportSelector) {
-    passportSelector.innerHTML = passports.map((passport, index) => `<option value="${index}">${escapeHtml(passport.networkId)} · ${escapeHtml(truncateAddress(passport.address))}</option>`).join("");
+    passportSelector.disabled = !passports.length;
+    passportSelector.innerHTML = passports.length
+      ? passports.map((passport, index) => `<option value="${index}">${escapeHtml(passport.networkId)} · ${escapeHtml(truncateAddress(passport.address))}</option>`).join("")
+      : `<option value="">No completed passports</option>`;
   }
   passportList.querySelectorAll("[data-passport-index]").forEach((row) => row.addEventListener("click", () => {
     if (passportSelector) passportSelector.value = row.dataset.passportIndex;
     openPassportWorkspace(passports[Number(row.dataset.passportIndex)]);
   }));
   JobenI18n.translate(passportList);
+  if (!passports.length && passportAreaContent) {
+    passportWorkspace.hidden = false;
+    passportWorkspaceTitle.textContent = "No completed Passport selected";
+    passportWorkspaceMeta.textContent = "Complete a live scan to activate the six evidence workspace areas.";
+    passportAreaContent.innerHTML = `<div class="passport-empty-state"><strong>Risk Passport is ready for your first snapshot.</strong><p>The six areas below will populate from immutable Core Scan evidence: Overview, Risk &amp; Evidence, Changes &amp; Trajectory, Control &amp; Market, Review &amp; Monitoring, and Compare &amp; Audit.</p><a class="secondary-button" href="/dashboard/new-scan">Start a live scan <span>→</span></a></div>`;
+  }
 }
 
 let passportWorkspaceData = null;
@@ -1463,11 +1473,10 @@ async function openPassportWorkspace(passport) {
   } catch (error) { passportAreaContent.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`; }
 }
 passportSelector?.addEventListener("change", () => openPassportWorkspace(passportCatalog[Number(passportSelector.value)]));
-document.querySelectorAll("[data-passport-area]").forEach((button) => button.addEventListener("click", () => {
-  passportArea = button.dataset.passportArea;
-  document.querySelectorAll("[data-passport-area]").forEach((item) => item.classList.toggle("active", item === button));
+passportAreaSelector?.addEventListener("change", () => {
+  passportArea = passportAreaSelector.value;
   renderPassportArea();
-}));
+});
 
 function renderWatchlistList(watchlists) {
   const active = watchlists.filter((item) => item.status === "active").length;

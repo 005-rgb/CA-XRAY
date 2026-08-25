@@ -1582,10 +1582,14 @@ body, body.private-view { background: var(--joben-void); color: var(--joben-text
 .passport-workspace-head p { margin: 0; color: var(--joben-muted); font-size: 11px; }
 .passport-select-label { display: grid; gap: 6px; min-width: 190px; color: var(--joben-dim); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
 .passport-select-label select { padding: 9px 10px; border: 1px solid var(--joben-line-bright); border-radius: 4px; color: var(--joben-text); background: #09121b; font: inherit; letter-spacing: normal; }
-.passport-area-nav { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 9px; border-bottom: 1px solid var(--joben-line); }
-.passport-area-nav button { flex: 0 0 auto; padding: 9px 11px; border: 1px solid transparent; border-radius: 4px; color: var(--joben-muted); background: transparent; font: inherit; font-size: 10px; cursor: pointer; }
-.passport-area-nav button:hover, .passport-area-nav button.active { color: var(--joben-cyan); background: rgba(77,225,208,.08); border-color: rgba(77,225,208,.24); }
+.passport-area-nav { display: flex; padding-bottom: 12px; border-bottom: 1px solid var(--joben-line); }
+.passport-area-nav label { display: grid; gap: 6px; min-width: min(100%, 330px); color: var(--joben-dim); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
+.passport-area-nav select { appearance: none; padding: 11px 35px 11px 12px; border: 1px solid var(--joben-cyan); border-radius: 5px; color: var(--joben-text); background: linear-gradient(135deg, rgba(77,225,208,.1), rgba(255,255,255,.025)); font: inherit; font-size: 11px; letter-spacing: normal; cursor: pointer; }
+.passport-area-nav select:focus { outline: 2px solid rgba(77,225,208,.3); outline-offset: 2px; }
 .passport-area-content { padding-top: 16px; }
+.passport-empty-state { padding: 22px; border: 1px dashed var(--joben-line-bright); border-radius: 5px; background: rgba(77,225,208,.035); }
+.passport-empty-state strong { color: var(--joben-text); font-size: 12px; }
+.passport-empty-state p { max-width: 680px; margin: 8px 0 15px; color: var(--joben-muted); font-size: 10px; line-height: 1.55; }
 .passport-area-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 13px; }
 .passport-area-heading h4 { margin: 5px 0 0; color: var(--joben-text); font-size: 15px; }
 .passport-metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
