@@ -1146,6 +1146,95 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/policies") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMPLIANCE_READ });
+    sendJson(res, 200, { policies: intelligenceStore.listPolicies(authenticated.workspaceId) }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/policies") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.GOVERNANCE_MANAGE });
+    const body = await readBody(req);
+    sendJson(res, 201, { policy: intelligenceStore.createPolicy({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, ...body,
+    }) }, { context });
+    return true;
+  }
+
+  const policyMatch = url.pathname.match(/^\/api\/policies\/([^/]+)$/);
+  if (req.method === "GET" && policyMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMPLIANCE_READ });
+    const policy = intelligenceStore.getPolicy(authenticated.workspaceId, policyMatch[1]);
+    if (!policy) { sendJson(res, 404, { error: "POLICY_NOT_FOUND", message: "Policy not found." }, { context }); return true; }
+    sendJson(res, 200, { policy }, { context });
+    return true;
+  }
+  if (req.method === "PATCH" && policyMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.GOVERNANCE_MANAGE });
+    sendJson(res, 200, { policy: intelligenceStore.updatePolicy({
+      workspaceId: authenticated.workspaceId, policyId: policyMatch[1], ...(await readBody(req)),
+    }) }, { context });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/governance") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMPLIANCE_READ });
+    sendJson(res, 200, { governance: intelligenceStore.getGovernance(authenticated.workspaceId) }, { context });
+    return true;
+  }
+  if (req.method === "PATCH" && url.pathname === "/api/governance") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.GOVERNANCE_MANAGE });
+    sendJson(res, 200, { governance: intelligenceStore.updateGovernance({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, ...(await readBody(req)),
+    }) }, { context });
+    return true;
+  }
+
+  const reviewMatch = url.pathname.match(/^\/api\/cases\/([^/]+)\/compliance-review$/);
+  if (req.method === "GET" && reviewMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMPLIANCE_READ });
+    const result = intelligenceStore.complianceReport(authenticated.workspaceId, reviewMatch[1]);
+    if (!result) { sendJson(res, 404, { error: "REVIEW_NOT_FOUND", message: "Compliance review not found." }, { context }); return true; }
+    sendJson(res, 200, result, { context });
+    return true;
+  }
+  if (req.method === "POST" && reviewMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMPLIANCE_REVIEW });
+    const body = await readBody(req);
+    sendJson(res, 201, { review: intelligenceStore.startCaseReview({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, caseId: reviewMatch[1],
+      policyId: body.policyId, scan: body.scan, manualResults: body.manualResults,
+    }) }, { context });
+    return true;
+  }
+
+  const reviewEvidenceMatch = url.pathname.match(/^\/api\/cases\/([^/]+)\/compliance-review\/evidence$/);
+  if (req.method === "POST" && reviewEvidenceMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMPLIANCE_REVIEW });
+    sendJson(res, 201, { review: intelligenceStore.addReviewEvidence({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, caseId: reviewEvidenceMatch[1], evidence: await readBody(req),
+    }) }, { context });
+    return true;
+  }
+  const complianceApprovalMatch = url.pathname.match(/^\/api\/cases\/([^/]+)\/compliance-review\/approval$/);
+  if (req.method === "POST" && complianceApprovalMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMPLIANCE_APPROVE });
+    sendJson(res, 200, { review: intelligenceStore.approveCaseReview({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, caseId: complianceApprovalMatch[1], ...(await readBody(req)),
+    }) }, { context });
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/cases") {
     const authenticated = requireAuthenticated(context);
     const body = await readBody(req);

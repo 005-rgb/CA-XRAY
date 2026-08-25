@@ -1,4 +1,8 @@
 const crypto = require("node:crypto");
+const {
+  DEFAULT_POLICY, DECISIONS, REVIEW_STATUSES, bilingualReport,
+  decisionOutcome, evaluatePolicy, normalizePolicy, clone: complianceClone, id: complianceId, invalid: complianceInvalid,
+} = require("../compliance/policy");
 
 const WATCH_INTERVALS = Object.freeze([1, 6, 12, 24, 168]);
 const ALERT_TYPES = Object.freeze([
@@ -256,6 +260,10 @@ class IntelligenceStore {
     this.comments = new Map();
     this.approvals = new Map();
     this.cases = new Map();
+    this.policies = new Map();
+    this.reviews = new Map();
+    this.governance = new Map();
+    this.policies.set(DEFAULT_POLICY.id, complianceClone(DEFAULT_POLICY));
   }
 
   async init() {
@@ -270,6 +278,10 @@ class IntelligenceStore {
     for (const [key, value] of state.comments || []) this.comments.set(key, value);
     for (const [key, value] of state.approvals || []) this.approvals.set(key, value);
     for (const [key, value] of state.cases || []) this.cases.set(key, value);
+    for (const [key, value] of state.policies || []) this.policies.set(key, value);
+    for (const [key, value] of state.reviews || []) this.reviews.set(key, value);
+    for (const [key, value] of state.governance || []) this.governance.set(key, value);
+    if (!this.policies.size) this.policies.set(DEFAULT_POLICY.id, complianceClone(DEFAULT_POLICY));
   }
 
   #persist() {
@@ -283,6 +295,9 @@ class IntelligenceStore {
       comments: [...this.comments.entries()],
       approvals: [...this.approvals.entries()],
       cases: [...this.cases.entries()],
+      policies: [...this.policies.entries()],
+      reviews: [...this.reviews.entries()],
+      governance: [...this.governance.entries()],
     };
     this.persistChain = this.persistChain
       .then(() => this.persistence.saveIntelligenceState(state))
@@ -797,6 +812,131 @@ class IntelligenceStore {
   getCase(workspaceId, caseId) {
     const item = this.cases.get(caseId);
     return item && item.workspaceId === workspaceId ? clone(item) : null;
+  }
+
+  listPolicies(workspaceId) {
+    return [...this.policies.values()].filter((policy) => !policy.workspaceId || policy.workspaceId === workspaceId)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name))).map(complianceClone);
+  }
+
+  createPolicy({ workspaceId, actorId, ...input }) {
+    const policy = normalizePolicy(input);
+    policy.workspaceId = workspaceId;
+    policy.createdBy = actorId;
+    policy.createdAt = this.clock().toISOString();
+    this.policies.set(`${workspaceId}:${policy.id}`, policy);
+    this.#persist();
+    return complianceClone(policy);
+  }
+
+  getPolicy(workspaceId, policyId) {
+    return complianceClone(this.policies.get(`${workspaceId}:${policyId}`) || this.policies.get(policyId) || null);
+  }
+
+  updatePolicy({ workspaceId, policyId, ...input }) {
+    const existing = this.policies.get(`${workspaceId}:${policyId}`) || this.policies.get(policyId);
+    if (!existing || (existing.workspaceId && existing.workspaceId !== workspaceId)) return null;
+    if (existing.status === "ACTIVE") complianceInvalid("POLICY_VERSION_IMMUTABLE", "Active policies are immutable; create a new version.");
+    const next = normalizePolicy({ ...existing, ...input }, { id: existing.id, version: existing.version });
+    next.workspaceId = existing.workspaceId;
+    this.policies.set(existing.workspaceId ? `${workspaceId}:${policyId}` : policyId, next);
+    this.#persist();
+    return complianceClone(next);
+  }
+
+  startCaseReview({ workspaceId, actorId, caseId, policyId = DEFAULT_POLICY.id, scan, manualResults = {} }) {
+    const item = this.cases.get(caseId);
+    if (!item || item.workspaceId !== workspaceId) return null;
+    const policy = this.getPolicy(workspaceId, policyId);
+    if (!policy) complianceInvalid("POLICY_NOT_FOUND", "Policy not found.");
+    const now = this.clock().toISOString();
+    const evaluation = evaluatePolicy(policy, scan || {}, manualResults);
+    const review = {
+      id: complianceId("review"), workspaceId, caseId, policyId: policy.id, policyVersion: policy.version,
+      reviewerId: actorId, status: "IN_REVIEW", outcome: null, evaluation, scanSnapshot: complianceClone(scan || null),
+      approvals: [], evidenceRegister: (scan?.evidence || []).map((evidence, index) => ({
+        id: evidence.id || `evidence-${index + 1}`, status: "RECORDED", source: evidence.source || evidence.provider || "provider",
+        retrievedAt: evidence.retrievedAt || scan.timestamp || now, hash: evidence.hash || null,
+      })), createdAt: now, updatedAt: now, expiresAt: null, decision: null,
+    };
+    this.reviews.set(review.id, review);
+    item.status = "IN_REVIEW";
+    item.updatedAt = now;
+    item.timeline.push({ id: complianceId("case_event"), type: "COMPLIANCE_REVIEW_STARTED", actorId, at: now, metadata: { reviewId: review.id, policyId: policy.id, policyVersion: policy.version } });
+    this.#persist();
+    return complianceClone(review);
+  }
+
+  getCaseReview(workspaceId, caseId) {
+    const review = [...this.reviews.values()].filter((item) => item.workspaceId === workspaceId && item.caseId === caseId).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (!review) return null;
+    if (review.expiresAt && new Date(review.expiresAt).getTime() <= this.clock().getTime() && review.status !== "EXPIRED") {
+      review.status = "EXPIRED";
+    }
+    return complianceClone(review);
+  }
+
+  addReviewEvidence({ workspaceId, actorId, caseId, evidence }) {
+    const review = [...this.reviews.values()].find((item) => item.workspaceId === workspaceId && item.caseId === caseId && item.status === "IN_REVIEW");
+    if (!review || !evidence || !String(evidence.id || "").trim()) complianceInvalid("REVIEW_NOT_FOUND", "An active review and evidence id are required.");
+    const record = { id: String(evidence.id).slice(0, 160), status: "RECORDED", source: String(evidence.source || "manual").slice(0, 160), retrievedAt: evidence.retrievedAt || this.clock().toISOString(), hash: evidence.hash || null, addedBy: actorId };
+    review.evidenceRegister.push(record);
+    review.updatedAt = this.clock().toISOString();
+    this.#persist();
+    return complianceClone(review);
+  }
+
+  approveCaseReview({ workspaceId, actorId, caseId, decision, rationale, conditions = [] }) {
+    const review = [...this.reviews.values()].find((item) => item.workspaceId === workspaceId && item.caseId === caseId && item.status === "IN_REVIEW");
+    if (!review) complianceInvalid("REVIEW_NOT_FOUND", "No active compliance review found.");
+    if (!DECISIONS.includes(decision)) complianceInvalid("INVALID_APPROVAL_DECISION", "Decision must be APPROVE, CONDITIONAL, or REJECT.");
+    if (!String(rationale || "").trim()) complianceInvalid("APPROVAL_RATIONALE_REQUIRED", "Approval rationale is required.");
+    if (review.reviewerId === actorId) complianceInvalid("FOUR_EYES_REQUIRED", "The reviewer cannot approve their own review.");
+    if (review.approvals.some((approval) => approval.actorId === actorId)) complianceInvalid("FOUR_EYES_REQUIRED", "A second independent approver is required.");
+    const outcome = decisionOutcome(decision, review.evaluation);
+    const now = this.clock().toISOString();
+    review.approvals.push({ id: complianceId("approval"), actorId, decision, rationale: String(rationale).trim().slice(0, 4000), conditions: Array.isArray(conditions) ? conditions.map((v) => String(v).slice(0, 500)).slice(0, 20) : [], createdAt: now });
+    review.decision = review.approvals.at(-1);
+    review.outcome = outcome;
+    review.status = outcome;
+    review.expiresAt = outcome === "APPROVED" || outcome === "CONDITIONAL"
+      ? new Date(this.clock().getTime() + (this.getPolicy(workspaceId, review.policyId)?.reviewValidityDays || 30) * 86400000).toISOString() : null;
+    review.updatedAt = now;
+    const item = this.cases.get(caseId);
+    item.status = "DECIDED";
+    item.decision = { decision: outcome, rationale: review.decision.rationale, decidedBy: actorId, decidedAt: now, reviewId: review.id };
+    item.updatedAt = now;
+    item.timeline.push({ id: complianceId("case_event"), type: "COMPLIANCE_APPROVED", actorId, at: now, metadata: { reviewId: review.id, outcome, expiresAt: review.expiresAt } });
+    this.#persist();
+    return complianceClone(review);
+  }
+
+  complianceReport(workspaceId, caseId) {
+    const review = this.getCaseReview(workspaceId, caseId);
+    return review ? { review, report: bilingualReport(review) } : null;
+  }
+
+  getGovernance(workspaceId) {
+    return complianceClone(this.governance.get(workspaceId) || {
+      workspaceId, requireFourEyes: true, allowedReviewerRoles: ["Workspace Owner", "Workspace Member"],
+      allowedApproverRoles: ["Workspace Owner"], defaultPolicyId: DEFAULT_POLICY.id, retentionDays: 365,
+    });
+  }
+
+  updateGovernance({ workspaceId, actorId, ...input }) {
+    const current = this.getGovernance(workspaceId);
+    const next = {
+      ...current,
+      requireFourEyes: input.requireFourEyes === undefined ? current.requireFourEyes : Boolean(input.requireFourEyes),
+      allowedReviewerRoles: Array.isArray(input.allowedReviewerRoles) ? input.allowedReviewerRoles.slice(0, 10) : current.allowedReviewerRoles,
+      allowedApproverRoles: Array.isArray(input.allowedApproverRoles) ? input.allowedApproverRoles.slice(0, 10) : current.allowedApproverRoles,
+      defaultPolicyId: String(input.defaultPolicyId || current.defaultPolicyId),
+      retentionDays: Number.isInteger(Number(input.retentionDays)) ? Math.min(3650, Math.max(30, Number(input.retentionDays))) : current.retentionDays,
+      updatedBy: actorId, updatedAt: this.clock().toISOString(),
+    };
+    this.governance.set(workspaceId, next);
+    this.#persist();
+    return complianceClone(next);
   }
 
   updateCase({ workspaceId, actorId, caseId, status, assigneeId, priority }) {
