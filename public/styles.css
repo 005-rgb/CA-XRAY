@@ -1902,3 +1902,374 @@ html[data-theme="light"] .map-value-pitch > a { color: #08766f; }
   .case-row { grid-template-columns: 1fr; }
   .case-row-actions { justify-content: space-between; }
 }
+
+/* Dark workspace refinement
+   Keep the forensic character, but remove the low-contrast / translucent
+   layering that made private screens look washed out and unstable. */
+html:not([data-theme="light"]) {
+  --joben-void: #070c12;
+  --joben-panel: #101923;
+  --joben-panel-raised: #152330;
+  --joben-line: #263847;
+  --joben-line-bright: #3b5364;
+  --joben-text: #edf5f3;
+  --joben-muted: #a0b0bb;
+  --joben-dim: #708491;
+  --joben-cyan: #55dfd0;
+  --joben-green: #65e6a2;
+  --joben-amber: #f2b866;
+  --joben-red: #ff7777;
+}
+
+html:not([data-theme="light"]) body,
+html:not([data-theme="light"]) body.private-view {
+  background: var(--joben-void);
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .sidebar {
+  width: 232px;
+  flex-basis: 232px;
+  padding: 22px 14px 18px;
+  background: #0b121a;
+  border-right: 1px solid var(--joben-line);
+}
+
+html:not([data-theme="light"]) .sidebar .brand {
+  min-height: 42px;
+  padding: 0 9px 22px;
+  border-bottom-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .sidebar .brand-copy strong,
+html:not([data-theme="light"]) .public-header .brand-copy strong {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .sidebar .brand-copy small,
+html:not([data-theme="light"]) .public-header .brand-copy small {
+  color: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .primary-nav {
+  gap: 4px;
+  padding-top: 22px;
+}
+
+html:not([data-theme="light"]) .nav-item {
+  min-height: 40px;
+  padding: 0 11px;
+  color: #92a3ae;
+  border-radius: 6px;
+  font-size: 11px;
+  letter-spacing: .01em;
+}
+
+html:not([data-theme="light"]) .nav-item:hover,
+html:not([data-theme="light"]) .nav-item.active {
+  color: var(--joben-text);
+  background: #142530;
+  border-color: rgba(85,223,208,.28);
+}
+
+html:not([data-theme="light"]) .nav-item.active {
+  box-shadow: inset 2px 0 var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .nav-icon,
+html:not([data-theme="light"]) .nav-item.active .nav-icon {
+  color: var(--joben-cyan);
+  opacity: .9;
+}
+
+html:not([data-theme="light"]) .plan-card {
+  margin-bottom: 20px;
+  padding: 15px 12px 13px;
+  background: #101923;
+  border-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .plan-label,
+html:not([data-theme="light"]) .plan-usage {
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .plan-card > strong,
+html:not([data-theme="light"]) .plan-usage b {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .upgrade-button {
+  color: var(--joben-muted);
+  background: #15222d;
+  border-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .logout-button {
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .topbar {
+  height: 68px;
+  padding: 0 34px;
+  background: #0c151e;
+  border-bottom-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .topbar-context {
+  color: var(--joben-dim);
+  font-size: 10px;
+}
+
+html:not([data-theme="light"]) .topbar-context strong,
+html:not([data-theme="light"]) .user-name {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .topbar-actions,
+html:not([data-theme="light"]) .icon-button,
+html:not([data-theme="light"]) .chevron {
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .user-avatar {
+  color: #06201d;
+  background: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .private-view #landing {
+  background: #0a131c;
+}
+
+html:not([data-theme="light"]) .private-view #landing .dashboard-heading,
+html:not([data-theme="light"]) .private-view #landing .dashboard-overview,
+html:not([data-theme="light"]) .private-view #landing .scan-workbench,
+html:not([data-theme="light"]) .private-view #landing .intelligence-dashboard,
+html:not([data-theme="light"]) .private-view #landing .scan-history {
+  max-width: 1220px;
+}
+
+html:not([data-theme="light"]) .dashboard-page,
+html:not([data-theme="light"]) .settings-page {
+  padding: 38px 46px 72px;
+}
+
+html:not([data-theme="light"]) .dashboard-heading {
+  margin-bottom: 30px;
+}
+
+html:not([data-theme="light"]) .dashboard-heading h1,
+html:not([data-theme="light"]) .settings-heading h2 {
+  color: var(--joben-text);
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.08;
+  letter-spacing: -.055em;
+}
+
+html:not([data-theme="light"]) .dashboard-heading p,
+html:not([data-theme="light"]) .settings-heading p,
+html:not([data-theme="light"]) .report-subtitle {
+  color: var(--joben-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+html:not([data-theme="light"]) .card-kicker,
+html:not([data-theme="light"]) .data-label {
+  color: var(--joben-dim);
+  font-size: 9px;
+  letter-spacing: .12em;
+}
+
+html:not([data-theme="light"]) .scan-workbench {
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+}
+
+html:not([data-theme="light"]) .scan-form-card,
+html:not([data-theme="light"]) .scan-mode-card,
+html:not([data-theme="light"]) .dashboard-report,
+html:not([data-theme="light"]) .side-card,
+html:not([data-theme="light"]) .report-table-card,
+html:not([data-theme="light"]) .trajectory-card,
+html:not([data-theme="light"]) .intelligence-card,
+html:not([data-theme="light"]) .settings-card,
+html:not([data-theme="light"]) .overview-page-card {
+  background: #111c27;
+  border-color: var(--joben-line);
+  box-shadow: 0 16px 34px rgba(0,0,0,.18);
+}
+
+html:not([data-theme="light"]) .scan-form-card {
+  padding: 21px 21px 14px;
+}
+
+html:not([data-theme="light"]) .scan-form-card form {
+  grid-template-columns: 170px minmax(0, 1fr) 132px;
+  gap: 12px;
+}
+
+html:not([data-theme="light"]) .form-field label,
+html:not([data-theme="light"]) .scan-mode-card label,
+html:not([data-theme="light"]) .settings-form label {
+  color: #b8c6cc;
+  font-size: 10px;
+}
+
+html:not([data-theme="light"]) .form-field select,
+html:not([data-theme="light"]) .form-field input,
+html:not([data-theme="light"]) .settings-form input,
+html:not([data-theme="light"]) .settings-form select,
+html:not([data-theme="light"]) .invite-form input,
+html:not([data-theme="light"]) .invite-form select {
+  height: 40px;
+  color: var(--joben-text);
+  background: #0b151f;
+  border-color: var(--joben-line-bright);
+  font-size: 11px;
+}
+
+html:not([data-theme="light"]) .form-field input::placeholder {
+  color: #718491;
+}
+
+html:not([data-theme="light"]) .form-field select:focus,
+html:not([data-theme="light"]) .form-field input:focus {
+  border-color: var(--joben-cyan);
+  box-shadow: 0 0 0 3px rgba(85,223,208,.14);
+}
+
+html:not([data-theme="light"]) .scan-form-card .primary-button {
+  height: 40px;
+  margin-top: 25px;
+  color: #06201d;
+  background: var(--joben-cyan);
+  border-color: var(--joben-cyan);
+  font-size: 10px;
+}
+
+html:not([data-theme="light"]) .primary-button:hover {
+  color: #06201d;
+  background: #83eee1;
+}
+
+html:not([data-theme="light"]) .secondary-button,
+html:not([data-theme="light"]) .download-button,
+html:not([data-theme="light"]) .view-all,
+html:not([data-theme="light"]) .outline-button {
+  min-height: 36px;
+  color: var(--joben-text);
+  background: #152431;
+  border-color: var(--joben-line-bright);
+}
+
+html:not([data-theme="light"]) .privacy-note,
+html:not([data-theme="light"]) .scan-mode-card small,
+html:not([data-theme="light"]) .dashboard-heading .hero-proof-row {
+  color: var(--joben-dim);
+}
+
+html:not([data-theme="light"]) .mode-title {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .radio-option {
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .radio-option input {
+  accent-color: var(--joben-cyan);
+}
+
+html:not([data-theme="light"]) .overview-page-card {
+  min-height: 188px;
+  padding: 21px;
+}
+
+html:not([data-theme="light"]) .overview-page-card strong,
+html:not([data-theme="light"]) .intelligence-card h3,
+html:not([data-theme="light"]) .settings-card h3,
+html:not([data-theme="light"]) .trajectory-heading h3,
+html:not([data-theme="light"]) .report-heading h2 {
+  color: var(--joben-text);
+  font-size: 15px;
+}
+
+html:not([data-theme="light"]) .overview-page-card p,
+html:not([data-theme="light"]) .trajectory-intro,
+html:not([data-theme="light"]) .trajectory-empty,
+html:not([data-theme="light"]) .intelligence-row span,
+html:not([data-theme="light"]) .overview-page-card p,
+html:not([data-theme="light"]) .settings-help {
+  color: var(--joben-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+html:not([data-theme="light"]) .network-pulse {
+  background: #0e1923;
+  border-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .pulse-intro,
+html:not([data-theme="light"]) .pulse-stat {
+  background: #111f2b;
+}
+
+html:not([data-theme="light"]) .pulse-stat strong,
+html:not([data-theme="light"]) .pulse-intro strong {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .pulse-stat span,
+html:not([data-theme="light"]) .pulse-stat small {
+  color: var(--joben-muted);
+}
+
+html:not([data-theme="light"]) .signal-board {
+  border-color: var(--joben-line);
+  background: #0d1822;
+}
+
+html:not([data-theme="light"]) .signal-preview {
+  min-height: 164px;
+  background: #111f2b;
+  border-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .signal-preview strong {
+  color: var(--joben-text);
+  font-size: 13px;
+}
+
+html:not([data-theme="light"]) .signal-preview p {
+  color: var(--joben-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+html:not([data-theme="light"]) .evidence-map-card,
+html:not([data-theme="light"]) .risk-posture-card,
+html:not([data-theme="light"]) .verification-trail-card {
+  background: #111f2b;
+  border-color: var(--joben-line);
+}
+
+@media (max-width: 900px) {
+  html:not([data-theme="light"]) .dashboard-page,
+  html:not([data-theme="light"]) .settings-page { padding: 30px 28px 56px; }
+  html:not([data-theme="light"]) .scan-workbench { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  html:not([data-theme="light"]) .sidebar {
+    width: 270px;
+    flex-basis: 270px;
+  }
+  html:not([data-theme="light"]) .topbar { padding: 0 18px; }
+  html:not([data-theme="light"]) .dashboard-page,
+  html:not([data-theme="light"]) .settings-page { padding: 24px 18px 44px; }
+  html:not([data-theme="light"]) .dashboard-heading h1 { font-size: 30px; }
+  html:not([data-theme="light"]) .scan-form-card form { grid-template-columns: 1fr; gap: 5px; }
+  html:not([data-theme="light"]) .scan-form-card .primary-button { margin-top: 12px; }
+}
