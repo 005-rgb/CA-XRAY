@@ -1,0 +1,768 @@
+JOBEN NETWORK
+CONTRACT INTELLIGENCE
+⌂
+Dashboard
+⌁
+Core Scan
+◷
+Scan History
+♢
+Risk Passport
+◉
+Watchtower
+⇄
+Compare
+▤
+Shared Reports
+⌘
+API Access
+◌
+Evidence Community
+⚙
+Settings
+Current Plan
+Free
+Scans this month
+3 / 5
+Upgrade Plan
+↪ Logout
+Workspace / Personal
+ID
+♧
+U
+zer30@smkn1wonogiri.sch.id
+⌄
+ACTIVE WORKSPACE
+
+personal · free
+Sign out
+FORENSIC INTELLIGENCE / LIVE NETWORK SIGNAL
+Private Scan Report
+Your forensic report is available inside the authenticated workspace.
+
+53 NETWORKS
+READ-ONLY BY DESIGN
+PROVIDER-AWARE
+Network
+
+Ethereum
+Coverage: 7/7 capabilities available · evm-rpc-blockscout
+
+Contract Address
+0xE172e9B6cfBeeB5593bDcE3f077356FDb33af904
+×
+
+Start Core Scan
+→
+♢ We never store your private keys. All scans are read-only.
+
+Scan Report
+Evidence-backed forensic assessment for the selected contract.
+
+⇩ Download Report
+Contract
+0xE172...f904 ▣
+Network
+◆ Ethereum
+Scan Mode
+Live
+Scan ID
+live-e172e9b6-5114331948
+Date
+Aug 25, 2026, 11:43 AM UTC
+ADVANCED REPORT INTELLIGENCE
+Risk Trajectory
+INITIAL SNAPSHOT
+No prior scan is stored for this contract. A future scan will show evidence-backed changes here.
+
+OVERALL RISK
+4/ 100
+LOW
+Risk Score
+4 / 100
+Reliability Score
+96 / 100
+Confidence
+MEDIUM
+Scan Mode
+Live Data
+WHY THIS SCORE?
+This score is primarily influenced by the contract's control surface, trading conditions, and available evidence quality.
+
+!
+Active owner concentration is material
+High Impact
+!
+Large 24-hour price movement
+High Impact
+View Full Analysis →
+QUICK SUMMARY
+Token Name
+The Interfold
+Symbol
+FOLD
+Decimals
+18
+Total Supply
+0
+Holders
+4,369
+Contract Age
+Unknown
+RISK BREAKDOWN
+Security
+0 / 100
+Trading Safety
+0 / 100
+Reliability
+96 / 100
+Market
+0 / 100
+View All Categories →
+REPORT SECTION
+
+All sections
+Show All
+↓
+17 sections · full evidence review
+TOP RISKS
+View All Findings →
+RISK	CATEGORY	SEVERITY	IMPACT	STATUS
+Active owner concentration is material	Holder Concentration	HIGH	+40	Detected
+Large 24-hour price movement	Market / Project	MEDIUM	+20	Detected
+DATA STATUS
+On-Chain Data
+UNKNOWN
+Contract Code
+Valid
+Liquidity Data
+Valid
+Holder Data
+Valid
+Market Data
+Valid
+Social Data
+Valid
+EVIDENCE SOURCES
+4
+Total Sources
+4 Successful
+0 Partial
+0 Failed
+View Evidence →
+EXECUTIVE SUMMARY
+01 / 08
+The observed evidence maps to a low risk level. The most material signals are active owner concentration is material and large 24-hour price movement. The assessment is partial because some categories are not sufficiently covered. This is an assessment based on available data at scan time, not financial advice.
+
+TOP 3 RISKS
+HIGH
+Active owner concentration is material
+MEDIUM
+Large 24-hour price movement
+TOP 3 POSITIVE SIGNALS
+POSITIVE
+Top-10 holder concentration is below 20%
+POSITIVE
+Primary-pair liquidity is substantial
+POSITIVE
+No mint capability detected
+IMPORTANT LIMITATIONS
+RPC bytecode presence was verified; ABI, ownership, holders, and source verification require explorer evidence.
+Transfer event history is partial or unavailable; the indexer/RPC did not provide a complete cursor traversal.
+Ownership event history is partial or unavailable; the indexer/RPC did not provide a complete cursor traversal.
+Router output is a read-only quote; it does not prove a wallet allowance, balance, slippage tolerance, or successful mined transaction.
+PROJECT CONTEXT
+02 / 16
+Project name
+The Interfold VERIFIED
+Token / symbol
+FOLD VERIFIED
+Contract address (per official source)
+UNKNOWN
+Network (per official source)
+UNKNOWN
+Official website
+https://www.theinterfold.com/ VERIFIED
+Official socials
+https://x.com/theInterfold,http://telegram.me/enclave_e3 VERIFIED
+PROJECT IDENTITY STATUS
+PARTIAL
+Official project links were found, but the scanned contract has not been cross-checked against an official address.
+
+PRIMARY TRADING PAIR
+0x909e...6c32 VERIFIED
+DEX / VENUE
+uniswap VERIFIED
+ACTIVE PAIRS
+UNKNOWN
+TRADING PAIR AGE
+2026-07-10T14:25:59.000Z VERIFIED
+Source: public market data. Trading-pair age reflects the indexed pair, not necessarily the age of the project.
+
+DATA CONSISTENCY
+03 / 16
+Token contract
+PASS
+Pair contract
+UNKNOWN
+Primary pair
+PASS
+DEX match
+PASS
+Pair ↔ market data
+UNKNOWN
+Price orientation
+PASS
+Market cap / FDV
+PASS
+NETWORK VALIDATION
+PASS
+Data consistency checks assess evidence integrity only. They are not a risk score and do not change the risk assessment.
+
+CONTRACT EVIDENCEVERIFIED
+RISK PROFILE
+02 / 16
+Explanatory dimensions derived from the canonical overall risk score. UNKNOWN means the available evidence is not sufficient for a category conclusion.
+
+Contract Control
+0 / 100
+LOW
+No mint capability was detected in available evidence.
+
+DATA COVERAGE
+93%
+Trading
+0 / 100
+LOW
+Trading controls are only partially covered.
+
+DATA COVERAGE
+92%
+Holder Concentration
+25 / 100
+MODERATE
+Top-10 holders control 8.65% of supply.
+
+DATA COVERAGE
+100%
+Liquidity
+0 / 100
+LOW
+Primary-pair liquidity is $1,870,768.
+
+DATA COVERAGE
+100%
+Deployer
+0 / 100
+LOW
+No major deployer signal was detected.
+
+DATA COVERAGE
+50%
+Market / Project
+0 / 100
+LOW
+Market and project context is based on available evidence.
+
+DATA COVERAGE
+62%
+WHAT CAN THIS CONTRACT DO?
+03 / 16
+Technical permissions are translated into potential user impact. UNVERIFIED_SIGNAL means a bytecode/provider signal was not confirmed by verified source or ABI.
+
+Mint new tokens
+NOT_DETECTED
+MEANING
+The capability was not detected in available evidence.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+Pause transfers
+NOT_DETECTED
+MEANING
+The capability was not detected in available evidence.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+Blacklist addresses
+NOT_DETECTED
+MEANING
+The capability was not detected in available evidence.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+Whitelist addresses
+NOT_DETECTED
+MEANING
+The capability was not detected in available evidence.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+Modify taxes
+NOT_DETECTED
+MEANING
+The capability was not detected in available evidence.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+Modify anti-whale limits
+NOT_DETECTED
+MEANING
+The capability was not detected in available evidence.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+Withdraw contract funds
+NOT_DETECTED
+MEANING
+The capability was not detected in available evidence.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+Upgrade / proxy
+NOT_DETECTED
+MEANING
+The capability was not detected in available evidence.
+
+POTENTIAL IMPACT
+No observed addition.
+CONTROL
+—
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+Ownership control
+DETECTED
+MEANING
+An active privileged control address was identified.
+
+POTENTIAL IMPACT
+The privileged address may be able to exercise detected capabilities.
+CONTROL
+ACTIVE
+EVIDENCE: Contract Analysis
+RISK CONFIDENCE: HIGH
+CONTRACT POWER MAP
+04 / 16
+OWNER / ADMIN
+0x5429...c018
+ACTIVE
+↓
+CAN CONTROL
+Ownership control
+↓
+POTENTIAL USER IMPACT
+The privileged address may be able to exercise detected capabilities.
+CAN I EXIT?
+05 / 16
+Technical exitability assessment only. This is not investment advice and does not guarantee execution or safety.
+
+EXITABILITY
+UNKNOWN
+Insufficient evidence is available to assess practical exit conditions.
+
+SELL SIMULATION
+UNKNOWN
+SELL TAX
+0%
+SELL RESTRICTION
+UNKNOWN
+LIQUIDITY
+$1,870,768
+ROUTER ETH_CALL
+UNKNOWN
+READ-ONLY ROUTER EVIDENCE
+UNKNOWN
+No verified router/pair mapping is available for this network.
+
+This is an eth_call quote only. It does not prove allowance, wallet balance, slippage tolerance, tax behavior, or a mined transaction.
+USER IMPACT
+06 / 16
+Each material finding is expressed as capability or signal → potential user impact → control → evidence confidence.
+
+Active owner concentration is material
+HIGH
+WHAT
+The active owner controls approximately 39.9917% of supply.
+WHY
+A large balance held by an active privileged address can combine distribution concentration with administrative control.
+POTENTIAL IMPACT
+A small number of wallets may have a larger effect on supply and liquidity.
+CONTROL
+The relevant contract or market condition.
+EVIDENCE
+Contract Analysis · CONFIDENCE HIGH
+Large 24-hour price movement
+HIGH
+WHAT
+The observed 24-hour change is -4.35%.
+WHY
+Large short-term movement is a market-risk signal, not a prediction of future performance.
+POTENTIAL IMPACT
+The signal may affect how the contract should be independently reviewed.
+CONTROL
+The relevant contract or market condition.
+EVIDENCE
+Contract Analysis · CONFIDENCE HIGH
+RISK BREAKDOWN
+02 / 08
+CATEGORY	SCORE	ORIGINAL WEIGHT	APPLIED WEIGHT	STATUS	COVERAGE
+Contract Control	0 / 100	30%	30.00%	PARTIAL	
+93%
+Trading	0 / 100	20%	20.00%	PARTIAL	
+92%
+Holder Concentration	25 / 100	15%	15.00%	AVAILABLE	
+100%
+Liquidity	0 / 100	15%	15.00%	AVAILABLE	
+100%
+Deployer	0 / 100	10%	10.00%	PARTIAL	
+50%
+Market / Project	0 / 100	10%	10.00%	PARTIAL	
+62%
+This report is marked PARTIAL DATA. Unknown categories are not redistributed. Risk from available data: 3.75–3.75 / 100; unscored weight: 0%.
+
+HOW THE SCORE WAS CALCULATED
+Contract Control: 0 × 30% = 0.00 → applied 30.00%
+Trading: 0 × 20% = 0.00 → applied 20.00%
+Holder Concentration: 25 × 15% = 3.75 → applied 15.00%
+Liquidity: 0 × 15% = 0.00 → applied 15.00%
+Deployer: 0 × 10% = 0.00 → applied 10.00%
+Market / Project: 0 × 10% = 0.00 → applied 10.00%
+Final: 3.75 / 100 = 3.75 (range 3.75–3.75)
+RELIABILITY CALCULATION
+E: 87.5 × 35%
+S: 100 × 20%
+F: 100 × 15%
+C: 100 × 15%
+R: 100 × 10%
+I: 100 × 5%
+Reliability: 96 / 100
+CONTRACT & TRADING FORENSICS
+03 / 08
+CONTRACT CAPABILITIES
+CAPABILITY	STATUS	IMPACT	EVIDENCE	EVIDENCE TYPE	CONFIDENCE
+Mint additional tokens	NOT DETECTED NOT DETECTED	No observed addition	GP-001	Contract Analysis	HIGH
+Blacklist addresses	NOT DETECTED NOT DETECTED	No observed addition	GP-002	Contract Analysis	HIGH
+Whitelist restrictions	NOT DETECTED NOT DETECTED	No observed addition	GP-003	Contract Analysis	HIGH
+Pause transfers	NOT DETECTED NOT DETECTED	No observed addition	GP-004	Contract Analysis	HIGH
+Modify transaction tax	NOT DETECTED NOT DETECTED	No observed addition	GP-005	Contract Analysis	HIGH
+Upgradeable / proxy	NOT DETECTED NOT DETECTED	No observed addition	GP-006	Contract Analysis	HIGH
+Withdraw funds	NOT DETECTED NOT DETECTED	No observed addition	GP-007	Contract Analysis	HIGH
+Source verification	DETECTED VERIFIED	Unverified +10	BS-001	Contract Analysis	HIGH
+TRADING SIGNALS
+SIGNAL	VALUE / STATUS	IMPACT	EVIDENCE	EVIDENCE TYPE	CONFIDENCE
+Buy tax	0% VERIFIED	≥15% adds +15	GP-012	Contract Analysis	HIGH
+Sell tax	0% VERIFIED	≥20% adds +20	GP-013	Contract Analysis	HIGH
+Transfer tax	0% VERIFIED	—	GP-014	Contract Analysis	HIGH
+Sell restriction	UNKNOWN	+30	GP-015	UNKNOWN	UNKNOWN
+Buy restriction	NOT DETECTED NOT DETECTED	+20	GP-016	Contract Analysis	HIGH
+Malicious-trading signal	NOT DETECTED NOT DETECTED	+50	GP-017	Contract Analysis	HIGH
+Max wallet / transaction	NOT DETECTED NOT DETECTED	+10	GP-019	Contract Analysis	HIGH
+Trading pause	NOT DETECTED NOT DETECTED	+10	GP-004	Contract Analysis	HIGH
+HOLDER & LIQUIDITY ANALYSIS
+04 / 08
+HOLDER SUMMARY
+Total holders
+4,369 VERIFIED
+Top 1%
+3.5% VERIFIED
+Top 5%
+6.66% VERIFIED
+Top 10%
+8.65% VERIFIED
+GoPlus top 10% (incl. contracts/LP)
+70.19% VERIFIED
+Deployer
+0% VERIFIED
+Owner
+39.99% VERIFIED
+GoPlus holder count
+4,373 VERIFIED
+Burn
+0% VERIFIED
+Liquidity-related
+71.78 VERIFIED
+On-chain transfer events
+5,850 VERIFIED
+On-chain observed holders
+613 VERIFIED
+Event history status
+PARTIAL VERIFIED
+PRIMARY LIQUIDITY PAIR
+Liquidity
+$1,870,768 VERIFIED
+24h volume
+$4,108,136 VERIFIED
+Pair
+0x909e...6c32 VERIFIED
+DEX
+uniswap VERIFIED
+Price
+$0.09327 VERIFIED
+24h change
+-4.35% VERIFIED
+Indexed pairs
+8 VERIFIED
+All-pair liquidity
+$2,649,939 VERIFIED
+All-pair 24h volume
+$7,474,316 VERIFIED
+24h buys / sells
+2716 / 2393 VERIFIED
+Primary pair rule: Highest-evidence pair selection rule. Liquidity lock status is not claimed because no reliable lock source is configured.
+
+ON-CHAIN EVENT HISTORY
+UNKNOWN
+No on-chain Transfer history was available.
+
+OWNER EVENT HISTORY
+UNKNOWN
+No OwnershipTransferred events were found in the scanned range.
+
+MARKET & DEPLOYER SIGNALS
+05 / 08
+MARKET & PROJECT
+Price
+$0.09327 VERIFIED
+24h volume
+$4,108,136 VERIFIED
+Liquidity
+$1,870,768 VERIFIED
+FDV
+$111,935,527 VERIFIED
+Market cap
+$33,954,912 VERIFIED
+24h change
+-4.35% VERIFIED
+7d change
+UNKNOWN
+Website
+https://www.theinterfold.com/ VERIFIED
+Address consistency
+UNKNOWN
+Audit claim
+UNKNOWN
+DEPLOYER
+Contract Creator
+0x0b84...c8cb VERIFIED
+Contract Owner
+0x5429...c018 VERIFIED
+Deployment date
+UNKNOWN
+Suspicious behavior
+UNKNOWN
+Related contracts
+UNKNOWN
+Recent deployment
+UNKNOWN
+Token concentration
+UNKNOWN
+Malicious association
+UNKNOWN
+EXPLORER / INDEXER EVIDENCE
+Source verification
+DETECTED DETECTED
+Verified ABI / class
+["bonding_registry","cca_end","cca_start","claim_source","clock_mode","default_admin_role","domain_separator","lock_manager_role","max_locks_per_account","max_queued_locks_per_account","max_supply","minter_role","no_more_locks","pending_lock_policy_id","tge_cooldown","whitelist_role","acceptownership","allowance","approve","balanceof","checkpoints","claimlockexempt","clock","createlockpolicy","decimals","delegate","delegatebysig","delegates","eip712domain","getpasttotalsupply","getpastvotes","getroleadmin","getvotes","grantrole","hasrole","linkclaim","lockcount","lockpolicyof","lockedbalanceat","lockedbalanceof","locks","mint","mintallocations","name","nonces","numcheckpoints","owner","pendingowner","permit","phase","queuedlockcount","queuedlocks","relinkactivelock","renounceownership","renouncerole","revokerole","setclaimlockexempt","setclaimsource","settransferwhitelisted","supportsinterface","symbol","tge","tgetimestamp","totalsupply","transfer","transferfrom","transferownership","transferwhitelist","transferablebalanceof"] VERIFIED
+Contract metadata
+UNKNOWN
+Owner address
+0x5429...c018 VERIFIED
+Deployer address
+0x0b84...c8cb VERIFIED
+Deployment time
+UNKNOWN
+Holder count
+4,369 VERIFIED
+KEY FINDINGS
+06 / 08
+Findings are generated only when the normalized snapshot contains supporting evidence. They are ordered by severity, risk contribution, confidence, and stable finding ID.
+
+SEVERITY	FINDING / WHY IT MATTERS	CONFIDENCE	EVIDENCE
+HIGH	
+Active owner concentration is material
+A large balance held by an active privileged address can combine distribution concentration with administrative control.
+Risk confidence: HIGHData retrieval: HIGH	Active owner concentration is material: 39.9917
+MEDIUM	
+Large 24-hour price movement
+Large short-term movement is a market-risk signal, not a prediction of future performance.
+Risk confidence: HIGHData retrieval: HIGH	Large 24-hour price movement: -4.35
+POSITIVE	
+Top-10 holder concentration is below 20%
+The observed distribution is below the highest concentration bands in this rubric.
+Risk confidence: HIGHData retrieval: HIGH	Top-10 holder concentration is below 20%: 8.65
+POSITIVE	
+Primary-pair liquidity is substantial
+The observed liquidity is at or above the rubric's $100,000 lower-risk threshold.
+Risk confidence: HIGHData retrieval: HIGH	Primary-pair liquidity is substantial: 1,870,768.25
+POSITIVE	
+No mint capability detected
+This removes one observed privileged supply-control signal from the current scan.
+Risk confidence: HIGHData retrieval: HIGH	No mint capability detected: NOT DETECTED
+VIEW ALL FINDINGS (2)
+EVIDENCE REGISTER
+07 / 08
+Expand an item for WHAT, WHY, EVIDENCE, timestamp, status, confidence, and limitations.
+
+ID	FINDING	EVIDENCE TYPE	RETRIEVED AT	CONFIDENCE
+GP-031	Active owner concentration is material
+VIEW EVIDENCE DETAIL
+Contract Analysis	Aug 25, 2026, 11:43 AM UTC	HIGH
+DS-006	Large 24-hour price movement
+VIEW EVIDENCE DETAIL
+WHAT
+The observed 24-hour change is -4.35%.
+WHY
+Large short-term movement is a market-risk signal, not a prediction of future performance.
+EVIDENCE
+Large 24-hour price movement: -4.35
+EVIDENCE TYPE
+Contract Analysis
+RETRIEVED AT
+Aug 25, 2026, 11:43 AM UTC
+STATUS
+VERIFIED
+CONFIDENCE
+HIGH
+Contract Analysis	Aug 25, 2026, 11:43 AM UTC	HIGH
+DATA COVERAGE & LIMITATIONS
+15 / 16
+OVERALL EVIDENCE COVERAGE
+83%
+SCAN LIMITATION
+Coverage reflects fields returned in the normalized snapshot.
+
+Contract Control
+93%
+PARTIAL
+Trading
+92%
+PARTIAL
+Holder Concentration
+100%
+FULL
+Liquidity
+100%
+FULL
+Deployer
+50%
+PARTIAL
+Market / Project
+62%
+PARTIAL
+TOKEN TIMELINE
+DEPLOYED
+UNKNOWN
+OWNERSHIP
+0x5429...c018
+LIQUIDITY
+$1,870,768
+CURRENT
+Aug 25... UTC
+ADDRESS RELATIONSHIPS
+DEPLOYER
+0x0b84...c8cb
+TOKEN CONTRACT
+0xE172...f904
+OWNER
+0x5429...c018
+WHAT CHANGED?
+NO PREVIOUS SCAN
+Historical comparison is not available because no prior scan is stored in this application.
+
+EVIDENCE INTELLIGENCE
+16 / 16
+Lineage, provider posture, conflicts, freshness, and coverage remain separate from the risk score.
+
+EVIDENCE GRAPH
+Snapshot relationships
+0 NODES
+No graph relationships were available for this snapshot.
+PROVIDER POSTURE
+Independent sources
+0 SOURCES
+Provider lineage is unavailable for this snapshot.
+CONFLICT VIEW
+Provider disagreements
+0 FOUND
+No unresolved provider conflict was recorded.
+FRESHNESS & COVERAGE
+Evidence health
+0 STALE
+contract
+93%
+trading
+92%
+holder
+100%
+liquidity
+100%
+deployer
+50%
+marketProject
+62%
+No evidence item exceeded the 24-hour freshness threshold.
+
+FINDING	STATUS	CONFIDENCE	RETRIEVED	PROVENANCE
+Active owner concentration is material	VERIFIED	HIGH	Aug 25, 2026, 11:43 AM UTC	UNKNOWN
+Large 24-hour price movement	VERIFIED	HIGH	Aug 25, 2026, 11:43 AM UTC	UNKNOWN
+Top-10 holder concentration is below 20%	VERIFIED	HIGH	Aug 25, 2026, 11:43 AM UTC	UNKNOWN
+Primary-pair liquidity is substantial	VERIFIED	HIGH	Aug 25, 2026, 11:43 AM UTC	UNKNOWN
+No mint capability detected	NOT_DETECTED	HIGH	Aug 25, 2026, 11:43 AM UTC	UNKNOWN
+Contract source is verified	VERIFIED	HIGH	Aug 25, 2026, 11:43 AM UTC	UNKNOWN
+No honeypot signal detected	NOT_DETECTED	HIGH	Aug 25, 2026, 11:43 AM UTC	UNKNOWN
+FINAL ASSESSMENT
+08 / 08
+Overall risk
+4 / 100 VERIFIED
+Risk level
+LOW VERIFIED
+Reliability
+96 / 100 VERIFIED
+Confidence
+MEDIUM VERIFIED
+Data coverage
+83% VERIFIED
+PRIMARY RISKS
+Active owner concentration is material
+Large 24-hour price movement
+POSITIVE SIGNALS
+Top-10 holder concentration is below 20%
+Primary-pair liquidity is substantial
+No mint capability detected
+WHAT TO VERIFY BEFORE TRUSTING THIS TOKEN
+Verify contract address
+Review owner permissions
+Review holder concentration
+Review liquidity
+Review trading restrictions
+Review audit claims
+Review deployer activity
+This is not financial advice. This assessment does not guarantee safety and does not establish that a token is a scam. JOBEN NETWORK does not provide BUY, SELL, LONG, or SHORT recommendations.
