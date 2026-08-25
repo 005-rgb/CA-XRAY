@@ -1,0 +1,1192 @@
+# JOBEN NETWORK — Arbitrum Immune System Roadmap
+
+## Competition product: Transaction Intent Firewall for Autonomous Finance
+
+**Status:** Approved for implementation planning  
+**Created:** 2026-08-25  
+**Target environment:** Arbitrum Sepolia first, Arbitrum One verification path  
+**Competition window used for planning:** 2026-09-14 through 2026-10-04  
+**Primary product:** Arbitrum Immune System  
+**MVP wedge:** Transaction Intent Firewall for AI agents and protocol automation  
+**Supporting intelligence:** Cross-chain provenance, permission risk, dependency graph, and blast-radius monitoring
+
+---
+
+## 1. Executive decision
+
+JOBEN must not enter the competition as a generic multichain scanner, a
+GoPlus/DexScreener aggregator, or a dashboard with an on-chain hash.
+
+The competition product is:
+
+> **JOBEN is the immune system for autonomous finance on Arbitrum. It verifies
+> transaction intent, permissions, contract provenance, and dependency changes
+> before an AI agent or protocol can put capital at risk.**
+
+The product has one complete vertical slice:
+
+```text
+Agent instruction
+  -> transaction intent decoding
+  -> target and calldata validation
+  -> permission / allowance analysis
+  -> contract, bridge, and dependency evidence
+  -> policy evaluation
+  -> ALLOW / REVIEW_REQUIRED / BLOCK
+  -> signed and anchored decision record
+  -> Watchtower invalidation
+  -> blast-radius explanation
+```
+
+The multichain engine remains intact. Arbitrum is the execution environment and
+the first product market, not a permanent deletion of other network support.
+
+---
+
+## 2. Recommendations before implementation
+
+### 2.1 Build one complete path, not ten disconnected features
+
+The product may be described as an “immune system”, but the MVP must prove one
+complete safety decision from input to prevention. A shallow collection of
+features will score lower than one reliable, replayable workflow.
+
+The required demo path is:
+
+1. An agent receives a deposit instruction.
+2. The agent produces an unsigned transaction intent.
+3. JOBEN decodes the actual operation and requested permissions.
+4. JOBEN compares the operation with the declared intent.
+5. JOBEN evaluates target, asset, origin, bridge, freshness, and policy evidence.
+6. JOBEN blocks a dangerous transaction.
+7. A compliant transaction is allowed.
+8. A monitored dependency changes.
+9. The old decision is invalidated and the next action is blocked or escalated.
+
+### 2.2 Do not require a real wallet for the first milestone
+
+The existing product direction explicitly defers wallet connection and
+transaction execution. The MVP should accept a normalized unsigned transaction
+payload and provide a deterministic simulator. A real wallet adapter can be
+added only after the core decision contract is stable.
+
+This avoids making wallet permissions, browser-extension behavior, and user
+signatures the critical path for the competition build.
+
+### 2.3 Use Arbitrum Sepolia for writes and Arbitrum One for evidence
+
+All mutable demo writes and the registry deployment should initially use
+Arbitrum Sepolia. Arbitrum One should be used for read/evidence verification
+where the target contract and provider data are available.
+
+No production claim may be made from testnet data without clearly labeling:
+
+```text
+NETWORK: ARBITRUM_SEPOLIA
+ENVIRONMENT: DEMO
+```
+
+### 2.4 Do not call an off-chain score an oracle
+
+The server is an evidence evaluator and policy issuer. The on-chain component
+stores and verifies attestations and exposes a narrow registry read path. It
+must not pretend that an off-chain process is a decentralized oracle.
+
+Use these terms:
+
+- `evidence attestation`;
+- `policy decision`;
+- `verification registry`;
+- `integration gate`;
+- `issuer`;
+- `freshness`;
+- `revocation` or `invalidation`.
+
+Avoid:
+
+- “guaranteed safe”;
+- “trustless security oracle”;
+- “proves a contract is safe”;
+- “AI determines truth”.
+
+### 2.5 Preserve uncertainty as a first-class result
+
+`UNKNOWN`, `UNAVAILABLE`, `UNVERIFIED`, `PARTIAL`, `CONFLICT`, and `STALE` must
+never silently become `ALLOW`. The existing trust contract in
+`src/contracts/trust.js` is the semantic authority for evidence status and
+freshness.
+
+---
+
+## 3. Why this is materially different from existing scanners
+
+Existing providers remain valuable inputs, but they are not the product
+differentiator.
+
+| Layer | Typical scanner answer | JOBEN answer |
+|---|---|---|
+| Contract signal | Does this token have a mint, tax, blacklist, or honeypot signal? | What risk evidence exists and how reliable is each source? |
+| Market data | What is the liquidity and volume? | Is the market evidence fresh enough for this policy? |
+| Contract review | Is the source verified? | Is the target verified on this chain and consistent with other evidence? |
+| Transaction safety | What does the contract generally look like? | What does this exact transaction grant or execute? |
+| Provenance | What is the token contract on Arbitrum? | What origin, bridge, authority, and dependency path brought it here? |
+| Automation | Show a warning | Enforce a declared policy for an agent or protocol |
+| Monitoring | Alert on a changed signal | Invalidate prior decisions and explain affected integrations |
+| Incident response | List a finding | Calculate the observable downstream blast radius |
+
+The novelty claim is therefore the **composition and enforcement model**, not
+the invention of every individual security signal:
+
+```text
+user/agent intent
+  + exact transaction behavior
+  + permission exposure
+  + cross-chain provenance
+  + time-bounded evidence
+  + dependency impact
+  + explicit policy
+  = verifiable integration decision
+```
+
+The submission must demonstrate this difference with an intent mismatch and a
+dependency invalidation, not only with a scan score.
+
+---
+
+## 4. Product scope
+
+### 4.1 In scope for the competition MVP
+
+#### A. Transaction intent safety
+
+- Accept a normalized unsigned EVM transaction.
+- Accept a declared human/agent intent.
+- Decode supported selectors and arguments.
+- Detect mismatch between declared intent and actual behavior.
+- Identify transfers, approvals, permits, operator permissions, and privileged
+  calls where the ABI/evidence is available.
+- Return a decision with reason codes and evidence references.
+
+#### B. Permission exposure
+
+At minimum detect:
+
+- ERC-20 `approve`;
+- ERC-20 `permit` where the signature payload is supplied;
+- ERC-721/1155 operator approval;
+- unlimited or materially oversized allowance;
+- unknown spender;
+- upgradeable spender;
+- privileged or arbitrary-call target;
+- approval that exceeds the declared intent.
+
+#### C. Contract and chain target verification
+
+- Validate address syntax using the existing network rules.
+- Confirm deployed bytecode on the selected chain.
+- Ensure provider data is not mixed between Arbitrum One and Arbitrum Sepolia.
+- Capture chain ID, block reference, retrieval time, and provider status.
+
+#### D. Cross-chain provenance MVP
+
+Support a bounded registry of known bridge/origin relationships. Do not attempt
+automatic discovery of every bridge in the ecosystem.
+
+The first implementation may cover:
+
+- canonical Arbitrum bridge relationship patterns;
+- explicitly configured bridge adapters;
+- origin contract and origin chain when evidence is available;
+- bridge admin/proxy status;
+- mint/burn authority status;
+- provenance status: `VERIFIED`, `PARTIAL`, `UNKNOWN`, `CONFLICT`.
+
+#### E. Policy engine
+
+Provide at least three named policies:
+
+1. `AI_AGENT_CONSERVATIVE`
+2. `LENDING_ASSET_ADMISSION`
+3. `DEMO_PERMISSIVE`
+
+Policies must be versioned and evaluate explicit conditions. No hidden
+thresholds may be embedded only in UI code.
+
+#### F. On-chain verification registry
+
+Deploy a small Solidity contract to Arbitrum Sepolia with:
+
+- attestation creation;
+- attestation lookup;
+- expiry;
+- invalidation/revocation;
+- issuer access control;
+- event logs;
+- duplicate/replay protection;
+- chain and subject binding.
+
+The contract stores hashes and compact metadata, not provider responses or full
+reports.
+
+#### G. Watchtower invalidation
+
+Monitor at least one meaningful change type end to end:
+
+- target proxy implementation change; or
+- bridge implementation/admin change; or
+- origin/mint authority change.
+
+When detected:
+
+1. identify the affected passport/attestation;
+2. create an immutable event;
+3. mark the decision `STALE` or `INVALIDATED`;
+4. identify affected demo integrations;
+5. make the next gate check return `REVIEW_REQUIRED` or `BLOCK`.
+
+#### H. Blast-radius view
+
+The MVP graph must contain only evidence-backed or explicitly configured edges.
+Every inferred edge must be labeled `INFERRED` and must not be presented as
+proof of ownership or malicious intent.
+
+The UI must show:
+
+- changed node;
+- directly affected assets;
+- directly affected demo integrations;
+- evidence basis;
+- confidence and limitation.
+
+### 4.2 Explicitly out of scope
+
+- real fund custody;
+- automatic transaction submission;
+- automatic fund recovery;
+- financial recommendations or yield ranking;
+- claiming to prevent all exploits;
+- full Arbitrum-wide graph indexing;
+- all bridge protocols;
+- fully autonomous AI agents;
+- decentralized validator network;
+- token, DAO, governance, or staking mechanics;
+- arbitrary smart-contract execution;
+- using an LLM to assign risk, severity, evidence status, or policy outcome;
+- making wallet connection a release blocker;
+- migrating the existing multichain engine;
+- replacing PostgreSQL or the existing persistence direction.
+
+---
+
+## 5. Reference architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│ Presentation                                                         │
+│ Agent simulator | Decision review | Passport | Dependency graph     │
+└──────────────────────────────────┬──────────────────────────────────┘
+                                   │
+┌──────────────────────────────────▼──────────────────────────────────┐
+│ Intent Safety API                                                    │
+│ request validation | idempotency | auth/scope | decision resource   │
+└──────────────────────────────────┬──────────────────────────────────┘
+                                   │
+┌──────────────────────────────────▼──────────────────────────────────┐
+│ Decision Orchestrator                                                │
+│ target validation | calldata decoder | permission analyzer          │
+│ provenance resolver | evidence freshness | policy evaluator         │
+└───────────────┬─────────────────────┬─────────────────┬──────────────┘
+                │                     │                 │
+┌───────────────▼─────────────┐ ┌─────▼─────────────┐ ┌─▼──────────────┐
+│ Existing evidence engine    │ │ Provenance graph  │ │ Policy registry │
+│ GoPlus/RPC/Blockscout/DEX   │ │ bridge/origin     │ │ versioned rules │
+│ Risk Passport/Watchtower    │ │ dependency edges │ │ reason codes    │
+└───────────────┬─────────────┘ └────────┬───────────┘ └──────┬─────────┘
+                │                        │                  │
+                └────────────────────────▼──────────────────┘
+                                         │
+┌────────────────────────────────────────▼────────────────────────────┐
+│ Attestation boundary                                                 │
+│ canonical decision hash | signed report | on-chain registry         │
+└────────────────────────────────────────┬────────────────────────────┘
+                                         │
+┌────────────────────────────────────────▼────────────────────────────┐
+│ Watchtower / incident projection                                     │
+│ change event | invalidation | affected-subject projection            │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 5.1 Existing boundaries to reuse
+
+- `src/engine.js` remains responsible for normalized evidence and risk
+  semantics.
+- `src/contracts/trust.js` remains responsible for status, freshness, and
+  trust event vocabulary.
+- `src/providers/registry.js` remains the provider adapter boundary.
+- `src/intelligence/deployer-cluster.js` remains an intelligence source; its
+  inferences must retain their current limitations.
+- `src/watchtower/` remains the monitoring and delivery boundary.
+- `src/api/developer.js` remains the safe API/access boundary.
+- Existing auth/workspace controls remain authoritative for tenant isolation.
+
+New modules should consume these boundaries rather than fork scoring logic.
+
+---
+
+## 6. Domain contracts
+
+### 6.1 Declared intent
+
+```json
+{
+  "intentId": "intent_opaque",
+  "actorType": "AI_AGENT",
+  "actorId": "agent_demo_1",
+  "chainId": 421614,
+  "sender": "0x...",
+  "declaredAction": "DEPOSIT",
+  "asset": "0x...",
+  "amount": "500000000",
+  "amountUnit": "USDC_BASE_UNITS",
+  "destination": "0x...",
+  "expectedSpender": "0x...",
+  "maxApproval": "500000000",
+  "policyId": "AI_AGENT_CONSERVATIVE",
+  "policyVersion": "1.0.0"
+}
+```
+
+Required invariants:
+
+- `chainId` is explicit;
+- sender and target use network-specific validation;
+- amount is represented as an integer string, never a floating point number;
+- declared asset and destination are canonical addresses;
+- policy is selected by server-side registry ID/version;
+- caller cannot supply workspace, role, or entitlement overrides.
+
+### 6.2 Unsigned transaction
+
+```json
+{
+  "transactionId": "txi_opaque",
+  "chainId": 421614,
+  "from": "0x...",
+  "to": "0x...",
+  "value": "0",
+  "data": "0x...",
+  "gasLimit": "250000",
+  "nonce": null,
+  "capturedAt": "2026-09-20T10:30:00.000Z"
+}
+```
+
+For the MVP, gas and nonce are informational unless they affect a declared
+policy. Raw calldata must be retained in the private decision record but
+redacted from public output when not needed for verification.
+
+### 6.3 Decision result
+
+```json
+{
+  "decisionId": "decision_opaque",
+  "status": "BLOCK",
+  "decision": "BLOCK",
+  "intentId": "intent_opaque",
+  "transactionId": "txi_opaque",
+  "chain": {
+    "chainId": 421614,
+    "networkId": "arbitrum-sepolia",
+    "targetStatus": "FOUND"
+  },
+  "summary": "Approval exceeds the declared deposit amount and targets an upgradeable spender.",
+  "reasons": [
+    {
+      "code": "APPROVAL_EXCEEDS_INTENT",
+      "severity": "HIGH",
+      "field": "approval.amount",
+      "observed": "MAX_UINT256",
+      "expected": "500000000",
+      "status": "VERIFIED"
+    },
+    {
+      "code": "UPGRADEABLE_SPENDER",
+      "severity": "MEDIUM",
+      "field": "spender.proxy",
+      "observed": true,
+      "status": "VERIFIED"
+    }
+  ],
+  "evidence": {
+    "snapshotId": "snapshot_opaque",
+    "evidenceHash": "0x...",
+    "capturedAt": "2026-09-20T10:30:00.000Z",
+    "freshness": "FRESH",
+    "reliabilityScore": 92
+  },
+  "limitations": [],
+  "policy": {
+    "id": "AI_AGENT_CONSERVATIVE",
+    "version": "1.0.0"
+  }
+}
+```
+
+### 6.4 Decision statuses
+
+```text
+ALLOW
+REVIEW_REQUIRED
+BLOCK
+STALE_EVIDENCE
+UNAVAILABLE
+CONFLICT
+```
+
+`STALE_EVIDENCE`, `UNAVAILABLE`, and `CONFLICT` are not aliases for `BLOCK`.
+They are explicit operational outcomes. A policy may map them to a blocked
+execution, but the original evidence state must remain visible.
+
+### 6.5 Provenance edge
+
+```json
+{
+  "edgeId": "edge_opaque",
+  "from": {
+    "networkId": "arbitrum-one",
+    "address": "0x..."
+  },
+  "to": {
+    "networkId": "ethereum",
+    "address": "0x..."
+  },
+  "relationship": "BRIDGED_REPRESENTATION",
+  "status": "VERIFIED",
+  "source": "configured_canonical_bridge_adapter",
+  "observedAt": "2026-09-20T10:30:00.000Z",
+  "limitation": null
+}
+```
+
+Unknown relationships must not be invented from address similarity. Inferred
+edges require a separate status and explanation.
+
+---
+
+## 7. Policy model
+
+Policies are data, not UI conditionals.
+
+### 7.1 `AI_AGENT_CONSERVATIVE`
+
+Required:
+
+- target bytecode exists on the selected chain;
+- transaction intent matches decoded action;
+- approval is capped at declared amount;
+- target and spender are not unknown;
+- critical evidence is not stale;
+- unresolved provider conflict is not allowed;
+- critical proxy/admin change is not present;
+- provenance is `VERIFIED` or explicitly allowed by policy;
+- transaction value is below the configured limit;
+- sensitive function selectors require human review.
+
+### 7.2 `LENDING_ASSET_ADMISSION`
+
+Required:
+
+- asset contract exists on Arbitrum;
+- source or bytecode evidence is available;
+- risk score is below policy threshold;
+- reliability is above policy threshold;
+- control/owner evidence is fresh;
+- bridge/origin status is not `UNKNOWN` for bridged assets;
+- no critical mint/blacklist/pause finding is unresolved;
+- liquidity evidence meets configured minimum where applicable.
+
+### 7.3 `DEMO_PERMISSIVE`
+
+This is only for demonstrating policy differences. It may allow lower-severity
+unknowns but must never allow:
+
+- invalid target;
+- missing chain bytecode;
+- intent mismatch involving value transfer;
+- unlimited approval when the policy declares a cap;
+- known critical contract change;
+- invalid or expired attestation.
+
+### 7.4 Reason code registry
+
+The first reason code set must be stable and tested:
+
+```text
+TARGET_NOT_DEPLOYED
+TARGET_CHAIN_MISMATCH
+INTENT_DECODE_UNAVAILABLE
+INTENT_ACTION_MISMATCH
+APPROVAL_EXCEEDS_INTENT
+UNLIMITED_APPROVAL
+UNKNOWN_SPENDER
+UPGRADEABLE_SPENDER
+PRIVILEGED_FUNCTION_CALL
+ORIGIN_UNKNOWN
+BRIDGE_UNVERIFIED
+BRIDGE_ADMIN_ACTIVE
+ORIGIN_MINT_AUTHORITY_UNRESOLVED
+PROVIDER_CONFLICT
+CRITICAL_EVIDENCE_STALE
+ATTESTATION_EXPIRED
+ATTESTATION_INVALIDATED
+DEPENDENCY_CHANGED
+BLAST_RADIUS_INCOMPLETE
+HUMAN_REVIEW_REQUIRED
+```
+
+---
+
+## 8. Smart contract design
+
+### 8.1 Contract responsibility
+
+The registry contract is not a score oracle. It provides verifiability for an
+issuer-generated decision:
+
+- bind a subject to a chain ID;
+- bind a policy and policy version;
+- store evidence hash;
+- store decision status;
+- store captured and expiry timestamps;
+- allow authorized issuer invalidation;
+- emit lifecycle events;
+- prevent duplicate attestation IDs or replay;
+- expose read methods for a gate/demo contract.
+
+### 8.2 Suggested interface
+
+Names may change during implementation, but semantics must remain:
+
+```solidity
+enum Decision {
+    NONE,
+    ALLOW,
+    REVIEW_REQUIRED,
+    BLOCK,
+    STALE_EVIDENCE,
+    INVALIDATED
+}
+
+struct Attestation {
+    bytes32 passportId;
+    uint256 subjectChainId;
+    address subject;
+    bytes32 evidenceHash;
+    bytes32 policyHash;
+    uint64 issuedAt;
+    uint64 expiresAt;
+    Decision decision;
+    bool invalidated;
+}
+
+function attest(Attestation calldata attestation) external;
+function invalidate(bytes32 passportId, bytes32 reasonHash) external;
+function getAttestation(bytes32 passportId) external view returns (Attestation memory);
+function isUsable(bytes32 passportId, uint256 maxAge) external view returns (bool);
+```
+
+### 8.3 Security requirements
+
+- explicit issuer role;
+- default deny for unauthorized writes;
+- subject address and chain ID validation;
+- `expiresAt > issuedAt`;
+- no zero passport ID;
+- no duplicate passport ID;
+- no invalidation of a non-existent attestation;
+- invalidation is monotonic;
+- no silent overwrite;
+- events contain enough data for replay/audit;
+- no upgradeability for the competition registry unless a real requirement
+  appears and is reviewed;
+- Solidity compiler and dependency versions pinned;
+- unit tests include malicious caller, replay, expiry, duplicate, and boundary
+  timestamps;
+- deployment address and chain ID are recorded in the submission documentation.
+
+### 8.4 Demo gate
+
+Create a minimal SafeVault or AssetAdmissionGate for Arbitrum Sepolia. It must
+not custody meaningful funds.
+
+The gate should:
+
+- request a passport ID;
+- read the registry;
+- reject expired/invalidated/non-ALLOW attestations;
+- emit `AssetAdmissionAttempt`;
+- provide a deterministic test path for both success and rejection.
+
+---
+
+## 9. Implementation phases
+
+## Phase 0 — Product and evidence lock
+
+**Window:** 2026-08-25 to 2026-08-28  
+**Objective:** Freeze semantics before implementation.
+
+### Work
+
+- approve product name and one-sentence promise;
+- freeze the supported demo scenario;
+- define transaction intent schema;
+- define supported selectors and token standards;
+- define reason codes;
+- define evidence-to-policy mapping;
+- define Arbitrum One/Sepolia network IDs and explorer links;
+- define canonical bridge adapter scope;
+- write threat model for intent spoofing, replay, stale evidence, and issuer
+  compromise;
+- define demo fixtures that are explicitly labeled as fixtures.
+
+### Done looks like
+
+- no ambiguous use of “safe”;
+- every decision status has a machine-readable meaning;
+- every MVP field has an evidence source or is clearly marked unavailable;
+- unsupported calldata returns `INTENT_DECODE_UNAVAILABLE`, never an optimistic
+  result;
+- product scope fits one end-to-end demo.
+
+## Phase 1 — Intent and permission analysis
+
+**Window:** 2026-08-29 to 2026-09-04  
+**Objective:** Reliably explain what an unsigned transaction will do.
+
+### Work
+
+- normalize transaction input;
+- validate chain and target;
+- decode ERC-20 transfer/approve;
+- decode permit and operator approvals where supported;
+- extract spender, recipient, amount, selector, and value;
+- compare declared intent against decoded operation;
+- calculate approval exposure;
+- return decision reasons with evidence status;
+- add idempotent decision creation and retrieval;
+- add API error envelopes consistent with `/api/v1`.
+
+### Done looks like
+
+- a capped approval matching the declared deposit can proceed to policy;
+- unlimited approval is detected;
+- approval greater than intended amount is blocked under conservative policy;
+- wrong destination is blocked;
+- unknown selector returns explicit review/unavailable behavior;
+- malformed addresses and invalid chain targets fail closed;
+- repeated request with the same idempotency key does not duplicate a decision.
+
+## Phase 2 — Arbitrum evidence and provenance
+
+**Window:** 2026-09-05 to 2026-09-10  
+**Objective:** Add the cross-chain reason JOBEN is not a generic provider wrapper.
+
+### Work
+
+- add Arbitrum target validation to the decision path;
+- connect existing provider evidence without changing scoring semantics;
+- add configured canonical bridge/origin adapter;
+- normalize origin chain, origin contract, bridge, admin, and mint authority;
+- create provenance edges with status and limitations;
+- add freshness policy for control, bridge, origin, and market evidence;
+- add provider conflict projection;
+- create one verified, one partial, and one unknown provenance fixture;
+- calculate a bounded direct blast-radius projection from configured edges.
+
+### Done looks like
+
+- a token with verified origin path is distinguishable from an unknown-origin
+  token;
+- bridge/admin evidence can force review under the selected policy;
+- provider disagreement remains visible;
+- an address valid on one chain cannot be silently treated as deployed on
+  another;
+- every graph edge has a basis and status;
+- unknown provenance never becomes `ALLOW` under conservative policy.
+
+## Phase 3 — Registry and admission gate
+
+**Window:** 2026-09-11 to 2026-09-16  
+**Objective:** Make the decision verifiable and actually consumable on-chain.
+
+### Work
+
+- implement registry contract;
+- implement unit tests and adversarial cases;
+- deploy to Arbitrum Sepolia;
+- record deployment metadata;
+- implement server-side attestation canonicalization;
+- generate evidence/policy hashes;
+- add issuer authorization;
+- add invalidation flow;
+- implement SafeVault/AssetAdmissionGate demo;
+- expose registry verification page/API;
+- verify emitted events through explorer/RPC.
+
+### Done looks like
+
+- an `ALLOW` passport is written once and retrievable by ID;
+- duplicate writes fail;
+- expired passport is not usable;
+- invalidated passport is not usable;
+- unauthorized issuer cannot write or invalidate;
+- admission gate accepts valid passport and rejects invalid/stale passport;
+- all on-chain values match the off-chain verification page.
+
+## Phase 4 — Watchtower and immune-system behavior
+
+**Window:** 2026-09-17 to 2026-09-22  
+**Objective:** Prove that trust is dynamic and risk can propagate.
+
+### Work
+
+- monitor one critical implementation/admin/origin change path;
+- create a deterministic change fixture for the demo;
+- compare current evidence with anchored evidence;
+- emit `DEPENDENCY_CHANGED` or equivalent trust event;
+- invalidate affected passport;
+- recalculate policy decision;
+- produce blast-radius projection;
+- expose alert, timeline, and affected integrations;
+- ensure invalidation is append-only and auditable.
+
+### Done looks like
+
+- the demo starts with `ALLOW`;
+- a dependency change produces a visible event;
+- the passport changes to `STALE` or `INVALIDATED`;
+- the same admission request no longer returns `ALLOW`;
+- the UI explains exactly what changed;
+- the UI distinguishes directly observed impact from inferred impact;
+- replaying the same change does not duplicate the event.
+
+## Phase 5 — Product surface and competition polish
+
+**Window:** 2026-09-23 to 2026-09-27  
+**Objective:** Turn the technical path into a judge-comprehensible product.
+
+### Work
+
+- create the Immune System overview;
+- create Agent Simulator;
+- create Decision Review page;
+- create Permission Exposure panel;
+- create Origin/Bridge graph;
+- create Passport verification page;
+- create Watchtower incident timeline;
+- add English and Bahasa Indonesia copy together;
+- show chain, block/time, provider, freshness, status, and limitations;
+- add copyable reason codes and transaction links;
+- add safe loading, partial, stale, unavailable, and error states;
+- remove unsupported buttons and placeholder claims.
+
+### Done looks like
+
+- a judge can understand the problem within 20 seconds;
+- the first dangerous transaction is blocked within 90 seconds of starting the
+  demo;
+- the successful path and blocked path are visually distinct;
+- the evidence trail can be followed from decision to source to chain record;
+- no UI says or implies absolute safety;
+- the product works at desktop and mobile widths.
+
+## Phase 6 — Submission hardening
+
+**Window:** 2026-09-28 to 2026-10-04  
+**Objective:** Make the project reproducible, credible, and submission-ready.
+
+### Work
+
+- run the full existing test suite;
+- add contract and decision integration tests;
+- run clean-install verification;
+- verify workflow and preview;
+- verify all demo fixtures from a fresh state;
+- verify Arbitrum Sepolia deployment;
+- prepare two-minute demo recording;
+- prepare technical architecture diagram;
+- prepare contract addresses and explorer links;
+- prepare limitations and threat model;
+- prepare README/submission text;
+- freeze demo data and runbook;
+- submit before the official platform deadline.
+
+### Done looks like
+
+- a fresh evaluator can run the demo using documented steps;
+- no secret, raw API key, or private workspace data is in the repository;
+- all claims are backed by an observable behavior;
+- the contract source and deployment metadata are available;
+- the demo has a recovery path if an external provider is unavailable;
+- the submission explains what is real, simulated, testnet-only, and future work.
+
+---
+
+## 10. API surface for the MVP
+
+The exact route names may follow the existing API conventions, but the resource
+semantics must be stable.
+
+```text
+POST /api/v1/intent-checks
+GET  /api/v1/intent-checks/{decisionId}
+POST /api/v1/intent-checks/{decisionId}/attest
+GET  /api/v1/passports/{passportId}
+GET  /api/v1/passports/{passportId}/verify
+GET  /api/v1/provenance/{chainId}/{address}
+GET  /api/v1/blast-radius/{subjectId}
+POST /api/v1/watchtower/replay-change
+GET  /api/v1/policies
+```
+
+### API invariants
+
+- authenticated workspace context comes from the session/API key;
+- no caller-supplied workspace ID can override authorization;
+- intent checks are idempotent;
+- provider failure returns explicit unavailable/degraded state;
+- API never returns a false `ALLOW` because data was missing;
+- decision output is versioned;
+- public verification never exposes private workspace metadata;
+- raw credentials never enter logs, reports, URLs, or client bundles.
+
+---
+
+## 11. Test and verification plan
+
+### 11.1 Unit tests
+
+- address and chain validation;
+- calldata decoding;
+- ERC-20 amount comparison;
+- unlimited approval detection;
+- intent mismatch reason codes;
+- policy threshold boundaries;
+- stale evidence;
+- unknown/unavailable/conflict mapping;
+- provenance edge normalization;
+- blast-radius classification;
+- canonical hash stability;
+- localization key completeness.
+
+### 11.2 Contract tests
+
+- authorized attestation;
+- unauthorized attestation;
+- duplicate passport;
+- invalid expiry;
+- invalidation;
+- repeated invalidation;
+- expired `isUsable`;
+- non-ALLOW `isUsable`;
+- chain/subject binding;
+- event payload correctness;
+- replay and boundary timestamp cases.
+
+### 11.3 Integration tests
+
+Required scenarios:
+
+1. Valid deposit with capped approval returns `ALLOW`.
+2. Unlimited approval returns `BLOCK`.
+3. Approval greater than intent returns `BLOCK`.
+4. Wrong recipient returns `BLOCK`.
+5. Unknown calldata returns explicit review/unavailable.
+6. Unknown origin returns `REVIEW_REQUIRED` under conservative policy.
+7. Provider conflict never returns `ALLOW`.
+8. Expired attestation is rejected by the gate.
+9. Dependency change invalidates the passport.
+10. Repeated invalidation is idempotent.
+11. Workspace A cannot read or mutate workspace B’s decision.
+12. A provider outage degrades evidence without silently passing the policy.
+
+### 11.4 Security verification
+
+- inspect authorization on every write path;
+- test tenant isolation;
+- test replay/idempotency;
+- verify no secrets appear in logs;
+- validate calldata/input size limits;
+- ensure graph relationships cannot be used to assert unsupported ownership;
+- check that AI-generated text cannot alter the machine decision;
+- verify public verification redaction.
+
+### 11.5 Manual demo verification
+
+Before submission, a person unfamiliar with the code must be able to:
+
+1. open the app;
+2. select the agent scenario;
+3. run the dangerous transaction;
+4. see why it is blocked;
+5. run the compliant transaction;
+6. open the passport;
+7. open the Arbitrum transaction;
+8. replay a dependency change;
+9. see invalidation and affected integrations.
+
+---
+
+## 12. Demo script
+
+### 0:00–0:20 — Problem
+
+“An AI agent can execute faster than a human can inspect every approval and
+contract. A scanner tells us about a contract. It does not prove that this
+exact action matches the user’s instruction.”
+
+### 0:20–0:55 — Dangerous action
+
+Instruction:
+
+```text
+Deposit 500 USDC into the selected Arbitrum vault.
+```
+
+Actual transaction:
+
+```text
+Unlimited USDC approval
+Upgradeable spender
+Unknown withdrawal path
+```
+
+JOBEN returns:
+
+```text
+BLOCK
+Reason: intent mismatch and excessive permission exposure
+```
+
+### 0:55–1:20 — Compliant action
+
+The agent retries with a capped approval and verified target.
+
+JOBEN returns:
+
+```text
+ALLOW
+Evidence: fresh
+Provenance: verified
+Policy: AI_AGENT_CONSERVATIVE v1.0.0
+```
+
+The decision is anchored to Arbitrum Sepolia.
+
+### 1:20–1:45 — Threat propagation
+
+A monitored bridge or implementation dependency changes.
+
+JOBEN shows:
+
+```text
+Passport invalidated
+Affected assets: ...
+Affected integrations: ...
+Next admission: REVIEW_REQUIRED / BLOCK
+```
+
+### 1:45–2:00 — Closing
+
+“JOBEN is not another risk score. It is a verifiable safety layer that checks
+what an agent is about to do, what authority it is granting, where the asset
+came from, and whether the trust path has changed.”
+
+---
+
+## 13. Judging strategy
+
+### Smart contract quality
+
+Show:
+
+- small, auditable contract;
+- strict issuer access;
+- event-driven lifecycle;
+- expiry and invalidation;
+- replay protection;
+- tests;
+- no unnecessary upgradeability;
+- deployed address and explorer verification.
+
+### Product-market fit
+
+Primary buyer/user:
+
+- DeFi protocol risk operator;
+- lending asset-listing team;
+- autonomous-agent platform;
+- wallet or vault infrastructure builder.
+
+Do not pitch “everyone in crypto”. Pitch the moment before a protocol or agent
+commits capital.
+
+### Innovation and creativity
+
+Demonstrate the combination:
+
+- intent-level transaction analysis;
+- permission exposure;
+- cross-chain origin/bridge provenance;
+- evidence freshness;
+- policy-as-code;
+- on-chain verification;
+- blast-radius invalidation.
+
+Do not claim that every individual part is unprecedented.
+
+### Real problem solving
+
+Show the prevented outcome:
+
+- user intended a limited deposit;
+- the actual transaction granted unlimited authority;
+- JOBEN blocked it;
+- later dependency change invalidated an earlier approval;
+- downstream integration was protected.
+
+The judge should see prevention and containment, not only analysis.
+
+---
+
+## 14. Risk register and mitigations
+
+| Risk | Impact | Mitigation |
+|---|---:|---|
+| Looks like provider aggregation | High | Lead with transaction intent, permission, provenance, and prevention |
+| Scope becomes too large | High | One complete vertical slice; bounded bridge registry |
+| Real wallet integration delays MVP | High | Unsigned transaction simulator first |
+| Provider outage breaks demo | High | Frozen evidence fixtures with clear fixture labels and degraded-state tests |
+| False safety claim | High | Never map unknown/conflict/stale to silent allow |
+| Smart contract too trivial | Medium | Add expiry, invalidation, access control, events, replay protection, and gate consumer |
+| Graph implies unsupported ownership | High | Separate observed/inferred labels and show limitations |
+| Arbitrum relevance feels superficial | High | Write and read actual registry/gate on Arbitrum Sepolia and show chain-specific evidence |
+| AI becomes a gimmick | Medium | AI is the caller/agent scenario; deterministic policy remains authoritative |
+| Existing architecture is forked | Medium | Reuse engine, trust contract, API, Watchtower, and workspace boundaries |
+| Multichain capability is hidden | Medium | Present it as cross-chain provenance advantage, not as a generic selector |
+
+---
+
+## 15. Release gates
+
+### Gate A — Intent safety
+
+- transaction is decoded;
+- permission exposure is visible;
+- declared intent can disagree with actual calldata;
+- unsafe approval is blocked;
+- unknown decode is explicit.
+
+### Gate B — Evidence decision
+
+- Arbitrum target validated;
+- evidence has provenance and freshness;
+- policy version is visible;
+- conflict and unavailable states are preserved;
+- decision is deterministic and replayable.
+
+### Gate C — On-chain proof
+
+- registry deployed;
+- attestation written;
+- verification page reads chain state;
+- duplicate, expiry, invalidation, and authorization tests pass;
+- SafeVault/AssetAdmissionGate consumes registry state.
+
+### Gate D — Immune response
+
+- monitored change is detected;
+- passport is invalidated;
+- blast-radius view is produced;
+- subsequent integration is blocked or escalated;
+- event is append-only and reproducible.
+
+### Gate E — Submission
+
+- clean run from documentation;
+- responsive UI;
+- English and Bahasa Indonesia copy;
+- no secret leakage;
+- two-minute demo;
+- architecture and limitation documents;
+- deployed contract addresses;
+- final submission artifacts.
+
+---
+
+## 16. Post-competition roadmap
+
+These are not MVP commitments and must not displace the competition vertical
+slice.
+
+### Next
+
+- real wallet adapter;
+- SDK for agent platforms;
+- more Arbitrum bridges;
+- protocol-specific policy templates;
+- webhook alerts;
+- signed public decision packets;
+- richer allowance and permit simulation.
+
+### Later
+
+- full dependency graph;
+- transaction trace simulation;
+- L1/L2 message and retryable-ticket context;
+- cross-protocol blast-radius indexing;
+- agent reputation and capability passports;
+- Orbit-chain deployment profile;
+- independent attestation issuers and dispute workflow.
+
+### Never infer automatically without evidence
+
+- common ownership;
+- malicious intent;
+- exploit certainty;
+- financial outcome;
+- safety guarantee.
+
+---
+
+## 17. Final product definition
+
+### Product name
+
+**JOBEN Arbitrum Immune System**
+
+### Technical MVP name
+
+**JOBEN Transaction Intent Firewall**
+
+### One-line promise
+
+> Before an AI agent or Arbitrum protocol commits capital, JOBEN verifies what
+> the transaction actually does, what authority it grants, where the asset came
+> from, and whether the trust path is still valid.
+
+### Core proof
+
+```text
+Dangerous intent -> BLOCK
+Compliant intent -> ALLOW
+Dependency change -> INVALIDATE
+Downstream exposure -> CONTAIN
+```
+
+### Success condition
+
+The project is successful when a judge can see, in one reproducible flow, that
+JOBEN prevented an unsafe autonomous action and later detected that a previously
+accepted trust decision was no longer valid.
