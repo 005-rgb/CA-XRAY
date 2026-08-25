@@ -2037,6 +2037,8 @@ function formatEvidenceMetadata(value) {
 function renderHolderLiquidity(scan) {
   const h = scan.holders || {};
   const l = scan.liquidity || {};
+  const holderHistory = scan.holderHistory || {};
+  const ownerHistory = scan.ownerHistory || {};
   const holderFields = [h.totalHolders, h.top1Percent, h.top5Percent, h.top10Percent, h.deployerPercent, h.ownerPercent, h.burnPercent, h.liquidityRelatedAddresses];
   const holderUnavailable = holderFields.every((field) => !field || field.status === "UNKNOWN" || field.status === "UNAVAILABLE" || field.status === "ERROR");
   return `<section id="report-holder-liquidity" class="report-section full">${sectionHeading("04", "HOLDER & LIQUIDITY ANALYSIS", "04 / 08")}
@@ -2052,6 +2054,9 @@ function renderHolderLiquidity(scan) {
         ${metric("GoPlus holder count", h.goplusTotalHolders)}
         ${metric("Burn", h.burnPercent, formatPercent)}
         ${metric("Liquidity-related", h.liquidityRelatedAddresses)}
+        ${metric("On-chain transfer events", h.onChainTransferCount)}
+        ${metric("On-chain observed holders", h.onChainHolderCount)}
+        ${metric("Event history status", h.onChainHistoryStatus)}
       </div>`}</div>
      <div id="report-liquidity"><h3 class="subheading">PRIMARY LIQUIDITY PAIR</h3>${!l.pair || ["UNKNOWN", "NOT_CHECKED", "UNAVAILABLE", "ERROR"].includes(l.pair.status) ? `<div class="unknown-message">LIQUIDITY DATA UNKNOWN</div>` : `<div class="metric-grid">
         ${metric("Liquidity", l.liquidityUsd, formatCurrency)}
@@ -2065,6 +2070,14 @@ function renderHolderLiquidity(scan) {
          ${metric("All-pair 24h volume", l.totalVolume24h, formatCurrency)}
          ${metric("24h buys / sells", l.buys24h && l.sells24h ? { ...l.buys24h, value: `${l.buys24h.value} / ${l.sells24h.value}` } : null)}
       </div><p class="pair-note">Primary pair rule: ${escapeHtml(l.primaryPairRule || "Highest-evidence pair selection rule.")} Liquidity lock status is not claimed because no reliable lock source is configured.</p>`}</div>
+    </div>
+    <div class="history-card onchain-history-card">
+      <div><span class="data-label">ON-CHAIN EVENT HISTORY</span><strong>${escapeHtml(holderHistory.status || "UNKNOWN")}</strong></div>
+      <p>${holderHistory.status === "COMPLETE" || holderHistory.status === "PARTIAL"
+        ? `${holderHistory.transfers?.length || 0} Transfer event(s) indexed from block ${holderHistory.scannedFromBlock ?? "UNKNOWN"} to ${holderHistory.scannedToBlock ?? "UNKNOWN"}. ${holderHistory.status === "PARTIAL" ? "The RPC limited the scan range; this is not a complete lifetime history." : "The scan covered the available lifetime range."}`
+        : escapeHtml(holderHistory.reason || "No on-chain Transfer history was available.")}</p>
+      <div><span class="data-label">OWNER EVENT HISTORY</span><strong>${escapeHtml(ownerHistory.status || "UNKNOWN")}</strong></div>
+      ${ownerHistory.events?.length ? `<div class="relationship-list">${ownerHistory.events.map((event) => `<div><span>BLOCK ${escapeHtml(String(event.blockNumber ?? "UNKNOWN"))}</span><strong class="address-text">${escapeHtml(event.previousOwner || "UNKNOWN")} → ${escapeHtml(event.newOwner || "UNKNOWN")}</strong></div>`).join("")}</div>` : `<p>${escapeHtml(ownerHistory.reason || "No OwnershipTransferred events were found in the scanned range.")}</p>`}
     </div>
   </section>`;
 }
@@ -2519,10 +2532,12 @@ function renderPowerMap(scan) {
 
 function renderExitability(scan) {
   const exit = scan.intelligence?.exitability || {};
+  const quote = exit.onChain || {};
   return `<section class="report-section full intelligence-section">${sectionHeading("05", "CAN I EXIT?", "05 / 16")}
     <p class="section-intro">Technical exitability assessment only. This is not investment advice and does not guarantee execution or safety.</p>
     <div class="exit-grid"><div class="exit-summary"><div class="data-label">EXITABILITY</div><div class="exit-level ${statusClass(exit.level)}">${escapeHtml(exit.level || "UNKNOWN")}</div><p>${escapeHtml(exit.explanation || "Insufficient evidence is available to assess practical exit conditions.")}</p></div>
       <div class="exit-signals">${(exit.signals || []).map((signal) => `<div class="exit-signal"><span class="data-label">${escapeHtml(signal.label)}</span><strong>${escapeHtml(signal.value)}</strong></div>`).join("")}</div>
+      <div class="history-card"><div><span class="data-label">READ-ONLY ROUTER EVIDENCE</span><strong>${escapeHtml(quote.status || "UNKNOWN")}</strong></div><p>${escapeHtml(quote.status === "PASS" ? `Router quote: ${quote.quotedOutput || "UNKNOWN"} wrapped-native units for ${quote.amountIn || "UNKNOWN"} token base units.` : quote.reason || "No router quote was available.")}</p><small>This is an eth_call quote only. It does not prove allowance, wallet balance, slippage tolerance, tax behavior, or a mined transaction.</small></div>
     </div>
   </section>`;
 }

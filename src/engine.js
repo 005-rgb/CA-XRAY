@@ -5,6 +5,7 @@ const {
 } = require("./providers/contracts");
 const { createDefaultProviderRegistry } = require("./providers/default-adapters");
 const { validateNativeAddress, verifyNativeNetwork } = require("./providers/native-network-adapters");
+const { collectEvmEvidence } = require("./providers/evm-evidence");
 
 const STATUS = Object.freeze({
   VERIFIED: "VERIFIED",
@@ -1067,7 +1068,23 @@ function buildIntelligence(scan, risk) {
       impacts: detectedCapabilities.map((capability) => capability.impact),
     },
     impacts: impactItems,
-    exitability: { level: exitLevel, signals: exitSignals, explanation: exitExplanation },
+    exitability: {
+      level: scan.evmEvidence?.exitability?.status === "REVERT" ? "HIGH"
+        : scan.evmEvidence?.exitability?.status === "PASS" && exitLevel === "UNKNOWN" ? "LOW RISK"
+          : exitLevel,
+      signals: [
+        ...exitSignals,
+        ...(scan.evmEvidence ? [{ label: "ROUTER ETH_CALL", value: scan.evmEvidence.exitability?.status || "UNKNOWN" }] : []),
+      ],
+      explanation: scan.evmEvidence?.exitability?.status === "PASS"
+        ? `${exitExplanation} A read-only router quote returned output for the selected route; this is not proof of a successful wallet transaction.`
+        : scan.evmEvidence?.exitability?.status === "REVERT"
+          ? "The selected router route reverted or returned no output under the latest on-chain state."
+          : exitExplanation,
+      onChain: scan.evmEvidence?.exitability || null,
+    },
+    holderHistory: scan.evmEvidence?.holderHistory || null,
+    ownerHistory: scan.evmEvidence?.ownerHistory || null,
     scoreExplanation: {
       items: scoreItems,
       total: scoreItems.reduce((sum, item) => sum + item.contribution, 0),
@@ -1160,6 +1177,7 @@ function toPublicScan(scan) {
   for (const section of ["token", "security", "trading", "holders", "liquidity", "market", "deployer", "project", "verification"]) {
     stripPointProvenance(publicScan[section]);
   }
+  stripPointProvenance(publicScan.evmEvidence);
   publicScan.findings = (publicScan.findings || []).map(({ source, ...finding }) => finding);
   publicScan.evidence = (publicScan.evidence || []).map(({ source, ...evidence }) => evidence);
   publicScan.errors = (publicScan.errors || []).map(({ provider, ...error }) => error);
@@ -1427,6 +1445,28 @@ async function scanLive({
     }
   }
   applyCapabilityVerification(scan);
+  const supportsOnChainEvidence = validation.network.evm
+    && typeof providerRegistry.get === "function"
+    && providerRegistry.get("blockscout-abi");
+  if (supportsOnChainEvidence) {
+    const pairAddress = scan.liquidity?.pair?.value || null;
+    const decimals = Number.isInteger(scan.token?.decimals?.value) ? scan.token.decimals.value : null;
+    scan.evmEvidence = await collectEvmEvidence({
+      network: validation.network,
+      tokenAddress: validation.normalized,
+      pairAddress,
+      decimals,
+      timeoutMs: 12_000,
+    });
+    if (scan.evmEvidence.limitations?.length) scan.limitations.push(...scan.evmEvidence.limitations);
+    const history = scan.evmEvidence.holderHistory;
+    if (history?.status === "COMPLETE" || history?.status === "PARTIAL") {
+      scan.holders.onChainTransferCount = point(history.transfers.length, STATUS.VERIFIED, "Ethereum JSON-RPC eth_getLogs", "HIGH", "RPC-TRANSFER-COUNT", scan.evmEvidence.retrievedAt);
+      scan.holders.onChainHolderCount = point(history.observedHolderCount, STATUS.VERIFIED, "Ethereum JSON-RPC eth_getLogs", "HIGH", "RPC-HOLDER-COUNT", scan.evmEvidence.retrievedAt);
+      scan.holders.onChainTopHolders = point(history.topHolders, STATUS.VERIFIED, "Ethereum JSON-RPC eth_getLogs", "HIGH", "RPC-HOLDER-TOP", scan.evmEvidence.retrievedAt);
+      scan.holders.onChainHistoryStatus = point(history.status, STATUS.VERIFIED, "Ethereum JSON-RPC eth_getLogs", "HIGH", "RPC-HOLDER-STATUS", scan.evmEvidence.retrievedAt);
+    }
+  }
   scan.evidenceSources = {
     total: scan.providerResults.length,
     successful: scan.providerResults.filter((result) => result.status === PROVIDER_RESULT_STATUS.VALID).length,
