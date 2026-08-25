@@ -9,7 +9,7 @@ const {
   calculateReliability,
   CATEGORY_WEIGHTS,
 } = require("../src/engine");
-const { normalizeBlockscout, normalizeRpcContract } = require("../src/providers/default-adapters");
+const { normalizeBlockscout, normalizeGoPlus, normalizeRpcContract } = require("../src/providers/default-adapters");
 const {
   isValidSolanaPublicKey,
   normalizeSolanaHolderAccounts,
@@ -185,6 +185,41 @@ test("RPC contract evidence never treats empty bytecode as deployed", () => {
   });
   assert.equal(result.status, "unavailable");
   assert.equal(result.errorCode, "CONTRACT_NOT_DEPLOYED_ON_NETWORK");
+});
+
+test("GoPlus token metadata and holder scope are preserved without collapsing provider definitions", () => {
+  const result = normalizeGoPlus({
+    providerId: "goplus-security",
+    retrievedAt: "2026-08-24T00:00:00.000Z",
+    network: { name: "Ethereum" },
+    response: {
+      code: 1,
+      result: {
+        token: {
+          token_name: "Interfold",
+          token_symbol: "FOLD",
+          decimals: "18",
+          total_supply: "1200000000",
+          holder_count: "4256",
+          owner_percent: "0.400876",
+          creator_percent: "0",
+          is_mintable: "0",
+          is_open_source: "1",
+          is_in_dex: "1",
+          holders: [
+            { address: "0x1", percent: "0.400876", is_contract: 1 },
+            { address: "0x2", percent: "0.2", is_contract: 1 },
+          ],
+        },
+      },
+    },
+  });
+  assert.equal(result.status, "valid");
+  assert.equal(result.evidence.token.name.value, "Interfold");
+  assert.equal(result.evidence.holders.goplusTotalHolders.value, 4256);
+  assert.equal(result.evidence.holders.goplusTop1Percent.value, 40.0876);
+  assert.equal(result.evidence.holders.ownerPercent.value, 40.0876);
+  assert.equal(result.evidence.trading.hasPair.value, true);
 });
 
 test("all three demos are deterministic and clearly marked", () => {

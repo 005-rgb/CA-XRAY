@@ -515,6 +515,7 @@ function calculateCategoryScores(scan) {
   let holder = 0;
   const top10 = numeric(h.top10Percent);
   const deployerPercent = numeric(h.deployerPercent);
+  const ownerPercent = numeric(h.ownerPercent);
   if (top10 !== null) {
     if (top10 < 20) holder += 0;
     else if (top10 < 40) holder += 20;
@@ -526,6 +527,11 @@ function calculateCategoryScores(scan) {
     if (deployerPercent >= 40) holder += 40;
     else if (deployerPercent >= 20) holder += 25;
     else if (deployerPercent >= 10) holder += 10;
+  }
+  if (ownerPercent !== null) {
+    if (ownerPercent >= 40) holder += 40;
+    else if (ownerPercent >= 20) holder += 25;
+    else if (ownerPercent >= 10) holder += 10;
   }
   holder = clamp(holder);
 
@@ -854,6 +860,7 @@ function generateFindings(scan, risk) {
   if (Number.isFinite(buyTax) && buyTax >= TAX_THRESHOLDS.veryHighBuyTax) addFinding({ id: "trading-buy-tax", severity: "HIGH", title: "Very high buy tax observed", what: `The observed buy tax is ${formatValue(buyTax)}%.`, why: `The value meets the named ${TAX_THRESHOLDS.veryHighBuyTax}% high-tax threshold.`, dataPoint: t.buyTax, impact: 15 });
   addFinding({ id: "holder-top10", severity: "HIGH", title: "Top-10 holder concentration is elevated", what: `Top-10 holders account for ${formatValue(h.top10Percent && h.top10Percent.value)}%.`, why: "Concentrated holdings can increase the impact of a small number of wallets on supply and liquidity.", dataPoint: h.top10Percent, impact: risk.categories.holder.score || 0, when: (value) => Number(value.value) >= 40 });
   addFinding({ id: "holder-deployer", severity: "MEDIUM", title: "Deployer concentration is material", what: `The deployer concentration is ${formatValue(h.deployerPercent && h.deployerPercent.value)}%.`, why: "A concentrated deployer position can affect distribution risk.", dataPoint: h.deployerPercent, impact: 25, when: (value) => Number(value.value) >= 10 });
+  addFinding({ id: "holder-owner", severity: "HIGH", title: "Active owner concentration is material", what: `The active owner controls approximately ${formatValue(h.ownerPercent && h.ownerPercent.value)}% of supply.`, why: "A large balance held by an active privileged address can combine distribution concentration with administrative control.", dataPoint: h.ownerPercent, impact: 40, when: (value) => Number(value.value) >= 20 });
   addFinding({ id: "holder-dump-risk", severity: "HIGH", title: "Dump risk: concentrated non-LP wallet", what: `A non-contract, non-burn wallet holds ${formatValue(h.top1Percent && h.top1Percent.value)}% of supply.`, why: "A private wallet with a large supply share can materially affect market price and liquidity if it sells.", dataPoint: h.top1Percent, impact: 40, when: (value) => Number(value.value) > 20 });
   const liquidityUsd = Number(l.liquidityUsd && l.liquidityUsd.value);
   if (Number.isFinite(liquidityUsd) && liquidityUsd < 100000) addFinding({ id: "liquidity-depth", severity: liquidityUsd < 10000 ? "HIGH" : "MEDIUM", title: "Liquidity depth is limited", what: `Primary-pair liquidity is ${formatCurrency(liquidityUsd)}.`, why: "Lower liquidity can increase execution impact and make market conditions more fragile.", dataPoint: l.liquidityUsd, impact: liquidityUsd < 10000 ? 60 : 20 });
@@ -1183,6 +1190,19 @@ function equivalentValues(left, right) {
   return JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right));
 }
 
+function equivalentEvidenceValues(path, left, right) {
+  if (path === "token.name" && typeof left === "string" && typeof right === "string") {
+    const normalizeName = (value) => value.trim().toLowerCase().replace(/^the\s+/, "");
+    return normalizeName(left) === normalizeName(right);
+  }
+  if (["token.decimals", "holders.totalHolders"].includes(path)) {
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    return Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber === rightNumber;
+  }
+  return equivalentValues(left, right);
+}
+
 function isNormalizedPoint(value) {
   return value && typeof value === "object" && Object.prototype.hasOwnProperty.call(value, "evidenceStatus");
 }
@@ -1204,7 +1224,7 @@ function mergeNormalizedEvidence(scan, result) {
           target[key] = value;
           continue;
         }
-        if (currentValid && incomingValid && !equivalentValues(current.value, value.value)) {
+        if (currentValid && incomingValid && !equivalentEvidenceValues(conflictPath, current.value, value.value)) {
           scan.conflicts.push({
             path: conflictPath,
             status: PROVIDER_RESULT_STATUS.PROVIDER_ERROR,
@@ -1343,7 +1363,9 @@ async function scanLive({
     }
     return providerRegistry.fetch(provider.id, {
       ...context,
-      providerPolicy: policy,
+      // Adapters accept an optional policy object. Passing null here makes
+      // otherwise healthy live scans fail before any provider request starts.
+      providerPolicy: policy || {},
     });
   }));
   let successes = 0;

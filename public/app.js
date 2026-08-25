@@ -2046,8 +2046,10 @@ function renderHolderLiquidity(scan) {
         ${metric("Top 1%", h.top1Percent, formatPercent)}
         ${metric("Top 5%", h.top5Percent, formatPercent)}
         ${metric("Top 10%", h.top10Percent, formatPercent)}
+        ${metric("GoPlus top 10% (incl. contracts/LP)", h.goplusTop10Percent, formatPercent)}
         ${metric("Deployer", h.deployerPercent, formatPercent)}
         ${metric("Owner", h.ownerPercent, formatPercent)}
+        ${metric("GoPlus holder count", h.goplusTotalHolders)}
         ${metric("Burn", h.burnPercent, formatPercent)}
         ${metric("Liquidity-related", h.liquidityRelatedAddresses)}
       </div>`}</div>
@@ -2058,6 +2060,10 @@ function renderHolderLiquidity(scan) {
         ${metric("DEX", l.dex)}
         ${metric("Price", l.price, (value) => `$${Number(value).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 8 })}`)}
         ${metric("24h change", l.change24h, formatPercent)}
+         ${metric("Indexed pairs", l.pairCount)}
+         ${metric("All-pair liquidity", l.totalLiquidityUsd, formatCurrency)}
+         ${metric("All-pair 24h volume", l.totalVolume24h, formatCurrency)}
+         ${metric("24h buys / sells", l.buys24h && l.sells24h ? { ...l.buys24h, value: `${l.buys24h.value} / ${l.sells24h.value}` } : null)}
       </div><p class="pair-note">Primary pair rule: ${escapeHtml(l.primaryPairRule || "Highest-evidence pair selection rule.")} Liquidity lock status is not claimed because no reliable lock source is configured.</p>`}</div>
     </div>
   </section>`;
@@ -2077,6 +2083,7 @@ function renderMarketDeployer(scan) {
         ${metric("24h volume", m.volume24h, formatCurrency)}
         ${metric("Liquidity", m.liquidityUsd, formatCurrency)}
         ${metric("FDV", m.fdv, formatCurrency)}
+         ${metric("Market cap", m.marketCap, formatCurrency)}
         ${metric("24h change", m.change24h, formatPercent)}
         ${metric("7d change", m.change7d, formatPercent)}
         ${metric("Website", p.website)}

@@ -151,6 +151,22 @@ function decodeAddress(value) {
   return `0x${value.slice(-40)}`;
 }
 
+function normalizedTokenSupply(rawValue, decimals) {
+  if (rawValue === null || rawValue === undefined || rawValue === "") return null;
+  try {
+    const raw = BigInt(String(rawValue));
+    const places = Number(decimals);
+    if (!Number.isInteger(places) || places < 0 || places > 36) return String(raw);
+    const divisor = 10n ** BigInt(places);
+    const whole = raw / divisor;
+    const remainder = raw % divisor;
+    if (remainder === 0n) return whole.toString();
+    return `${whole}.${remainder.toString().padStart(places, "0").replace(/0+$/, "")}`;
+  } catch {
+    return String(rawValue);
+  }
+}
+
 function normalizeHolderData({ tokenResponse, holdersResponse, retrievedAt, providerId }) {
   if (!isProviderObject(tokenResponse) || !isProviderObject(holdersResponse)) return {};
   const items = Array.isArray(holdersResponse.items) ? holdersResponse.items : [];
@@ -226,12 +242,23 @@ function normalizeBlockscout({ response, tokenResponse, holdersResponse, rpcResp
   }
   const verified = response.is_verified === true || response.is_verified === "true";
   const abi = Array.isArray(response.abi) ? response.abi : [];
+  const holderEvidence = normalizeHolderData({ tokenResponse, holdersResponse, retrievedAt, providerId });
+  const explorerToken = isProviderObject(tokenResponse) ? {
+    name: makePoint(tokenResponse.name, { providerId, retrievedAt }, "BS-010"),
+    symbol: makePoint(tokenResponse.symbol, { providerId, retrievedAt }, "BS-011"),
+    decimals: makePoint(Number(tokenResponse.decimals), { providerId, retrievedAt }, "BS-012"),
+    totalSupply: makePoint(normalizedTokenSupply(tokenResponse.total_supply ?? tokenResponse.totalSupply, tokenResponse.decimals), { providerId, retrievedAt }, "BS-013"),
+  } : {};
   if (!verified || !abi.length) {
     return normalizedResult({
       providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.UNAVAILABLE, retrievedAt,
       errorCode: "SOURCE_NOT_VERIFIED", message: "No verified ABI was returned by the block explorer.",
       limitations: ["Capability confirmation requires a verified ABI; no verified ABI was available."],
-      evidence: { verification: { sourceCode: makePoint(false, { providerId, retrievedAt }, "BS-001") } },
+      evidence: {
+        token: explorerToken,
+        ...holderEvidence,
+        verification: { sourceCode: makePoint(false, { providerId, retrievedAt }, "BS-001") },
+      },
     });
   }
   const names = abiFunctionNames(abi);
@@ -243,7 +270,6 @@ function normalizeBlockscout({ response, tokenResponse, holdersResponse, rpcResp
   const q = (value, ref) => makePoint(value, context, ref);
   const limitations = [];
   if (!ownerAddress) limitations.push("owner() did not return a decodable address from the public RPC.");
-  const holderEvidence = normalizeHolderData({ tokenResponse, holdersResponse, retrievedAt, providerId });
   if (!holderEvidence.holders?.totalHolders?.value) {
     limitations.push("Holder count was not available from the shared block explorer source.");
   }
@@ -256,6 +282,7 @@ function normalizeBlockscout({ response, tokenResponse, holdersResponse, rpcResp
     providerId, adapterVersion: BLOCKSCOUT_ADAPTER_VERSION, status: PROVIDER_RESULT_STATUS.VALID, retrievedAt,
     limitations,
     evidence: {
+      token: explorerToken,
       security: {
         ownerAddress: q(ownerAddress, "BS-017"),
         ownerControl: q(ownerAddress ? (/^0x0{40}$/i.test(ownerAddress) ? "RENOUNCED" : "ACTIVE") : null, "BS-018"),
@@ -337,6 +364,9 @@ function normalizeGoPlus({ response, retrievedAt, network, providerId, verifiedC
     canChangeTax: "slippage_modifiable",
     isUpgradeable: "is_proxy",
     canWithdraw: "can_take_back_ownership",
+    hiddenOwner: "hidden_owner",
+    canSelfDestruct: "selfdestruct",
+    externalCall: "external_call",
   };
   const security = Object.fromEntries(Object.entries(boolMap).map(([name, keyName], index) => [
     name,
@@ -366,13 +396,46 @@ function normalizeGoPlus({ response, retrievedAt, network, providerId, verifiedC
     maxTransactionRestriction: makeCapabilityPoint(providerBoolean(data, "anti_whale_modifiable"), sourceContext, "GP-018", verifiedCapabilities.maxTransactionRestriction === true),
     maxWalletRestriction: makeCapabilityPoint(providerBoolean(data, "anti_whale_modifiable"), sourceContext, "GP-019", verifiedCapabilities.maxWalletRestriction === true),
     tradingPause: security.canPause,
-    hasPair: makePoint(null, sourceContext, "GP-020"),
+    hasPair: makePoint(providerBoolean(data, "is_in_dex"), sourceContext, "GP-020"),
+    tradingCooldown: makePoint(providerBoolean(data, "trading_cooldown"), sourceContext, "GP-025"),
   };
   const token = {
     name: makePoint(providerValue(data, "token_name"), sourceContext, "GP-021"),
     symbol: makePoint(providerValue(data, "token_symbol"), sourceContext, "GP-022"),
     decimals: makePoint(providerValue(data, "decimals"), sourceContext, "GP-023"),
     totalSupply: makePoint(providerValue(data, "total_supply"), sourceContext, "GP-024"),
+  };
+  const holderItems = Array.isArray(data.holders) ? data.holders : [];
+  const holderPercent = (item) => {
+    const value = Number(item?.percent);
+    return Number.isFinite(value) ? value * 100 : null;
+  };
+  const holderPercents = holderItems.map(holderPercent).filter((value) => value !== null).sort((a, b) => b - a);
+  const sumTop = (count) => holderPercents.slice(0, count).reduce((sum, value) => sum + value, 0);
+  const burnAddresses = new Set([
+    "0x0000000000000000000000000000000000000000",
+    "0x000000000000000000000000000000000000dead",
+  ]);
+  const burnPercent = holderItems
+    .filter((item) => burnAddresses.has(String(item?.address || "").toLowerCase()))
+    .map(holderPercent)
+    .filter((value) => value !== null)
+    .reduce((sum, value) => sum + value, 0);
+  const holders = {
+    // GoPlus' indexed top-holder sample includes contracts and LP-related
+    // addresses. Keep it separate from Blockscout's wallet-only canonical
+    // concentration metrics instead of manufacturing a provider conflict.
+    goplusTotalHolders: makePoint(Number(providerValue(data, "holder_count")), sourceContext, "GP-026"),
+    goplusTop1Percent: makePoint(holderPercents.length ? sumTop(1) : null, sourceContext, "GP-027"),
+    goplusTop5Percent: makePoint(holderPercents.length ? sumTop(5) : null, sourceContext, "GP-028"),
+    goplusTop10Percent: makePoint(holderPercents.length ? sumTop(10) : null, sourceContext, "GP-029"),
+    deployerPercent: makePoint(providerValue(data, "creator_percent"), sourceContext, "GP-030", parseTax),
+    ownerPercent: makePoint(providerValue(data, "owner_percent"), sourceContext, "GP-031", parseTax),
+    burnPercent: makePoint(burnPercent, sourceContext, "GP-032"),
+    goplusHolderDataScope: makePoint("GoPlus top-holder percentages include contract and LP-related addresses in its indexed sample; they are shown as a provider comparison, not merged with wallet-only concentration.", sourceContext, "GP-033"),
+  };
+  const deployer = {
+    address: makePoint(providerValue(data, "creator_address"), sourceContext, "GP-034"),
   };
   return normalizedResult({
     providerId,
@@ -383,6 +446,8 @@ function normalizeGoPlus({ response, retrievedAt, network, providerId, verifiedC
       security,
       trading,
       token,
+      holders,
+      deployer,
       verification: { sourceCode: security.sourceVerified },
     },
   });
@@ -427,6 +492,12 @@ function normalizeDexScreener({ response, retrievedAt, network, address, provide
   }
   const context = { providerId, retrievedAt };
   const q = (value, evidenceReference) => makePoint(value, context, evidenceReference);
+  const totalLiquidityUsd = pairs.reduce((sum, item) => sum + (Number(item.liquidity?.usd) || 0), 0);
+  const totalVolume24h = pairs.reduce((sum, item) => sum + (Number(item.volume?.h24) || 0), 0);
+  const transactionTotals = pairs.reduce((totals, item) => ({
+    buys: totals.buys + (Number(item.txns?.h24?.buys) || 0),
+    sells: totals.sells + (Number(item.txns?.h24?.sells) || 0),
+  }), { buys: 0, sells: 0 });
   const liquidity = {
     liquidityUsd: q(pair.liquidity?.usd, "DS-001"),
     volume24h: q(pair.volume?.h24, "DS-002"),
@@ -434,6 +505,11 @@ function normalizeDexScreener({ response, retrievedAt, network, address, provide
     dex: q(pair.dexId, "DS-004"),
     price: q(pair.priceUsd, "DS-005"),
     change24h: q(pair.priceChange?.h24, "DS-006"),
+    pairCount: q(pairs.length, "DS-013"),
+    totalLiquidityUsd: q(totalLiquidityUsd, "DS-014"),
+    totalVolume24h: q(totalVolume24h, "DS-015"),
+    buys24h: q(transactionTotals.buys, "DS-016"),
+    sells24h: q(transactionTotals.sells, "DS-017"),
     primaryPairRule: "Highest USD liquidity, then 24h volume, then lexicographic pair address.",
   };
   const market = {
@@ -441,6 +517,7 @@ function normalizeDexScreener({ response, retrievedAt, network, address, provide
     volume24h: liquidity.volume24h,
     liquidityUsd: liquidity.liquidityUsd,
     fdv: q(pair.fdv, "DS-007"),
+    marketCap: q(pair.marketCap, "DS-018"),
     change24h: liquidity.change24h,
     change7d: q(null, "DS-008"),
   };
@@ -468,8 +545,8 @@ function normalizeDexScreener({ response, retrievedAt, network, address, provide
       },
       trading: { hasPair: q(true, "DS-009") },
       token: {
-        name: q(pair.baseToken?.name, "DS-013"),
-        symbol: q(pair.baseToken?.symbol, "DS-014"),
+        name: q(pair.baseToken?.name, "DS-019"),
+        symbol: q(pair.baseToken?.symbol, "DS-020"),
       },
     },
   });
