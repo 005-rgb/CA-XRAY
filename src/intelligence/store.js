@@ -21,6 +21,14 @@ const ALERT_TYPES = Object.freeze([
 const VISIBILITIES = new Set(["private", "public"]);
 const FINDING_STATUSES = new Set(["open", "reviewing", "resolved"]);
 const PASSPORT_REVIEW_STATUSES = new Set(["OPEN", "ACKNOWLEDGED", "DEFERRED", "RESOLVED"]);
+const ALERT_STATUSES = new Set(["OPEN", "ACKNOWLEDGED", "SNOOZED", "INVESTIGATING", "RESOLVED"]);
+const ALERT_TRANSITIONS = Object.freeze({
+  OPEN: new Set(["ACKNOWLEDGED", "SNOOZED", "INVESTIGATING", "RESOLVED"]),
+  ACKNOWLEDGED: new Set(["SNOOZED", "INVESTIGATING", "RESOLVED", "OPEN"]),
+  SNOOZED: new Set(["OPEN", "INVESTIGATING", "RESOLVED"]),
+  INVESTIGATING: new Set(["SNOOZED", "RESOLVED", "OPEN"]),
+  RESOLVED: new Set(["OPEN"]),
+});
 const EVIDENCE_FRESHNESS_TTL_HOURS = Object.freeze({
   liquidity: 24,
   market: 6,
@@ -459,7 +467,9 @@ class IntelligenceStore {
         ...publicContract(passport.networkId, passport.address),
         snapshotId: snapshot.id,
         timelineId: timeline.id,
-        status: "QUEUED",
+        status: "OPEN",
+        deliveryStatus: "QUEUED",
+        timeline: [{ type: "OPENED", at: snapshot.capturedAt, snapshotId: snapshot.id }],
         delivery: rule.delivery,
         createdAt: snapshot.capturedAt,
         dedupeKey,
@@ -875,15 +885,33 @@ class IntelligenceStore {
   }
 
   acknowledgeAlert(workspaceId, alertId, actorId) {
+    return this.transitionAlert({ workspaceId, alertId, status: "ACKNOWLEDGED", actorId });
+  }
+
+  transitionAlert({ workspaceId, alertId, status, actorId, reason = "", snoozedUntil = null }) {
     const event = [...this.alertEvents.values()].find((candidate) =>
       candidate.id === alertId && candidate.workspaceId === workspaceId);
     if (!event) return null;
-    if (event.status !== "ACKNOWLEDGED") {
-      event.status = "ACKNOWLEDGED";
-      event.acknowledgedAt = this.clock().toISOString();
-      event.acknowledgedBy = actorId || null;
-      this.#persist();
+    if (!ALERT_STATUSES.has(status)) invalid("INVALID_ALERT_STATUS", "Alert status is invalid.");
+    if (!ALERT_TRANSITIONS[event.status]?.has(status)) {
+      invalid("INVALID_ALERT_TRANSITION", `Cannot move alert from ${event.status} to ${status}.`);
     }
+    if (status === "SNOOZED" && (!snoozedUntil || !Number.isFinite(Date.parse(snoozedUntil)) || Date.parse(snoozedUntil) <= this.clock().getTime())) {
+      invalid("INVALID_ALERT_SNOOZE", "A future snooze time is required.");
+    }
+    const now = this.clock().toISOString();
+    const previousStatus = event.status;
+    event.status = status;
+    event.updatedAt = now;
+    if (status === "ACKNOWLEDGED") {
+      event.acknowledgedAt = now;
+      event.acknowledgedBy = actorId || null;
+    }
+    if (status === "SNOOZED") event.snoozedUntil = new Date(snoozedUntil).toISOString();
+    if (status !== "SNOOZED") event.snoozedUntil = null;
+    event.timeline = Array.isArray(event.timeline) ? event.timeline : [];
+    event.timeline.push({ type: status === "OPEN" ? "REOPENED" : status, at: now, actorId: actorId || null, reason: String(reason).slice(0, 500) || null, previousStatus });
+    this.#persist();
     return clone(event);
   }
 

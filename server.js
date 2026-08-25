@@ -1120,6 +1120,25 @@ async function handleApiUnsafe(req, res, url, context) {
     sendJson(res, 200, { alert: event }, { context });
     return true;
   }
+  const alertStatusMatch = url.pathname.match(/^\/api\/alerts\/([^/]+)\/status$/);
+  if (req.method === "PATCH" && alertStatusMatch) {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const event = intelligenceStore.transitionAlert({
+      workspaceId: authenticated.workspaceId,
+      alertId: alertStatusMatch[1],
+      status: body.status,
+      actorId: authenticated.actor.id,
+      reason: body.reason,
+      snoozedUntil: body.snoozedUntil,
+    });
+    if (!event) {
+      sendJson(res, 404, { error: "ALERT_NOT_FOUND", message: "Alert not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { alert: event }, { context });
+    return true;
+  }
 
   if (req.method === "GET" && url.pathname === "/api/risk-timeline") {
     const authenticated = requireAuthenticated(context);

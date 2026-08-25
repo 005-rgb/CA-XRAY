@@ -421,6 +421,26 @@
                 </div>
               </div>
                   <p class="intelligence-heading-help">Run due checks only processes active contracts added to Watchtower. A completed scan creates a Passport but does not start monitoring automatically.</p>
+              <div id="watchtower-menu" class="watchtower-menu-grid" aria-label="Watchtower work areas">
+                <button type="button" class="watchtower-menu-card active" data-watchtower-card="overview" data-watchtower-target="intelligence-dashboard">
+                  <span class="watchtower-menu-number">01</span><strong>Watchtower Overview</strong><small>Targets, due checks &amp; alerts</small><b data-watchtower-stat="overview">—</b>
+                </button>
+                <button type="button" class="watchtower-menu-card" data-watchtower-card="targets" data-watchtower-target="watchtower">
+                  <span class="watchtower-menu-number">02</span><strong>Monitored Targets</strong><small>Contracts &amp; monitoring status</small><b data-watchtower-stat="targets">—</b>
+                </button>
+                <button type="button" class="watchtower-menu-card" data-watchtower-card="schedule" data-watchtower-target="watchtower">
+                  <span class="watchtower-menu-number">03</span><strong>Schedule &amp; Runs</strong><small>Due time &amp; run controls</small><b data-watchtower-stat="schedule">—</b>
+                </button>
+                <button type="button" class="watchtower-menu-card" data-watchtower-card="pulse" data-watchtower-target="watchtower-alerts">
+                  <span class="watchtower-menu-number">04</span><strong>Evidence Pulse</strong><small>Measured changes &amp; signals</small><b data-watchtower-stat="pulse">—</b>
+                </button>
+                <button type="button" class="watchtower-menu-card" data-watchtower-card="alerts" data-watchtower-target="watchtower-alerts">
+                  <span class="watchtower-menu-number">05</span><strong>Alerts &amp; Review</strong><small>Actions &amp; investigation queue</small><b data-watchtower-stat="alerts">—</b>
+                </button>
+                <button type="button" class="watchtower-menu-card" data-watchtower-card="health" data-watchtower-target="watchtower">
+                  <span class="watchtower-menu-number">06</span><strong>Health, Delivery &amp; Audit</strong><small>Freshness, failures &amp; history</small><b data-watchtower-stat="health">—</b>
+                </button>
+              </div>
               <div class="intelligence-grid">
                 <section class="intelligence-card" id="risk-passport">
                   <div class="card-heading"><div><span class="card-kicker">RISK PASSPORT</span><h3>Longitudinal contract intelligence</h3></div><span class="data-label" id="passport-count">0 PASSPORTS</span></div>

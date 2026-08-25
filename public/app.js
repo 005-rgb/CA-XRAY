@@ -50,6 +50,8 @@ const passportAreaContent = document.querySelector("#passport-area-content");
 const passportWorkspaceTitle = document.querySelector("#passport-workspace-title");
 const passportWorkspaceMeta = document.querySelector("#passport-workspace-meta");
 const watchtowerTickStatus = document.querySelector("#watchtower-tick-status");
+const watchtowerMenu = document.querySelector("#watchtower-menu");
+const watchtowerMenuCards = document.querySelectorAll("[data-watchtower-card]");
 const watchlistList = document.querySelector("#watchlist-list");
 const watchlistCount = document.querySelector("#watchlist-count");
 const alertList = document.querySelector("#alert-list");
@@ -609,6 +611,7 @@ function showLanding({ privateView = false } = {}) {
   document.querySelector("#risk-passport").hidden = page !== "passport";
   document.querySelector("#watchtower").hidden = page !== "watchtower";
   document.querySelector("#watchtower-alerts").hidden = page !== "watchtower";
+  if (watchtowerMenu) watchtowerMenu.hidden = page !== "watchtower";
   if (privateView) {
     if (page === "history") loadScanHistory();
     if (["passport", "watchtower"].includes(page)) loadIntelligenceDashboard();
@@ -1453,6 +1456,29 @@ function renderPassportList(passports) {
 
 let passportWorkspaceData = null;
 let passportArea = "overview";
+function renderWatchtowerMenu(watchlists = [], alerts = [], passports = []) {
+  const now = Date.now();
+  const activeTargets = watchlists.filter((item) => item.status === "active");
+  const dueTargets = activeTargets.filter((item) => item.nextCheckAt && Date.parse(item.nextCheckAt) <= now);
+  const openAlerts = alerts.filter((item) => item.status !== "RESOLVED");
+  const failedTargets = watchlists.filter((item) => ["ERROR", "FAILED", "DEAD_LETTERED"].includes(String(item.lastRunStatus || "").toUpperCase()));
+  const stalePassports = passports.filter((item) => {
+    const capturedAt = item.current?.capturedAt;
+    return capturedAt && Number.isFinite(Date.parse(capturedAt)) && now - Date.parse(capturedAt) > 24 * 3600000;
+  });
+  const values = {
+    overview: `${activeTargets.length} active`,
+    targets: `${watchlists.length} target${watchlists.length === 1 ? "" : "s"}`,
+    schedule: `${dueTargets.length} due`,
+    pulse: `${alerts.length} signal${alerts.length === 1 ? "" : "s"}`,
+    alerts: `${openAlerts.length} open`,
+    health: failedTargets.length || stalePassports.length ? `${failedTargets.length + stalePassports.length} need review` : "Operational",
+  };
+  watchtowerMenuCards.forEach((card) => {
+    const stat = card.querySelector("[data-watchtower-stat]");
+    if (stat) stat.textContent = values[card.dataset.watchtowerCard] || "—";
+  });
+}
 function passportMetric(label, value, tone = "") {
   return `<div class="passport-metric"><span>${escapeHtml(label)}</span><strong class="${tone}">${escapeHtml(value ?? "UNKNOWN")}</strong></div>`;
 }
@@ -1517,6 +1543,10 @@ function renderPassportArea() {
     } catch (error) { event.currentTarget.title = error.message; } finally { event.currentTarget.disabled = false; }
   });
 }
+watchtowerMenuCards.forEach((card) => card.addEventListener("click", () => {
+  watchtowerMenuCards.forEach((item) => item.classList.toggle("active", item === card));
+  document.getElementById(card.dataset.watchtowerTarget)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}));
 async function openPassportWorkspace(passport) {
   if (!passport || !passportWorkspace) return;
   passportWorkspace.hidden = false;
@@ -1561,18 +1591,28 @@ function renderWatchlistList(watchlists) {
 }
 
 function renderAlertList(events) {
-  const open = events.filter((event) => event.status !== "ACKNOWLEDGED").length;
+  const open = events.filter((event) => event.status !== "RESOLVED").length;
   alertCount.textContent = `${open} OPEN`;
   alertList.innerHTML = events.length ? events.map((event) => `
     <div class="intelligence-row">
       <div><strong>${escapeHtml(event.message)}</strong><span>${escapeHtml(event.networkId)} · ${escapeHtml(formatDate(event.createdAt))}</span></div>
       <div class="intelligence-row-action"><span class="watch-status ${statusClass(event.status)}">${escapeHtml(event.status)}</span>
-        ${event.status !== "ACKNOWLEDGED" ? `<button type="button" class="text-button" data-alert-ack="${escapeHtml(event.id)}">Acknowledge</button>` : `<span>${escapeHtml(formatDate(event.acknowledgedAt))}</span>`}
+        ${event.status !== "RESOLVED" ? `<button type="button" class="text-button" data-alert-status="${escapeHtml(event.id)}" data-alert-next="ACKNOWLEDGED">Acknowledge</button><button type="button" class="text-button" data-alert-status="${escapeHtml(event.id)}" data-alert-next="INVESTIGATING">Investigate</button><button type="button" class="text-button" data-alert-status="${escapeHtml(event.id)}" data-alert-next="RESOLVED">Resolve</button>` : `<button type="button" class="text-button" data-alert-status="${escapeHtml(event.id)}" data-alert-next="OPEN">Reopen</button>`}
       </div>
     </div>`).join("") : `<div class="unknown-message">NO ALERTS. Watchtower changes will appear here for review.</div>`;
-  alertList.querySelectorAll("[data-alert-ack]").forEach((button) => button.addEventListener("click", async () => {
-    await apiJson(`/api/alerts/${encodeURIComponent(button.dataset.alertAck)}/acknowledge`, { method: "POST" });
-    await loadIntelligenceDashboard();
+  alertList.querySelectorAll("[data-alert-status]").forEach((button) => button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      await apiJson(`/api/alerts/${encodeURIComponent(button.dataset.alertStatus)}/status`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: button.dataset.alertNext }),
+      });
+      await loadIntelligenceDashboard();
+    } catch (error) {
+      button.disabled = false;
+      button.title = error.message;
+      if (watchtowerTickStatus) watchtowerTickStatus.textContent = `Alert update failed: ${error.message}`;
+    }
   }));
   JobenI18n.translate(alertList);
 }
@@ -1609,6 +1649,7 @@ async function loadIntelligenceDashboard() {
     renderWatchlistList(watchlists.watchlists || []);
     renderAlertList(alerts.events || []);
     renderCaseList(cases.cases || []);
+    renderWatchtowerMenu(watchlists.watchlists || [], alerts.events || [], passports.passports || []);
   } catch (error) {
     passportList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
   }

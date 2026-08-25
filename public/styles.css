@@ -785,6 +785,16 @@ body { background: var(--dashboard-bg); color: #17191c; }
 .intelligence-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 25px 0 12px; }
 .intelligence-heading-action { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .intelligence-action-status { min-height: 1em; color: var(--joben-muted); font-size: 9px; letter-spacing: .04em; }
+.intelligence-heading-help { margin: -4px 0 14px; color: var(--joben-dim); font-size: 10px; line-height: 1.5; }
+.watchtower-menu-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.watchtower-menu-card { position: relative; min-height: 104px; padding: 13px; border: 1px solid var(--dashboard-border); border-radius: 6px; color: #858b90; background: #fff; text-align: left; cursor: pointer; transition: border-color .2s ease, transform .2s ease, box-shadow .2s ease, background .2s ease; }
+.watchtower-menu-card:hover, .watchtower-menu-card.active { transform: translateY(-2px); border-color: rgba(44, 184, 172, .65); background: linear-gradient(145deg, #f8ffff, #fff); box-shadow: 0 8px 22px rgba(20, 46, 54, .1); }
+.watchtower-menu-card.active { box-shadow: inset 0 2px #2cb8ac, 0 8px 22px rgba(20, 46, 54, .1); }
+.watchtower-menu-number { display: block; margin-bottom: 12px; color: #2aa99e; font-size: 8px; font-weight: 800; letter-spacing: .12em; }
+.watchtower-menu-card strong, .watchtower-menu-card small, .watchtower-menu-card b { display: block; }
+.watchtower-menu-card strong { color: #4d5358; font-size: 10px; font-weight: 750; }
+.watchtower-menu-card small { margin-top: 4px; color: #858b90; font-size: 8px; }
+.watchtower-menu-card b { margin-top: 10px; color: #238b83; font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
 .intelligence-heading h2 { margin: 5px 0; font-size: 16px; letter-spacing: -.03em; }
 .intelligence-heading p { margin: 0; color: #7c8287; font-size: 10px; }
 .intelligence-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
@@ -848,6 +858,7 @@ body { background: var(--dashboard-bg); color: #17191c; }
   .dashboard-overview, .api-preview-grid { grid-template-columns: 1fr; }
   .intelligence-heading { align-items: flex-start; flex-direction: column; }
   .watchlist-form { grid-template-columns: 1fr; }
+  .watchtower-menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .watchlist-form .primary-button { grid-column: auto; }
   .watchlist-form .primary-button { margin-top: 0; }
   .intelligence-row { align-items: flex-start; flex-direction: column; }
