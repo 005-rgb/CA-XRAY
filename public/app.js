@@ -590,6 +590,7 @@ function showLanding({ privateView = false } = {}) {
   if (evidenceCommand) evidenceCommand.hidden = privateView;
   document.querySelector("#dashboard").classList.toggle("private-heading", privateView);
   landing.classList.toggle("passport-page", privateView && page === "passport");
+  landing.classList.toggle("core-scan-page", privateView && page === "new-scan");
   document.querySelector("#dashboard-overview").hidden = !privateView || page !== "dashboard";
   document.querySelector("#new-scan").hidden = privateView ? page !== "new-scan" : false;
   document.querySelector("#new-scan").classList.toggle("public-scan-workbench", !privateView);

@@ -451,6 +451,34 @@ details.evidence-detail summary { cursor: pointer; color: var(--ink); font-size:
   .passport-page .passport-area-grid { grid-template-columns: 1fr; }
 }
 
+/* Core Scan workspace: wide, balanced, and stable at every breakpoint. */
+.core-scan-page { max-width: 1600px; min-height: calc(100vh - 74px); }
+.core-scan-page .dashboard-heading { max-width: 1120px; }
+.core-scan-page .scan-workbench { grid-template-columns: minmax(0, 1.65fr) minmax(250px, .72fr); gap: 18px; max-width: 1320px; margin-top: 30px; }
+.core-scan-page .scan-form-card { min-width: 0; padding: 28px 30px 21px; border-radius: 10px; }
+.core-scan-page .scan-form-card form { grid-template-columns: minmax(150px, .8fr) minmax(240px, 1.45fr) 154px; gap: 14px; }
+.core-scan-page .scan-form-card .primary-button { min-width: 0; height: 42px; margin-top: 25px; border-radius: 6px; font-size: 10px; }
+.core-scan-page .scan-mode-card { min-width: 0; padding: 28px 25px 21px; border-radius: 10px; }
+.core-scan-page .scan-mode-card .mode-title { color: var(--joben-cyan); letter-spacing: .12em; }
+.core-scan-page .scan-mode-card .radio-option { padding: 11px 12px !important; border: 1px solid var(--joben-line); border-radius: 6px; background: rgba(255,255,255,.02); }
+.core-scan-page .scan-mode-card .radio-option:has(input:checked) { border-color: rgba(77,225,208,.55); background: rgba(77,225,208,.07); }
+.core-scan-page .scan-mode-card hr { border: 0; border-top: 1px solid var(--joben-line); margin: 20px 0 13px; }
+.core-scan-page .capability-hint { min-height: 28px; line-height: 1.45; }
+@media (max-width: 1024px) {
+  .core-scan-page .scan-workbench { grid-template-columns: minmax(0, 1.35fr) minmax(220px, .75fr); gap: 12px; }
+  .core-scan-page .scan-form-card { padding: 22px 20px 17px; }
+  .core-scan-page .scan-form-card form { grid-template-columns: minmax(120px, .8fr) minmax(150px, 1.2fr) 128px; gap: 9px; }
+  .core-scan-page .scan-mode-card { padding: 22px 17px 17px; }
+}
+@media (max-width: 760px) {
+  .core-scan-page { min-height: auto; }
+  .core-scan-page .scan-workbench { grid-template-columns: 1fr; gap: 12px; margin-top: 22px; }
+  .core-scan-page .scan-form-card { padding: 20px 17px 15px; }
+  .core-scan-page .scan-form-card form { grid-template-columns: 1fr; gap: 5px; }
+  .core-scan-page .scan-form-card .primary-button { width: 100%; margin-top: 10px; }
+  .core-scan-page .scan-mode-card { padding: 19px 17px 16px; }
+}
+
 /* CA X-RAY dashboard experience — the same layout adapts from desktop to mobile. */
 :root {
   --dashboard-bg: #f7f8f9;
