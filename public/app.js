@@ -132,7 +132,7 @@ async function apiJson(url, options = {}) {
 }
 
 function authMessage(message, target = authStatus) {
-  if (target) target.textContent = message || "";
+  if (target) target.textContent = message ? JobenI18n.t(message) : "";
 }
 
 function pushSignal(title, message, tone = "cyan", replace = false) {
@@ -185,9 +185,9 @@ function configureAuthRoute() {
   if (!isAuthRoute()) return;
   const register = pathName() === "/register";
   authMode.value = register ? "register" : "login";
-  authTitle.textContent = register ? "Create your JOBEN NETWORK account" : "Sign in to JOBEN NETWORK";
-  authSubmitLabel.textContent = register ? "Create account" : "Sign in";
-  authSwitch.textContent = register ? "I already have an account" : "Create an account";
+  authTitle.textContent = JobenI18n.t(register ? "Create your JOBEN NETWORK account" : "Sign in to JOBEN NETWORK");
+  authSubmitLabel.textContent = JobenI18n.t(register ? "Create account" : "Sign in");
+  authSwitch.textContent = JobenI18n.t(register ? "I already have an account" : "Create an account");
   authPassword.autocomplete = register ? "new-password" : "current-password";
 }
 
@@ -203,7 +203,7 @@ async function refreshAuth() {
       authForm.hidden = true;
       recoveryForm.hidden = true;
       mfaForm.hidden = false;
-      authTitle.textContent = "Verify your superadmin session";
+      authTitle.textContent = JobenI18n.t("Verify your superadmin session");
       authMessage("Enter the six-digit code from your authenticator.", mfaStatus);
       workspaceBar.hidden = true;
       return;
@@ -214,7 +214,7 @@ async function refreshAuth() {
       recoveryForm.hidden = true;
       mfaForm.hidden = true;
       emailVerificationForm.hidden = false;
-      authTitle.textContent = "Verify your email";
+      authTitle.textContent = JobenI18n.t("Verify your email");
       authMessage("Use the verification link sent to your email.", emailVerificationStatus);
       workspaceBar.hidden = true;
       return;
@@ -224,7 +224,7 @@ async function refreshAuth() {
     emailVerificationForm.hidden = true;
     authForm.hidden = false;
     if (!authenticated) {
-      authEntry.textContent = "Sign in →";
+      authEntry.textContent = JobenI18n.t("Sign in →");
       authEntry.href = "/login";
       configureAuthRoute();
       setShell({ authView: authRequested });
@@ -232,13 +232,13 @@ async function refreshAuth() {
     }
     if (authState.user?.platformRole === "Superadmin") {
       workspaceBar.hidden = true;
-      authEntry.textContent = "Platform Ops →";
+      authEntry.textContent = JobenI18n.t("Platform Ops →");
       authEntry.href = "/admin";
     } else {
       const workspaces = await apiJson("/api/workspaces");
       workspaceSelector.innerHTML = workspaces.workspaces.map((workspace) =>
         `<option value="${escapeHtml(workspace.id)}" ${workspace.id === authState.workspace?.id ? "selected" : ""}>${escapeHtml(workspace.name || workspace.workspaceType)} · ${escapeHtml(workspace.planId)}</option>`).join("");
-      authEntry.textContent = "Dashboard →";
+      authEntry.textContent = JobenI18n.t("Dashboard →");
       authEntry.href = "/dashboard";
     }
     const queuedScan = pendingScan();
@@ -1408,7 +1408,7 @@ async function scanLive() {
       address: addressInput.value.trim(),
     }));
     authRequested = true;
-    window.location.assign(`/login?returnTo=${encodeURIComponent("/")}`);
+    window.location.assign(`/login?lang=${encodeURIComponent(JobenI18n.locale)}&returnTo=${encodeURIComponent("/")}`);
     return;
   }
   showLoading(["VALIDATING", "FETCHING DATA"]);
@@ -1425,7 +1425,7 @@ async function scanLive() {
         address: addressInput.value.trim(),
       }));
       authRequested = true;
-      window.location.assign(`/login?returnTo=${encodeURIComponent("/")}`);
+      window.location.assign(`/login?lang=${encodeURIComponent(JobenI18n.locale)}&returnTo=${encodeURIComponent("/")}`);
       return;
     }
     if (!response.ok) {
@@ -1488,7 +1488,7 @@ async function loadPrivateRoute() {
 async function scanDemo(scenario) {
   if (!authState?.authenticated) {
     authRequested = true;
-    window.location.assign("/login?returnTo=%2Fdashboard");
+    window.location.assign(`/login?lang=${encodeURIComponent(JobenI18n.locale)}&returnTo=%2Fdashboard`);
     return;
   }
   showLoading(["BUILDING REPORT"]);
@@ -2352,6 +2352,15 @@ window.addEventListener("popstate", () => {
   } else {
     showLanding({ privateView: false });
   }
+});
+
+window.addEventListener("joben:locale-change", () => {
+  configureAuthRoute();
+  if (currentScan) {
+    renderReport(currentScan);
+    return;
+  }
+  if (authState?.authenticated && isPrivateRoute()) showLanding({ privateView: true });
 });
 
 configureAuthRoute();
