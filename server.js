@@ -1020,6 +1020,12 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/watchtower/health") {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, { health: intelligenceStore.getWatchtowerHealth(authenticated.workspaceId) }, { context });
+    return true;
+  }
+
   if (req.method === "POST" && ["/api/watchlists/tick", "/api/watchtower/tick"].includes(url.pathname)) {
     const authenticated = requireAuthenticated(context);
     sendJson(res, 200, {

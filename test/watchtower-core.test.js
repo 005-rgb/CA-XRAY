@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { DurableWatchScheduler } = require("../src/watchtower/scheduler");
 const { compareSnapshots } = require("../src/watchtower/materiality");
 const { DeliveryOutbox, signPayload, validateWebhookUrl } = require("../src/watchtower/delivery");
+const { IntelligenceStore } = require("../src/intelligence/store");
 
 const at = new Date("2026-08-25T00:00:00.000Z");
 const address = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -51,4 +52,15 @@ test("delivery signs payloads, rejects unsafe webhooks, retries transient failur
   await outbox.process({ now: new Date(at.getTime() + 2), sender: async () => ({ status: 200 }) });
   assert.equal(outbox.list()[0].status, "SENT");
   assert.ok(job.id);
+});
+
+test("health keeps monitoring state separate from risk and reports missed, stale, and provider failure gaps", () => {
+  let now = new Date("2026-08-25T00:00:00.000Z");
+  const store = new IntelligenceStore({ clock: () => now });
+  const target = store.createWatchlist({ workspaceId: "workspace-a", actorId: "user-a", networkId: "ethereum", address, intervalHours: 1 });
+  store.updateWatchlist("workspace-a", target.id, { status: "paused" });
+  const health = store.getWatchtowerHealth("workspace-a");
+  assert.equal(health.riskStateIsSeparate, true);
+  assert.equal(health.targets[0].state, "BLOCKED");
+  assert.equal(store.getWatchtowerHealth("workspace-b").targets.length, 0);
 });

@@ -123,6 +123,7 @@ function snapshotFromScan({ scan, jobId, capturedAt }) {
   const contract = scan.contract || {};
   const changePoints = {
     owner: contract.owner || contract.ownerAddress || security.ownerAddress || security.owner,
+    privilege: security.privilege || security.privileges || security.privilegedWallets,
     proxy: contract.proxy || contract.isProxy || security.isUpgradeable || security.proxy,
     buyTax: trading.buyTax,
     sellTax: trading.sellTax,
@@ -588,6 +589,40 @@ class IntelligenceStore {
       evidenceCount: items.length,
       items,
       checkedAt: this.clock().toISOString(),
+    };
+  }
+
+  getWatchtowerHealth(workspaceId) {
+    const now = this.clock().getTime();
+    const targets = this.listWatchlists(workspaceId);
+    const items = targets.map((target) => {
+      const passport = this.#passport(workspaceId, target.networkId, target.address);
+      const freshness = this.getFreshness(workspaceId, target.networkId, target.address);
+      const latest = passport?.snapshots?.at(-1) || null;
+      const failed = ["FAILED", "ERROR"].includes(String(target.lastRunStatus || "").toUpperCase());
+      const overdue = target.status === "active" && target.nextCheckAt && Date.parse(target.nextCheckAt) < now;
+      const providerUnavailable = latest?.dataStatus && ["unavailable", "error"].includes(String(latest.dataStatus).toLowerCase());
+      const state = target.status === "archived" ? "BLOCKED"
+        : failed || providerUnavailable ? "ERROR"
+          : overdue || freshness?.staleCount > 0 ? "STALE"
+            : target.status === "paused" ? "BLOCKED"
+              : latest ? "CURRENT" : "DEGRADED";
+      return {
+        targetId: target.id, networkId: target.networkId, address: target.address,
+        state, riskState: latest?.risk?.level || "UNKNOWN",
+        lastRunStatus: target.lastRunStatus || "NOT_RUN",
+        lastSuccessfulRunAt: target.lastRunStatus === "SUCCEEDED" ? target.lastRunCompletedAt : null,
+        nextDueAt: target.nextCheckAt || null,
+        staleCount: freshness?.staleCount || 0,
+        uncertaintyBudget: freshness?.uncertaintyBudget ?? null,
+        reason: providerUnavailable ? "PROVIDER_UNAVAILABLE" : failed ? (target.lastRunError || "RUN_FAILED") : overdue ? "MISSED_RUN" : freshness?.staleCount ? "EVIDENCE_STALE" : null,
+      };
+    });
+    const counts = Object.fromEntries(["CURRENT", "STALE", "DEGRADED", "BLOCKED", "ERROR"].map((state) => [state, 0]));
+    for (const item of items) counts[item.state] = (counts[item.state] || 0) + 1;
+    return {
+      workspaceId, generatedAt: this.clock().toISOString(), counts, targets: items,
+      riskStateIsSeparate: true, detectionGap: items.filter((item) => item.state !== "CURRENT").map((item) => ({ targetId: item.targetId, reason: item.reason || item.state })),
     };
   }
 
