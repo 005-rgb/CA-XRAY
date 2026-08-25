@@ -7,7 +7,7 @@ async function main() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
-    const versions = ["002_phase4_auth_tenant", "001_phase3_persistence"];
+    const versions = ["007_phase1_durable_queue", "006_settings_retention", "005_phase9_trajectory_deployer", "004_phase6_intelligence", "003_phase5_scan_jobs", "002_phase4_auth_tenant", "001_phase3_persistence"];
     const version = versions.find((candidate) => {
       return true;
     });

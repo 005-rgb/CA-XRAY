@@ -7,7 +7,10 @@ const migrations = [
   ["001_phase3_persistence", "2.0.0", "1.0.0"],
   ["002_phase4_auth_tenant", "2.0.0", "1.0.0"],
   ["003_phase5_scan_jobs", "2.1.0", "1.1.0"],
+  ["004_phase6_intelligence", "2.1.0", "1.1.0"],
+  ["005_phase9_trajectory_deployer", "2.2.0", "1.2.0"],
   ["006_settings_retention", "2.2.0", "1.2.0"],
+  ["007_phase1_durable_queue", "2.3.0", "1.3.0"],
 ];
 
 async function main() {

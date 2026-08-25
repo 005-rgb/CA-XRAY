@@ -46,6 +46,7 @@ function scanJobFromRow(row) {
     attempts: row.attempts ?? 0,
     maxAttempts: row.max_attempts ?? null,
     cancellationReason: row.cancellation_reason || null,
+    queuePayload: row.queue_payload || null,
   };
 }
 
@@ -641,7 +642,7 @@ class PostgresPersistence {
     const result = await this.pool.query(
       `SELECT id, type, status, created_at, started_at, completed_at, error_code, error_message, report_json,
               address, network_id, engine_version, evidence_schema_version, report_version,
-              report_hash, attempts, max_attempts, cancellation_reason
+              report_hash, attempts, max_attempts, cancellation_reason, queue_payload
          FROM scan_jobs
         WHERE id = $1 AND workspace_id = $2`,
       [jobId, workspaceId],
@@ -680,7 +681,7 @@ class PostgresPersistence {
     const result = await this.pool.query(
       `SELECT id, type, status, created_at, started_at, completed_at, error_code, error_message,
               address, network_id, engine_version, evidence_schema_version, report_version,
-              report_hash, attempts, max_attempts, cancellation_reason
+              report_hash, attempts, max_attempts, cancellation_reason, queue_payload
          FROM scan_jobs
         WHERE ${conditions.join(" AND ")}
         ORDER BY created_at DESC, id DESC

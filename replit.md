@@ -24,7 +24,7 @@ npm test
 - GoPlus Security is the active capability provider, DexScreener is the active market-pair provider, and Blockscout plus public JSON-RPC provide shared ABI, ownership, creator, deployment, and holder evidence when available. DexScreener does not provide holders, decimals, ABI/source verification, or ownership. GoPlus capability positives without independent verified ABI confirmation are `UNVERIFIED_SIGNAL` with LOW interpretation confidence.
 - `pairCreatedAt` is displayed as Pair Age, never Contract Age. Missing decimals/holders/capabilities use explicit unavailable/not-checked semantics rather than guessed defaults.
 - Phase 0 targets 100,000 MAU, 2,000 concurrent users, 300 scans/minute, RPO 15 minutes, RTO 1 hour, and 99.9% availability.
-- Live scans use an asynchronous job contract; the development queue is local only and production requires a shared durable queue.
+- Live scans use an asynchronous job contract; development uses a local queue while production supports the PostgreSQL durable queue with leases, bounded retries, and dead-letter records.
 - Clerk is provisioned for authentication. Stripe is the planned billing provider, but paid checkout remains disabled until its connection is authorized.
 - Phase 1 security contract is documented in `DOC/PHASE-1-SECURITY.md`. Workspace scope is assigned server-side, never accepted from request bodies.
 - Phase 4 authentication and tenant isolation are implemented in `src/auth/service.js`: opaque signed/revocable sessions, password hashing, one-time recovery and workspace invites, server-side membership authorization, ownership transfer, audit events, and encrypted TOTP MFA for superadmins. Development uses the memory auth store; PostgreSQL auth uses the Phase 4 migration.
@@ -37,7 +37,8 @@ npm test
 - Phase 2 uses a provider-agnostic pipeline: chain validation → replaceable adapter → canonical normalized evidence → evidence validation → forensic/risk/report engines. Provider result states are `valid`, `unknown`, `unavailable`, and `provider_error`.
 - Live evidence keeps internal provenance (provider ID, adapter/schema/engine versions, retrieval time, confidence, and evidence reference), while public reports redact provider identity. Risk score, reliability score, and data status remain separate.
 - Provider conflicts are explicit and excluded from silent scoring; missing, null, malformed, unavailable, and provider-error values never become zero, false, or a safe status.
-- Production startup rejects in-memory queue and data-store drivers; configure PostgreSQL via `DATA_STORE_DRIVER` and a shared queue via `SCAN_QUEUE_DRIVER` before deployment.
+- Production startup rejects in-memory queue and data-store drivers; configure PostgreSQL via `DATA_STORE_DRIVER=postgresql`, `SCAN_QUEUE_DRIVER=postgresql`, and `DATABASE_URL` before deployment. Operational details are in `doc/PHASE-1-OPERATIONS.md`.
+- `/healthz` is liveness, `/readyz` verifies persistence/intelligence/queue readiness, and `/metrics` exposes JSON service telemetry.
 - Phase 3 persistence is implemented through `src/persistence/index.js`: memory and PostgreSQL adapters share scan idempotency, usage, tenant-scoped job reads, webhook deduplication, outbox, and lifecycle metadata contracts.
 - PostgreSQL schema and rollback are versioned in `migrations/001_phase3_persistence.sql` and `migrations/001_phase3_persistence.down.sql`; run `npm run db:migrate` with `DATABASE_URL` before using the PostgreSQL adapter.
 - Phase 3 operations and backup/restore drill are documented in `DOC/PHASE-3-OPERATIONS.md`.

@@ -5,3 +5,4 @@
 - [Chain target validation](chain-target-validation.md) — EVM address syntax is not enough; confirm deployed bytecode on the selected chain.
 - [Native address checksums](native-address-checksums.md) — native validators must use protocol-specific checksum/encoding rules, not generic Base58 or Bech32 syntax.
 - [JOBEN NETWORK UI theme](joben-network-ui-theme.md) — dark forensic intelligence, with motion reserved for scan telemetry and evidence signals.
+- [Imported dependency state](imported-dependency-state.md) — package manifests may be present while runtime modules are absent; install declared dependencies before judging test failures.

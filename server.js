@@ -96,6 +96,7 @@ const scanQueue = createScanJobQueue({
     return undefined;
   },
 });
+const queueReady = typeof scanQueue.init === "function" ? scanQueue.init() : Promise.resolve();
 
 function runWatchtowerTick() {
   try {
@@ -1285,7 +1286,7 @@ async function handleApiUnsafe(req, res, url, context) {
         return true;
       }
       try {
-        scanQueue.enqueue({
+        await scanQueue.enqueue({
           jobId: created.job.id,
           address,
           networkId,
@@ -1438,7 +1439,7 @@ async function handleApiUnsafe(req, res, url, context) {
       sendJson(res, 409, { error: "SCAN_NOT_CANCELLABLE", message: "This scan is already in a terminal state.", job }, { context });
       return true;
     }
-    const cancelled = scanQueue.cancel(cancelMatch[1]);
+    const cancelled = await scanQueue.cancel(cancelMatch[1]);
     await persistence.markJobCancelled({
       id: cancelMatch[1],
       completedAt: new Date().toISOString(),
@@ -1552,15 +1553,46 @@ async function handleApi(req, res, url, context) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-  await persistenceReady;
-  await intelligenceReady;
-  const context = await requestContext(req);
   if (req.method === "GET" && url.pathname === "/healthz") {
-    sendJson(res, 200, { status: "ok" }, { context });
+    sendJson(res, 200, {
+      status: "ok",
+      environment: runtimeConfig.environment,
+      uptimeSeconds: Math.floor(process.uptime()),
+      measuredAt: new Date().toISOString(),
+    });
     return;
   }
   if (req.method === "GET" && url.pathname === "/readyz") {
-    sendJson(res, 200, { status: "ready", queue: runtimeConfig.queue.driver }, { context });
+    try {
+      await Promise.all([persistenceReady, intelligenceReady, queueReady]);
+      sendJson(res, 200, {
+        status: "ready",
+        queue: runtimeConfig.queue.driver,
+        storage: runtimeConfig.dataStore.driver,
+      });
+    } catch (error) {
+      sendJson(res, 503, {
+        status: "not_ready",
+        error: "DEPENDENCY_NOT_READY",
+        message: runtimeConfig.environment === "production"
+          ? "A required production dependency is not ready."
+          : error.message,
+      });
+    }
+    return;
+  }
+  await persistenceReady;
+  await intelligenceReady;
+  await queueReady;
+  const context = await requestContext(req);
+  if (req.method === "GET" && url.pathname === "/metrics") {
+    sendJson(res, 200, {
+      service: "joben-network",
+      environment: runtimeConfig.environment,
+      uptimeSeconds: Math.floor(process.uptime()),
+      queue: { driver: runtimeConfig.queue.driver, ...scanQueue.metrics() },
+      measuredAt: new Date().toISOString(),
+    }, { context });
     return;
   }
   if (url.pathname.startsWith("/api/")) {
@@ -1594,3 +1626,19 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   console.log(`CA X-RAY listening on http://${HOST}:${PORT}`);
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  clearInterval(watchtowerTimer);
+  server.close(async () => {
+    await Promise.resolve(scanQueue.close?.()).catch((error) => console.error(`Queue shutdown failed: ${error.message}`));
+    await Promise.resolve(persistence.close?.()).catch((error) => console.error(`Persistence shutdown failed: ${error.message}`));
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10_000).unref?.();
+  console.log(`Shutdown requested by ${signal}.`);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
