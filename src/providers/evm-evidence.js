@@ -91,7 +91,7 @@ function aggregateTransfers(logs, tokenAddress) {
   return { tokenAddress, transfers, topHolders: top, observedHolderCount: [...balances.values()].filter((value) => value > 0n).length };
 }
 
-async function getLogsAdaptive({ rpcUrl, address, topic0, latest, timeoutMs, maxBlocks = 10000, maxChunks = 20 }) {
+async function getLogsAdaptive({ rpcUrl, address, topic0, latest, timeoutMs, maxBlocks = 1000, maxChunks = 1 }) {
   const logs = [];
   let cursor = latest;
   let chunks = 0;
@@ -123,6 +123,15 @@ async function getLogsAdaptive({ rpcUrl, address, topic0, latest, timeoutMs, max
   }
   if (cursor >= 0) complete = false;
   return { logs, complete, fromBlock: scannedFromBlock, toBlock: scannedToBlock, chunks };
+}
+
+function boundedLogScan(options, deadlineMs) {
+  return Promise.race([
+    getLogsAdaptive(options),
+    new Promise((resolve) => setTimeout(() => resolve({
+      logs: [], complete: false, fromBlock: options.latest, toBlock: options.latest, chunks: 0, timedOut: true,
+    }), deadlineMs)),
+  ]);
 }
 
 async function simulateRouter({ rpcUrl, networkId, tokenAddress, pairAddress, decimals, timeoutMs = 12000 }) {
@@ -158,8 +167,8 @@ async function collectEvmEvidence({ network, tokenAddress, pairAddress, decimals
     if (latest === null) throw new Error("RPC returned an invalid latest block.");
     const [exitability, transferScan, ownerScan] = await Promise.all([
       simulateRouter({ rpcUrl: network.rpcUrl, networkId: network.id, tokenAddress, pairAddress, decimals, timeoutMs }),
-      getLogsAdaptive({ rpcUrl: network.rpcUrl, address: tokenAddress, topic0: TRANSFER_TOPIC, latest, timeoutMs }),
-      getLogsAdaptive({ rpcUrl: network.rpcUrl, address: tokenAddress, topic0: OWNERSHIP_TRANSFERRED_TOPIC, latest, timeoutMs, maxBlocks: 25000, maxChunks: 10 }),
+      boundedLogScan({ rpcUrl: network.rpcUrl, address: tokenAddress, topic0: TRANSFER_TOPIC, latest, timeoutMs }, Math.min(8000, timeoutMs + 1000)),
+      boundedLogScan({ rpcUrl: network.rpcUrl, address: tokenAddress, topic0: OWNERSHIP_TRANSFERRED_TOPIC, latest, timeoutMs, maxBlocks: 1000, maxChunks: 1 }, Math.min(8000, timeoutMs + 1000)),
     ]);
     const history = aggregateTransfers(transferScan.logs, tokenAddress);
     const ownerEvents = ownerScan.logs.map((log) => ({
