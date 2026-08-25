@@ -4,6 +4,7 @@ const { Pool } = require("pg");
 const JOB_STATUS = Object.freeze({
   QUEUED: "QUEUED",
   RUNNING: "RUNNING",
+  PARTIAL: "PARTIAL",
   SUCCEEDED: "SUCCEEDED",
   FAILED: "FAILED",
   CANCELLED: "CANCELLED",
@@ -18,6 +19,7 @@ function snapshot(job) {
     startedAt: job.startedAt,
     completedAt: job.completedAt,
     error: job.error,
+    payload: job.payload,
     scan: job.scan,
     attempts: job.attempts,
     maxAttempts: job.maxAttempts,
@@ -154,9 +156,16 @@ class InMemoryScanJobQueue {
       ])
         .then((scan) => {
           if (job.cancelRequested || job.status === JOB_STATUS.CANCELLED) return;
-          job.status = JOB_STATUS.SUCCEEDED;
+           job.status = scan?.continuation?.status === "PENDING" ? JOB_STATUS.PARTIAL : JOB_STATUS.SUCCEEDED;
           job.scan = scan;
           job.error = null;
+           if (job.status === JOB_STATUS.PARTIAL) {
+             job.payload = { ...job.payload, previousScan: scan };
+             job.completedAt = null;
+             this.pending.push(job.id);
+           } else {
+             job.completedAt = this.clock().toISOString();
+           }
         })
         .catch((error) => {
           if (job.cancelRequested || job.status === JOB_STATUS.CANCELLED) return;
@@ -176,7 +185,7 @@ class InMemoryScanJobQueue {
           };
         })
         .finally(() => {
-          if (job.status !== JOB_STATUS.QUEUED) {
+           if (![JOB_STATUS.QUEUED, JOB_STATUS.PARTIAL].includes(job.status)) {
             if (job.cancelRequested && job.status === JOB_STATUS.RUNNING) {
               job.status = JOB_STATUS.CANCELLED;
               job.error = { code: "SCAN_CANCELLED", message: "The scan was cancelled." };
@@ -399,16 +408,19 @@ class PostgresScanJobQueue {
         timeout,
       ]);
       if (!job.cancelRequested) {
-        job.status = "SUCCEEDED";
+        const partial = scan?.continuation?.status === "PENDING";
+        job.status = partial ? JOB_STATUS.PARTIAL : JOB_STATUS.SUCCEEDED;
         job.scan = scan;
-        job.completedAt = this.clock().toISOString();
+        job.payload = partial ? { ...job.payload, previousScan: scan } : job.payload;
+        job.completedAt = partial ? null : this.clock().toISOString();
         await this.pool.query(
-          `UPDATE scan_jobs SET status = 'SUCCEEDED', completed_at = $2, lease_owner = NULL,
-              lease_until = NULL, report_json = $3::jsonb, last_error = NULL
-            WHERE id = $1 AND lease_owner = $4`,
-          [job.id, job.completedAt, JSON.stringify(scan), this.owner],
+          `UPDATE scan_jobs SET status = $2, completed_at = $3, lease_owner = NULL,
+              lease_until = NULL, report_json = $4::jsonb, queue_payload = $5::jsonb, last_error = NULL
+            WHERE id = $1 AND lease_owner = $6`,
+          [job.id, job.status, job.completedAt, JSON.stringify(scan), JSON.stringify(job.payload), this.owner],
         );
         await this.onStatusChange?.(job);
+        if (partial) await this.#drain();
       }
     } catch (error) {
       if (!job.cancelRequested) {
@@ -436,6 +448,7 @@ class PostgresScanJobQueue {
       clearTimeout(timer);
       this.active.delete(job.id);
       this.counts.RUNNING = Math.max(0, this.counts.RUNNING - 1);
+      if (job.status === "PARTIAL") this.counts.PARTIAL += 1;
       if (job.status === "SUCCEEDED") this.counts.SUCCEEDED += 1;
       if (job.status === "FAILED") this.counts.FAILED += 1;
       if (job.status === "QUEUED") this.counts.QUEUED += 1;

@@ -186,6 +186,26 @@ function aggregateTransferList(transfers, tokenAddress) {
   })), tokenAddress);
 }
 
+function mergeEvmHistory(previous, current, tokenAddress) {
+  const previousTransfers = Array.isArray(previous?.transfers) ? previous.transfers : [];
+  const currentTransfers = Array.isArray(current?.transfers) ? current.transfers : [];
+  const transfers = [...new Map(
+    [...previousTransfers, ...currentTransfers].map((item) => [transferIdentity(item), item]),
+  ).values()];
+  const previousEvents = Array.isArray(previous?.events) ? previous.events : [];
+  const currentEvents = Array.isArray(current?.events) ? current.events : [];
+  const events = [...new Map(
+    [...previousEvents, ...currentEvents]
+      .map((item) => [`${item.txHash || "unknown"}:${item.blockNumber || "unknown"}:${item.newOwner || ""}`, item]),
+  ).values()];
+  return {
+    ...current,
+    ...(current?.transfers ? aggregateTransferList(transfers, tokenAddress) : {}),
+    ...(current?.events ? { events } : {}),
+    pages: (previous?.pages || 0) + (current?.pages || 0),
+  };
+}
+
 async function collectIndexerOwnerEvents({
   blockscoutHost,
   tokenAddress,
@@ -387,6 +407,7 @@ module.exports = {
   collectEvmEvidence,
   collectIndexerTransfers,
   collectIndexerOwnerEvents,
+  mergeEvmHistory,
   transferFromIndexer,
   TRANSFER_TOPIC,
   OWNERSHIP_TRANSFERRED_TOPIC,

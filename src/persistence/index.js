@@ -241,6 +241,19 @@ class MemoryPersistence {
     current.maxAttempts = job.maxAttempts || current.maxAttempts;
   }
 
+  async markJobPartial(job) {
+    const current = this.jobs.get(job.id);
+    if (!current || ["SUCCEEDED", "FAILED", "CANCELLED"].includes(current.status)) return;
+    current.status = "PARTIAL";
+    current.scan = clone(job.scan);
+    current.queuePayload = clone(job.payload);
+    current.reportJson = clone(job.scan);
+    current.engineVersion = job.scan?.engineVersion || current.engineVersion;
+    current.evidenceSchemaVersion = job.scan?.evidenceSchemaVersion || "1.0.0";
+    current.attempts = job.attempts || current.attempts;
+    current.maxAttempts = job.maxAttempts || current.maxAttempts;
+  }
+
   async markJobFailed(job) {
     const current = this.jobs.get(job.id);
     if (!current) return;
@@ -614,6 +627,16 @@ class PostgresPersistence {
     } finally {
       client.release();
     }
+  }
+
+  async markJobPartial(job) {
+    await this.pool.query(
+      `UPDATE scan_jobs
+          SET status = 'PARTIAL', report_json = $2::jsonb, queue_payload = $3::jsonb,
+              evidence_schema_version = $4, attempts = GREATEST(attempts, $5)
+        WHERE id = $1 AND status IN ('QUEUED', 'RUNNING', 'PARTIAL')`,
+      [job.id, JSON.stringify(job.scan), JSON.stringify(job.payload || {}), job.scan?.evidenceSchemaVersion || "1.0.0", job.attempts || 1],
+    );
   }
 
   async markJobFailed(job) {

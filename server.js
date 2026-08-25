@@ -4,6 +4,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const {
   NETWORKS,
+  getNetworkCapabilityMatrix,
   createDemoScan,
   scanLive,
   validateAddress,
@@ -90,6 +91,7 @@ const scanQueue = createScanJobQueue({
         }
       });
     }
+    if (job.status === "PARTIAL") return persistence.markJobPartial(job);
     if (job.status === "FAILED") {
       intelligenceStore.recordMonitoringJobStatus(job.id, "FAILED", job.error);
       return persistence.markJobFailed(job);
@@ -929,7 +931,12 @@ async function handleApiUnsafe(req, res, url, context) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/networks") {
-    sendJson(res, 200, { networks: NETWORKS }, { context });
+    sendJson(res, 200, {
+      networks: NETWORKS.map((network) => ({
+        ...network,
+        capabilityMatrix: getNetworkCapabilityMatrix(network),
+      })),
+    }, { context });
     return true;
   }
 

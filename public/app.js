@@ -6,6 +6,7 @@ const addressInput = document.querySelector("#contract-address");
 const networkInput = document.querySelector("#network");
 const addressError = document.querySelector("#address-error");
 const networkError = document.querySelector("#network-error");
+const networkCapabilityHint = document.querySelector("#network-capability-hint");
 const clearAddress = document.querySelector("#clear-address");
 const loadingStages = document.querySelector("#loading-stages");
 const authPanel = document.querySelector("#auth-panel");
@@ -149,6 +150,31 @@ async function apiJson(url, options = {}) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.message || body.error || "Request failed.");
   return body;
+}
+
+let networkCapabilityCatalog = new Map();
+
+function renderNetworkCapabilityHint() {
+  if (!networkCapabilityHint) return;
+  const network = networkCapabilityCatalog.get(networkInput?.value);
+  if (!network?.capabilityMatrix) {
+    networkCapabilityHint.textContent = "";
+    return;
+  }
+  const matrix = network.capabilityMatrix;
+  const unsupported = matrix.capabilities.filter((item) => item.support === "not_supported").length;
+  networkCapabilityHint.textContent = uiText("Coverage") + `: ${matrix.supportedCount}/${matrix.totalCount} ${uiText("capabilities available")} · ${uiText(matrix.networkClass)}` +
+    (unsupported ? ` · ${unsupported} ${uiText("not available on this network")}` : "");
+}
+
+async function loadNetworkCapabilityCatalog() {
+  try {
+    const body = await apiJson("/api/networks");
+    networkCapabilityCatalog = new Map((body.networks || []).map((network) => [network.id, network]));
+    renderNetworkCapabilityHint();
+  } catch {
+    if (networkCapabilityHint) networkCapabilityHint.textContent = uiText("Network capability details are unavailable.");
+  }
 }
 
 function authMessage(message, target = authStatus) {
@@ -1839,6 +1865,7 @@ function renderHero(scan) {
     </div>
     ${scan.mode === "DEMO" ? `<div class="demo-banner">DEMO DATA — NOT LIVE BLOCKCHAIN DATA &nbsp; / &nbsp; ENGINE REPRODUCIBILITY: HIGH &nbsp; / &nbsp; LIVE EVIDENCE: NOT APPLICABLE</div>` : ""}
     ${scan.errors.length ? `<div class="error-banner"><strong>PARTIAL DATA:</strong> Some evidence was unavailable for this scan. Missing fields remain UNKNOWN and were not replaced.</div>` : ""}
+    ${renderNetworkCoverage(scan)}
     <div class="report-hero">
       <div class="report-identity">
         <p class="eyebrow">JOBEN NETWORK / FORENSIC REPORT</p>
@@ -2022,6 +2049,21 @@ function renderForensics(scan) {
         ${tradingRow("Trading pause", t.tradingPause, formatValue, "+10")}
       </tbody></table></div></div>
     </div>
+  </section>`;
+}
+
+function renderNetworkCoverage(scan) {
+  const matrix = scan.network?.capabilityMatrix;
+  if (!matrix?.capabilities?.length) return "";
+  const classLabel = {
+    "evm-rpc-blockscout": "EVM + RPC + Blockscout",
+    "evm-rpc": "EVM + RPC",
+    "native-adapter": "Native adapter",
+    "metadata-only": "Metadata only",
+  }[matrix.networkClass] || matrix.networkClass;
+  return `<section class="report-section full network-coverage-section">${sectionHeading("01A", "NETWORK CAPABILITY COVERAGE", "01A / 08")}
+    <div class="coverage-summary"><div><div class="data-label">NETWORK CLASS</div><strong>${escapeHtml(classLabel)}</strong></div><div><div class="data-label">AVAILABLE CAPABILITIES</div><strong>${matrix.supportedCount} / ${matrix.totalCount}</strong></div><div><div class="data-label">FRESHNESS</div><strong>PER SCAN</strong></div></div>
+    <div class="capability-matrix">${matrix.capabilities.map((item) => `<div class="matrix-item ${item.support === "not_supported" ? "unsupported" : ""}"><div><strong>${escapeHtml(item.label)}</strong><span class="matrix-status">${escapeHtml(item.support === "supported" ? "SUPPORTED" : "NOT SUPPORTED")}</span></div><p>${escapeHtml(item.limitation)}</p>${item.provider ? `<small>${escapeHtml(item.provider)}</small>` : ""}</div>`).join("")}</div>
   </section>`;
 }
 
@@ -2699,7 +2741,9 @@ networkInput.addEventListener("change", () => {
   networkError.textContent = "";
   addressError.textContent = "";
   addressInput.placeholder = networkInput.value === "solana" ? "Solana contract address..." : "Contract address...";
+  renderNetworkCapabilityHint();
 });
+loadNetworkCapabilityCatalog();
 document.querySelectorAll("[data-demo]").forEach((button) => button.addEventListener("click", () => scanDemo(button.dataset.demo)));
 document.querySelector("#mobile-menu")?.addEventListener("click", (event) => {
   const open = sidebar.classList.toggle("open");

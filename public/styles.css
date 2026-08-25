@@ -27,6 +27,80 @@ html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--paper); }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
+
+.capability-hint {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 7px 0 0;
+  min-height: 14px;
+}
+
+.network-coverage-section .coverage-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.capability-matrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.matrix-item {
+  border: 1px solid var(--line);
+  min-width: 0;
+  padding: 14px;
+}
+
+.matrix-item.unsupported {
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  opacity: .78;
+}
+
+.matrix-item > div {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.matrix-item strong {
+  font-size: 11px;
+}
+
+.matrix-status {
+  color: var(--accent);
+  flex: 0 0 auto;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.matrix-item.unsupported .matrix-status {
+  color: var(--muted);
+}
+
+.matrix-item p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.matrix-item small {
+  color: var(--faint);
+  display: block;
+  font-size: 9px;
+  margin-top: 8px;
+}
+
+@media (max-width: 700px) {
+  .network-coverage-section .coverage-summary,
+  .capability-matrix {
+    grid-template-columns: 1fr;
+  }
+}
 .mono, .eyebrow, .label-note, .panel-kicker, .header-meta, .section-kicker, .data-label, th, .status-pill, .report-meta, .value-index {
   letter-spacing: .1em;
   text-transform: uppercase;

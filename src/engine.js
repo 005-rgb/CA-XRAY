@@ -5,7 +5,7 @@ const {
 } = require("./providers/contracts");
 const { createDefaultProviderRegistry } = require("./providers/default-adapters");
 const { validateNativeAddress, verifyNativeNetwork } = require("./providers/native-network-adapters");
-const { collectEvmEvidence } = require("./providers/evm-evidence");
+const { collectEvmEvidence, mergeEvmHistory } = require("./providers/evm-evidence");
 
 const STATUS = Object.freeze({
   VERIFIED: "VERIFIED",
@@ -210,6 +210,88 @@ const NETWORKS = Object.freeze([
   }),
 ]);
 
+const CAPABILITY_LABELS = Object.freeze({
+  deployment: "Deployment / account state",
+  bytecode: "Bytecode",
+  abi: "ABI / source verification",
+  market: "Market pairs / liquidity",
+  transferHistory: "Transfer history",
+  ownershipHistory: "Ownership history",
+  holderDistribution: "Holder distribution",
+});
+
+function getNetworkCapabilityMatrix(network) {
+  const isEvm = Boolean(network?.evm);
+  const isNative = Boolean(!isEvm && network?.nativeAdapter);
+  const hasIndexer = Boolean(network?.blockscoutHost);
+  const capabilities = [
+    {
+      key: "deployment",
+      label: CAPABILITY_LABELS.deployment,
+      support: isEvm || isNative ? "supported" : "not_supported",
+      evidenceStatus: isEvm || isNative ? "NOT_CHECKED" : "NOT_SUPPORTED",
+      provider: isEvm ? "public JSON-RPC" : isNative ? network.nativeAdapter : null,
+      limitation: isEvm || isNative ? "Verified during the live scan on the selected network." : "This network has metadata/market coverage only.",
+    },
+    {
+      key: "bytecode",
+      label: CAPABILITY_LABELS.bytecode,
+      support: isEvm ? "supported" : "not_supported",
+      evidenceStatus: isEvm ? "NOT_CHECKED" : "NOT_SUPPORTED",
+      provider: isEvm ? "public JSON-RPC" : null,
+      limitation: isEvm ? "Bytecode existence is checked with eth_getCode." : "This protocol does not use the EVM bytecode contract check.",
+    },
+    {
+      key: "abi",
+      label: CAPABILITY_LABELS.abi,
+      support: hasIndexer ? "supported" : "not_supported",
+      evidenceStatus: hasIndexer ? "NOT_CHECKED" : "NOT_SUPPORTED",
+      provider: hasIndexer ? "Blockscout" : null,
+      limitation: hasIndexer ? "Available when the explorer returns verified contract evidence." : "No Blockscout ABI/source adapter is configured for this network.",
+    },
+    {
+      key: "market",
+      label: CAPABILITY_LABELS.market,
+      support: Boolean(network?.providerSupport?.dexscreener) ? "supported" : "not_supported",
+      evidenceStatus: network?.providerSupport?.dexscreener ? "NOT_CHECKED" : "NOT_SUPPORTED",
+      provider: network?.providerSupport?.dexscreener ? "DexScreener" : null,
+      limitation: "Pair age is market-pair age, never contract age.",
+    },
+    {
+      key: "transferHistory",
+      label: CAPABILITY_LABELS.transferHistory,
+      support: hasIndexer ? "supported" : "not_supported",
+      evidenceStatus: hasIndexer ? "NOT_CHECKED" : "NOT_SUPPORTED",
+      provider: hasIndexer ? "Blockscout" : null,
+      limitation: hasIndexer ? "History is COMPLETE only after the provider cursor is exhausted; otherwise it is PARTIAL." : "Full lifetime history is not available without an indexer.",
+    },
+    {
+      key: "ownershipHistory",
+      label: CAPABILITY_LABELS.ownershipHistory,
+      support: hasIndexer ? "supported" : "not_supported",
+      evidenceStatus: hasIndexer ? "NOT_CHECKED" : "NOT_SUPPORTED",
+      provider: hasIndexer ? "Blockscout" : null,
+      limitation: hasIndexer ? "Ownership events are cursor-paginated and retain partial status." : "Ownership event history is not configured for this network.",
+    },
+    {
+      key: "holderDistribution",
+      label: CAPABILITY_LABELS.holderDistribution,
+      support: network?.id === "solana" || hasIndexer ? "supported" : "not_supported",
+      evidenceStatus: network?.id === "solana" || hasIndexer ? "NOT_CHECKED" : "NOT_SUPPORTED",
+      provider: network?.id === "solana" ? "Solana RPC" : hasIndexer ? "Blockscout" : null,
+      limitation: "Holder values describe observed evidence and never imply complete distribution when history is partial.",
+    },
+  ];
+  const supported = capabilities.filter((item) => item.support === "supported").length;
+  return {
+    networkClass: hasIndexer ? "evm-rpc-blockscout" : isEvm ? "evm-rpc" : isNative ? "native-adapter" : "metadata-only",
+    freshnessPolicy: "PER_SCAN",
+    supportedCount: supported,
+    totalCount: capabilities.length,
+    capabilities,
+  };
+}
+
 const FIXED_DEMO_TIMESTAMP = "2026-01-15T12:00:00.000Z";
 
 function clamp(value, min = 0, max = 100) {
@@ -339,6 +421,7 @@ function createBaseScan({ mode, address, network, timestamp }) {
       ...(network.explorer ? { explorer: network.explorer } : {}),
       validated: true,
       source: mode === "DEMO" ? "CA X-RAY DEMO FIXTURE" : "CA X-RAY network registry",
+      capabilityMatrix: getNetworkCapabilityMatrix(network),
     },
     token: {
       name: unknown(),
@@ -1315,6 +1398,7 @@ async function scanLive({
   networkId,
   providerRegistry = createDefaultProviderRegistry(),
   providerPolicy = null,
+  previousScan = null,
 }) {
   const validation = validateScanTarget(address, networkId);
   if (!validation.valid) {
@@ -1457,7 +1541,21 @@ async function scanLive({
       pairAddress,
       decimals,
       timeoutMs: 12_000,
+      transferCursor: previousScan?.evmEvidence?.holderHistory?.nextCursor || null,
+      ownerCursor: previousScan?.evmEvidence?.ownerHistory?.nextCursor || null,
     });
+    if (previousScan?.evmEvidence) {
+      scan.evmEvidence.holderHistory = mergeEvmHistory(
+        previousScan.evmEvidence.holderHistory,
+        scan.evmEvidence.holderHistory,
+        validation.normalized,
+      );
+      scan.evmEvidence.ownerHistory = mergeEvmHistory(
+        previousScan.evmEvidence.ownerHistory,
+        scan.evmEvidence.ownerHistory,
+        validation.normalized,
+      );
+    }
     if (scan.evmEvidence.limitations?.length) scan.limitations.push(...scan.evmEvidence.limitations);
     const history = scan.evmEvidence.holderHistory;
     if (history?.status === "COMPLETE" || history?.status === "PARTIAL") {
@@ -1467,6 +1565,18 @@ async function scanLive({
       scan.holders.onChainHistoryStatus = point(history.status, STATUS.VERIFIED, "Ethereum JSON-RPC eth_getLogs", "HIGH", "RPC-HOLDER-STATUS", scan.evmEvidence.retrievedAt);
     }
   }
+  const transferHistory = scan.evmEvidence?.holderHistory;
+  const ownerHistory = scan.evmEvidence?.ownerHistory;
+  const transferPending = ["PARTIAL", "UNAVAILABLE"].includes(transferHistory?.status) && transferHistory?.nextCursor;
+  const ownerPending = ["PARTIAL", "UNAVAILABLE"].includes(ownerHistory?.status) && ownerHistory?.nextCursor;
+  scan.continuation = {
+    status: transferPending || ownerPending ? "PENDING" : "COMPLETE",
+    transferCursor: transferPending ? transferHistory.nextCursor : null,
+    ownerCursor: ownerPending ? ownerHistory.nextCursor : null,
+    pageCount: (transferHistory?.pages || 0) + (ownerHistory?.pages || 0),
+    observedEventCount: transferHistory?.transfers?.length || 0,
+    checkpointedAt: scan.evmEvidence?.retrievedAt || scan.timestamp,
+  };
   scan.evidenceSources = {
     total: scan.providerResults.length,
     successful: scan.providerResults.filter((result) => result.status === PROVIDER_RESULT_STATUS.VALID).length,
@@ -1532,6 +1642,7 @@ function formatCurrency(value) {
 module.exports = {
   STATUS,
   NETWORKS,
+  getNetworkCapabilityMatrix,
   CATEGORY_WEIGHTS,
   TAX_THRESHOLDS,
   LIQUIDITY_THRESHOLDS,
