@@ -80,47 +80,100 @@ async function indexerPage(baseUrl, path, params, timeoutMs) {
   }
 }
 
+function paginationCursor(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const entries = Object.entries(value).filter(([, item]) => (
+    typeof item === "string" || typeof item === "number" || typeof item === "boolean"
+  ));
+  return entries.length ? Object.fromEntries(entries) : null;
+}
+
 function transferFromIndexer(item) {
   const from = item.from?.hash || item.from_address_hash || item.from || null;
   const to = item.to?.hash || item.to_address_hash || item.to || null;
   const amount = item.total?.value ?? item.amount ?? item.value;
   if (!/^0x[a-f0-9]{40}$/i.test(String(from)) || !/^0x[a-f0-9]{40}$/i.test(String(to))) return null;
-  if (amount === null || amount === undefined || !/^\d+$/.test(String(amount))) return null;
+  if (amount === null || amount === undefined || !/^(?:\d+|0x[0-9a-f]+)$/i.test(String(amount))) return null;
   return {
     txHash: item.tx_hash || item.transaction_hash || item.transaction?.hash || null,
     blockNumber: Number(item.block_number || item.blockNumber || item.block?.number) || null,
     logIndex: Number(item.log_index || item.logIndex) || null,
     from: String(from).toLowerCase(),
     to: String(to).toLowerCase(),
-    amount: String(amount),
+    amount: String(amount).toLowerCase().startsWith("0x") ? BigInt(amount).toString() : String(amount),
   };
 }
 
-async function collectIndexerTransfers({ blockscoutHost, tokenAddress, timeoutMs, maxPages = 200, budgetMs = 25000 }) {
+function transferIdentity(item) {
+  if (item.txHash && item.logIndex !== null && item.logIndex !== undefined) {
+    return `${String(item.txHash).toLowerCase()}:${item.logIndex}`;
+  }
+  return [
+    item.blockNumber ?? "unknown",
+    item.logIndex ?? "unknown",
+    item.from,
+    item.to,
+    item.amount,
+  ].join(":");
+}
+
+async function collectIndexerTransfers({
+  blockscoutHost,
+  tokenAddress,
+  timeoutMs,
+  maxPages = 200,
+  budgetMs = 25000,
+  cursor: initialCursor = null,
+} = {}) {
   if (!blockscoutHost) return null;
   const baseUrl = `https://${blockscoutHost}`;
   const path = `/api/v2/tokens/${encodeURIComponent(tokenAddress)}/transfers`;
   const transfers = [];
-  let cursor = null;
+  let cursor = paginationCursor(initialCursor);
   let pages = 0;
   const deadline = Date.now() + budgetMs;
   try {
     do {
-      if (Date.now() >= deadline) return { status: "PARTIAL", transfers, pages, reason: "Indexer pagination time budget reached." };
+      if (Date.now() >= deadline) {
+        return {
+          status: "PARTIAL",
+          transfers: dedupeTransfers(transfers),
+          pages,
+          nextCursor: cursor,
+          reason: "Indexer pagination time budget reached.",
+        };
+      }
       const body = await indexerPage(baseUrl, path, cursor || {}, timeoutMs);
       for (const item of body.items) {
         const transfer = transferFromIndexer(item);
         if (transfer) transfers.push(transfer);
       }
-      cursor = body.next_page_params || null;
+      cursor = paginationCursor(body.next_page_params);
       pages += 1;
-      if (pages >= maxPages && cursor) return { status: "PARTIAL", transfers, pages, reason: "Indexer pagination safety limit reached." };
+      if (pages >= maxPages && cursor) {
+        return {
+          status: "PARTIAL",
+          transfers: dedupeTransfers(transfers),
+          pages,
+          nextCursor: cursor,
+          reason: "Indexer pagination safety limit reached.",
+        };
+      }
     } while (cursor);
-    const unique = new Map(transfers.map((item) => [`${item.txHash || "unknown"}:${item.logIndex ?? "unknown"}`, item]));
-    return { status: "COMPLETE", transfers: [...unique.values()], pages };
+    return { status: "COMPLETE", transfers: dedupeTransfers(transfers), pages, nextCursor: null };
   } catch (error) {
-    return { status: "UNAVAILABLE", transfers: [], pages, reason: error.message };
+    return {
+      status: "UNAVAILABLE",
+      transfers: dedupeTransfers(transfers),
+      pages,
+      nextCursor: cursor,
+      reason: error.message,
+    };
   }
+}
+
+function dedupeTransfers(transfers) {
+  return [...new Map(transfers.map((item) => [transferIdentity(item), item])).values()];
 }
 
 function aggregateTransferList(transfers, tokenAddress) {
@@ -133,16 +186,23 @@ function aggregateTransferList(transfers, tokenAddress) {
   })), tokenAddress);
 }
 
-async function collectIndexerOwnerEvents({ blockscoutHost, tokenAddress, timeoutMs, maxPages = 200, budgetMs = 25000 }) {
+async function collectIndexerOwnerEvents({
+  blockscoutHost,
+  tokenAddress,
+  timeoutMs,
+  maxPages = 200,
+  budgetMs = 25000,
+  cursor: initialCursor = null,
+} = {}) {
   if (!blockscoutHost) return null;
   const baseUrl = `https://${blockscoutHost}`;
-  let cursor = null;
+  let cursor = paginationCursor(initialCursor);
   let pages = 0;
   const deadline = Date.now() + budgetMs;
   const events = [];
   try {
     do {
-      if (Date.now() >= deadline) return { status: "PARTIAL", events, pages, reason: "Indexer pagination time budget reached." };
+      if (Date.now() >= deadline) return { status: "PARTIAL", events, pages, nextCursor: cursor, reason: "Indexer pagination time budget reached." };
       const body = await indexerPage(baseUrl, `/api/v2/addresses/${encodeURIComponent(tokenAddress)}/logs`, cursor || {}, timeoutMs);
       for (const item of body.items) {
         const topics = item.topics || item.topic_hashes || [];
@@ -159,13 +219,13 @@ async function collectIndexerOwnerEvents({ blockscoutHost, tokenAddress, timeout
           });
         }
       }
-      cursor = body.next_page_params || null;
+      cursor = paginationCursor(body.next_page_params);
       pages += 1;
-      if (pages >= maxPages && cursor) return { status: "PARTIAL", events, pages, reason: "Indexer pagination safety limit reached." };
+      if (pages >= maxPages && cursor) return { status: "PARTIAL", events, pages, nextCursor: cursor, reason: "Indexer pagination safety limit reached." };
     } while (cursor);
-    return { status: "COMPLETE", events, pages };
+    return { status: "COMPLETE", events, pages, nextCursor: null };
   } catch (error) {
-    return { status: "UNAVAILABLE", events: [], pages, reason: error.message };
+    return { status: "UNAVAILABLE", events, pages, nextCursor: cursor, reason: error.message };
   }
 }
 
@@ -266,7 +326,17 @@ async function simulateRouter({ rpcUrl, networkId, tokenAddress, pairAddress, de
   }
 }
 
-async function collectEvmEvidence({ network, tokenAddress, pairAddress, decimals, timeoutMs = 12000 } = {}) {
+async function collectEvmEvidence({
+  network,
+  tokenAddress,
+  pairAddress,
+  decimals,
+  timeoutMs = 12000,
+  indexerMaxPages = 200,
+  indexerBudgetMs = 25000,
+  transferCursor = null,
+  ownerCursor = null,
+} = {}) {
   const startedAt = new Date().toISOString();
   if (!network?.evm || !network.rpcUrl) {
     return { status: "UNAVAILABLE", retrievedAt: startedAt, limitations: ["On-chain EVM evidence is unavailable for this network."], exitability: { status: "UNKNOWN", reason: "Network has no EVM RPC." }, holderHistory: { status: "UNKNOWN", reason: "Network has no EVM RPC." } };
@@ -277,8 +347,8 @@ async function collectEvmEvidence({ network, tokenAddress, pairAddress, decimals
     if (latest === null) throw new Error("RPC returned an invalid latest block.");
     const [exitability, indexerTransfers, indexerOwners] = await Promise.all([
       simulateRouter({ rpcUrl: network.rpcUrl, networkId: network.id, tokenAddress, pairAddress, decimals, timeoutMs }),
-      collectIndexerTransfers({ blockscoutHost: network.blockscoutHost, tokenAddress, timeoutMs: Math.min(timeoutMs, 8000) }),
-      collectIndexerOwnerEvents({ blockscoutHost: network.blockscoutHost, tokenAddress, timeoutMs: Math.min(timeoutMs, 8000) }),
+      collectIndexerTransfers({ blockscoutHost: network.blockscoutHost, tokenAddress, timeoutMs: Math.min(timeoutMs, 8000), maxPages: indexerMaxPages, budgetMs: indexerBudgetMs, cursor: transferCursor }),
+      collectIndexerOwnerEvents({ blockscoutHost: network.blockscoutHost, tokenAddress, timeoutMs: Math.min(timeoutMs, 8000), maxPages: indexerMaxPages, budgetMs: indexerBudgetMs, cursor: ownerCursor }),
     ]);
     const transferScan = indexerTransfers?.status === "COMPLETE" || indexerTransfers?.status === "PARTIAL"
       ? { ...indexerTransfers, fromBlock: null, toBlock: latest }
@@ -300,8 +370,8 @@ async function collectEvmEvidence({ network, tokenAddress, pairAddress, decimals
       retrievedAt: startedAt,
       latestBlock: latest,
       exitability,
-      holderHistory: { status: transferScan.status || (transferScan.complete ? "COMPLETE" : "PARTIAL"), ...history, scannedFromBlock: transferScan.fromBlock, scannedToBlock: transferScan.toBlock, chunks: transferScan.chunks, pages: transferScan.pages },
-      ownerHistory: { status: ownerScan.status || (ownerScan.complete ? "COMPLETE" : "PARTIAL"), events: ownerEvents, scannedFromBlock: ownerScan.fromBlock, scannedToBlock: ownerScan.toBlock, chunks: ownerScan.chunks, pages: ownerScan.pages },
+      holderHistory: { status: transferScan.status || (transferScan.complete ? "COMPLETE" : "PARTIAL"), ...history, scannedFromBlock: transferScan.fromBlock, scannedToBlock: transferScan.toBlock, chunks: transferScan.chunks, pages: transferScan.pages, nextCursor: transferScan.nextCursor || null },
+      ownerHistory: { status: ownerScan.status || (ownerScan.complete ? "COMPLETE" : "PARTIAL"), events: ownerEvents, scannedFromBlock: ownerScan.fromBlock, scannedToBlock: ownerScan.toBlock, chunks: ownerScan.chunks, pages: ownerScan.pages, nextCursor: ownerScan.nextCursor || null },
       limitations: [
         ...(transferScan.status === "COMPLETE" ? [] : ["Transfer event history is partial or unavailable; the indexer/RPC did not provide a complete cursor traversal."]),
         ...(ownerScan.status === "COMPLETE" ? [] : ["Ownership event history is partial or unavailable; the indexer/RPC did not provide a complete cursor traversal."]),
@@ -313,4 +383,11 @@ async function collectEvmEvidence({ network, tokenAddress, pairAddress, decimals
   }
 }
 
-module.exports = { collectEvmEvidence, TRANSFER_TOPIC, OWNERSHIP_TRANSFERRED_TOPIC };
+module.exports = {
+  collectEvmEvidence,
+  collectIndexerTransfers,
+  collectIndexerOwnerEvents,
+  transferFromIndexer,
+  TRANSFER_TOPIC,
+  OWNERSHIP_TRANSFERRED_TOPIC,
+};
