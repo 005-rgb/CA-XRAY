@@ -1091,6 +1091,16 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/network-intelligence") {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, {
+      intelligence: intelligenceStore.networkIntelligence(authenticated.workspaceId, {
+        networkId: url.searchParams.get("network") || null,
+      }),
+    }, { context });
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/compare") {
     const authenticated = requireAuthenticated(context);
     const body = await readBody(req);

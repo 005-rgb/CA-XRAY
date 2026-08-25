@@ -3,6 +3,9 @@ const {
   DEFAULT_POLICY, DECISIONS, REVIEW_STATUSES, bilingualReport,
   decisionOutcome, evaluatePolicy, normalizePolicy, clone: complianceClone, id: complianceId, invalid: complianceInvalid,
 } = require("../compliance/policy");
+const {
+  buildCluster, buildNetworkHypotheses, extractDeployerObservation, fingerprintKey, publicFingerprint,
+} = require("./deployer-cluster");
 
 const WATCH_INTERVALS = Object.freeze([1, 6, 12, 24, 168]);
 const ALERT_TYPES = Object.freeze([
@@ -263,6 +266,7 @@ class IntelligenceStore {
     this.policies = new Map();
     this.reviews = new Map();
     this.governance = new Map();
+    this.deployerObservations = new Map();
     this.policies.set(DEFAULT_POLICY.id, complianceClone(DEFAULT_POLICY));
   }
 
@@ -281,6 +285,7 @@ class IntelligenceStore {
     for (const [key, value] of state.policies || []) this.policies.set(key, value);
     for (const [key, value] of state.reviews || []) this.reviews.set(key, value);
     for (const [key, value] of state.governance || []) this.governance.set(key, value);
+    for (const [key, value] of state.deployerObservations || []) this.deployerObservations.set(key, value);
     if (!this.policies.size) this.policies.set(DEFAULT_POLICY.id, complianceClone(DEFAULT_POLICY));
   }
 
@@ -298,6 +303,7 @@ class IntelligenceStore {
       policies: [...this.policies.entries()],
       reviews: [...this.reviews.entries()],
       governance: [...this.governance.entries()],
+      deployerObservations: [...this.deployerObservations.entries()],
     };
     this.persistChain = this.persistChain
       .then(() => this.persistence.saveIntelligenceState(state))
@@ -327,6 +333,8 @@ class IntelligenceStore {
       updatedAt: capturedAt,
     };
     const snapshot = snapshotFromScan({ scan, jobId, capturedAt });
+    const observation = extractDeployerObservation({ workspaceId, scan, jobId, capturedAt });
+    if (observation) this.deployerObservations.set(`${workspaceId}:${observation.id}`, observation);
     const previous = passport.snapshots.at(-1) || null;
     if (previous?.evidenceHash === snapshot.evidenceHash) {
       passport.updatedAt = capturedAt;
@@ -710,6 +718,33 @@ class IntelligenceStore {
         } : {}),
       };
     });
+  }
+
+  networkIntelligence(workspaceId, { networkId = null } = {}) {
+    const observations = [...this.deployerObservations.values()].filter((item) => item.workspaceId === workspaceId && (!networkId || item.networkId === networkId));
+    const clusters = [];
+    const seen = new Set();
+    for (const observation of observations) {
+      const cluster = buildCluster({ observation, observations });
+      if (!seen.has(cluster.id)) { seen.add(cluster.id); clusters.push(cluster); }
+    }
+    const repeatedBehavior = observations
+      .filter((item) => item.suspicious)
+      .reduce((map, item) => {
+        const key = item.deployerAddress;
+        const current = map.get(key) || { deployerAddress: key, status: "OBSERVED", observedCount: 0, suspiciousCount: 0, networks: new Set(), contracts: [] };
+        current.observedCount += 1; current.suspiciousCount += 1; current.networks.add(item.networkId);
+        current.contracts.push({ networkId: item.networkId, address: item.contractAddress, capturedAt: item.capturedAt });
+        map.set(key, current); return map;
+      }, new Map());
+    return {
+      generatedAt: this.clock().toISOString(),
+      observations: observations.map((item) => ({ ...complianceClone(item), label: item.suspicious ? "OBSERVED" : "OBSERVED" })),
+      clusters: clusters.map((cluster) => publicFingerprint(cluster, observations.find((item) => item.deployerAddress === cluster.deployerAddress))),
+      repeatedBehavior: [...repeatedBehavior.values()].map((item) => ({ ...item, networks: [...item.networks].sort(), label: item.suspiciousCount >= 2 ? "INFERRED" : "OBSERVED" })),
+      crossNetworkHypotheses: buildNetworkHypotheses(observations),
+      labels: { OBSERVED: "Direct provider/scan observation", INFERRED: "Derived relationship that requires review", VERIFIED: "Independently confirmed by multiple evidence sources" },
+    };
   }
 
   simulate(workspaceId, { networkId, address, adjustments = {} }) {

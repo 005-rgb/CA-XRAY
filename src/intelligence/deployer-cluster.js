@@ -136,10 +136,32 @@ function publicFingerprint(cluster, observation) {
   };
 }
 
+function buildNetworkHypotheses(observations) {
+  const byDeployer = new Map();
+  for (const item of observations) {
+    const key = item.deployerAddress;
+    if (!byDeployer.has(key)) byDeployer.set(key, []);
+    byDeployer.get(key).push(item);
+  }
+  return [...byDeployer.entries()].filter(([, items]) => new Set(items.map((item) => item.networkId)).size > 1)
+    .map(([deployerAddress, items]) => ({
+      id: `hypothesis_${crypto.createHash("sha256").update(deployerAddress).digest("hex").slice(0, 20)}`,
+      type: "CROSS_NETWORK_DEPLOYER_REUSE",
+      status: "INFERRED",
+      confidence: items.length >= 3 ? "MEDIUM" : "LOW",
+      deployerAddress,
+      networks: [...new Set(items.map((item) => item.networkId))].sort(),
+      contracts: items.map((item) => ({ networkId: item.networkId, address: item.contractAddress })),
+      basis: ["same deployer address observed on multiple networks", "workspace-local scan evidence"],
+      limitation: "This is an inference, not proof of common ownership or intent.",
+    }));
+}
+
 module.exports = {
   address,
   buildCluster,
   extractDeployerObservation,
   fingerprintKey,
   publicFingerprint,
+  buildNetworkHypotheses,
 };
