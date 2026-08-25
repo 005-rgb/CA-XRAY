@@ -135,6 +135,10 @@ function authMessage(message, target = authStatus) {
   if (target) target.textContent = message ? JobenI18n.t(message) : "";
 }
 
+function uiText(value) {
+  return JobenI18n.t(String(value ?? ""));
+}
+
 function pushSignal(title, message, tone = "cyan", replace = false) {
   const region = document.querySelector("#signal-toast-region");
   if (!region || !title) return;
@@ -143,7 +147,7 @@ function pushSignal(title, message, tone = "cyan", replace = false) {
   lastSignalStage = key;
   const toast = document.createElement("div");
   toast.className = `signal-toast ${tone}`;
-  toast.innerHTML = `<span class="toast-pulse"></span><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(message)}</p></div><button type="button" aria-label="Dismiss notification">×</button>`;
+  toast.innerHTML = `<span class="toast-pulse"></span><div><strong>${escapeHtml(uiText(title))}</strong><p>${escapeHtml(uiText(message))}</p></div><button type="button" aria-label="${escapeHtml(uiText("Dismiss notification"))}">×</button>`;
   toast.querySelector("button").addEventListener("click", () => toast.remove());
   region.appendChild(toast);
   window.setTimeout(() => toast.remove(), tone === "danger" ? 7200 : 5200);
@@ -197,7 +201,7 @@ async function refreshAuth() {
     const authenticated = authState.authenticated;
     const pending = authState.mfaPending;
     const emailPending = authState.emailVerificationPending;
-    userName.textContent = authenticated ? (authState.user?.displayName || authState.user?.email || "User") : pending ? "Verification required" : "Visitor";
+    userName.textContent = authenticated ? (authState.user?.displayName || authState.user?.email || uiText("User")) : pending ? uiText("Verification required") : uiText("Visitor");
     if (pending) {
       setShell({ authView: true });
       authForm.hidden = true;
@@ -310,9 +314,9 @@ authForm?.addEventListener("submit", async (event) => {
 authSwitch?.addEventListener("click", () => {
   const register = authMode.value !== "register";
   authMode.value = register ? "register" : "login";
-  authTitle.textContent = register ? "Create your JOBEN NETWORK account" : "Sign in to JOBEN NETWORK";
-  authSubmitLabel.textContent = register ? "Create account" : "Sign in";
-  authSwitch.textContent = register ? "I already have an account" : "Create an account";
+  authTitle.textContent = uiText(register ? "Create your JOBEN NETWORK account" : "Sign in to JOBEN NETWORK");
+  authSubmitLabel.textContent = uiText(register ? "Create account" : "Sign in");
+  authSwitch.textContent = uiText(register ? "I already have an account" : "Create an account");
   authPassword.autocomplete = register ? "new-password" : "current-password";
   authMessage("");
 });
@@ -489,8 +493,8 @@ function showLanding({ privateView = false } = {}) {
   document.querySelectorAll(".primary-nav .nav-item[data-route]").forEach((item) => {
     item.classList.toggle("active", privateView && item.dataset.route === `/dashboard${page === "dashboard" ? "" : `/${page}`}`);
   });
-  document.querySelector("#landing-title").textContent = pageCopy[page][0];
-  document.querySelector("#landing-description").textContent = pageCopy[page][1];
+  document.querySelector("#landing-title").textContent = uiText(pageCopy[page][0]);
+  document.querySelector("#landing-description").textContent = uiText(pageCopy[page][1]);
   document.querySelector("#scan-mode-card").hidden = !privateView || !["dashboard", "new-scan"].includes(page);
   const signalSurface = document.querySelector("#signal-board");
   const networkPulse = document.querySelector("#network-pulse");
@@ -513,13 +517,14 @@ function showLanding({ privateView = false } = {}) {
     if (["passport", "watchtower"].includes(page)) loadIntelligenceDashboard();
     if (page === "settings") loadSettings();
   }
+  JobenI18n.translate(landing);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function settingMessage(id, message, tone = "") {
   const target = document.querySelector(`#${id}`);
   if (target) {
-    target.textContent = message || "";
+    target.textContent = message ? uiText(message) : "";
     target.className = `settings-status ${tone}`.trim();
   }
 }
@@ -565,11 +570,11 @@ async function loadSettings() {
   document.querySelector("#profile-name").value = authState.user?.displayName || "";
   document.querySelector("#profile-email").value = authState.user?.email || "";
   document.querySelector("#workspace-name").value = authState.workspace?.name || "";
-  document.querySelector("#settings-workspace-name").textContent = authState.workspace?.name || "Active workspace";
-  document.querySelector(".topbar-context strong").textContent = authState.workspace?.name || "Personal";
-  document.querySelector("#settings-workspace-role").textContent = authState.membership?.role || "Member";
-  document.querySelector("#settings-plan").textContent = authState.workspace?.planId || "free";
-  document.querySelector("#settings-workspace-type").textContent = authState.workspace?.workspaceType || "personal";
+  document.querySelector("#settings-workspace-name").textContent = authState.workspace?.name || uiText("Active workspace");
+  document.querySelector(".topbar-context strong").textContent = authState.workspace?.name || uiText("Personal");
+  document.querySelector("#settings-workspace-role").textContent = authState.membership?.role || uiText("Member");
+  document.querySelector("#settings-plan").textContent = authState.workspace?.planId || uiText("free");
+  document.querySelector("#settings-workspace-type").textContent = authState.workspace?.workspaceType || uiText("personal");
   const isOwner = authState.membership?.role === "Workspace Owner";
   document.querySelectorAll(".workspace-owner-only").forEach((element) => { element.hidden = !isOwner; });
   applySettingsTab();
@@ -578,7 +583,7 @@ async function loadSettings() {
     const deletionResult = await apiJson("/api/auth/deletion-request");
     const deletionButton = document.querySelector("#delete-account");
     if (deletionResult.deletion?.status === "scheduled") {
-      deletionButton.textContent = "Cancel deletion request";
+      deletionButton.textContent = uiText("Cancel deletion request");
       deletionButton.dataset.scheduled = "true";
       settingMessage("privacy-status", `Deletion scheduled for ${formatDate(deletionResult.deletion.scheduledFor)}. You can cancel during the 30-day retention period.`, "success");
     }
@@ -595,6 +600,7 @@ async function loadSettings() {
     membersList.innerHTML = memberResult.members.map((member) => `
       <div class="settings-list-row"><div><strong>${escapeHtml(member.user?.displayName || member.user?.email || "Workspace member")}</strong><span>${escapeHtml(member.user?.email || "")}</span></div><span class="role-pill">${escapeHtml(member.role || "Member")}</span></div>`).join("")
       || '<p class="settings-help">No members found.</p>';
+    JobenI18n.translate(settingsPanel);
   } catch (error) {
     sessionsList.innerHTML = `<p class="settings-help">${escapeHtml(error.message)}</p>`;
     membersList.innerHTML = `<p class="settings-help">${escapeHtml(error.message)}</p>`;
@@ -734,7 +740,7 @@ function showAdminShell() {
 }
 
 function adminMessage(message, tone = "") {
-  adminStatus.textContent = message || "";
+  adminStatus.textContent = message ? uiText(message) : "";
   adminStatus.className = `admin-status ${tone}`.trim();
 }
 
@@ -1274,6 +1280,7 @@ async function loadScanHistory({ reset = true } = {}) {
       : reset ? `<div class="unknown-message">NO SCANS MATCH THIS FILTER</div>` : "";
     if (reset) scanHistoryList.innerHTML = rows;
     else scanHistoryList.insertAdjacentHTML("beforeend", rows);
+    JobenI18n.translate(scanHistoryList);
     historyCursor = body.pagination?.nextCursor || null;
     if (historyLoadMore) historyLoadMore.hidden = !body.pagination?.hasMore;
     scanHistoryList.querySelectorAll("[data-cancel-job]").forEach((button) => {
@@ -1309,6 +1316,7 @@ function renderPassportList(passports) {
       <div class="intelligence-row-value"><b class="${scoreTone(score)}">${escapeHtml(score ?? "UNKNOWN")}</b><span>${escapeHtml(current.risk?.level || "UNKNOWN")} · ${passport.snapshotCount} snapshot${passport.snapshotCount === 1 ? "" : "s"}</span></div>
     </div>`;
   }).join("") : `<div class="unknown-message">NO RISK PASSPORTS YET. A completed live scan will create one.</div>`;
+  JobenI18n.translate(passportList);
 }
 
 function renderWatchlistList(watchlists) {
@@ -1333,6 +1341,7 @@ function renderWatchlistList(watchlists) {
     await apiJson(`/api/watchlists/${encodeURIComponent(button.dataset.watchDelete)}`, { method: "DELETE" });
     await loadIntelligenceDashboard();
   }));
+  JobenI18n.translate(watchlistList);
 }
 
 function renderAlertList(events) {
@@ -1349,6 +1358,7 @@ function renderAlertList(events) {
     await apiJson(`/api/alerts/${encodeURIComponent(button.dataset.alertAck)}/acknowledge`, { method: "POST" });
     await loadIntelligenceDashboard();
   }));
+  JobenI18n.translate(alertList);
 }
 
 async function loadIntelligenceDashboard() {
@@ -2238,9 +2248,10 @@ function renderReport(scan) {
   const dashboardReport = document.querySelector("#dashboard-report");
   dashboardReport.hidden = false;
   dashboardReport.innerHTML = renderDashboardReport(scan);
+  JobenI18n.translate(dashboardReport);
   loadRiskTrajectory(scan);
-  document.querySelector("#landing-title").textContent = "Private Scan Report";
-  document.querySelector("#landing-description").textContent = "Your forensic report is available inside the authenticated workspace.";
+  document.querySelector("#landing-title").textContent = uiText("Private Scan Report");
+  document.querySelector("#landing-description").textContent = uiText("Your forensic report is available inside the authenticated workspace.");
   document.querySelector("#scan-mode-card").hidden = true;
   scanHistory.hidden = true;
   document.querySelector("#new-scan").classList.add("report-route");
@@ -2358,9 +2369,10 @@ window.addEventListener("joben:locale-change", () => {
   configureAuthRoute();
   if (currentScan) {
     renderReport(currentScan);
-    return;
+  } else if (authState?.authenticated && isPrivateRoute()) {
+    showLanding({ privateView: true });
   }
-  if (authState?.authenticated && isPrivateRoute()) showLanding({ privateView: true });
+  JobenI18n.translate(document);
 });
 
 configureAuthRoute();

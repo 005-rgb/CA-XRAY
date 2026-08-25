@@ -1,0 +1,200 @@
+baikan sesaui saranmu, jadikan aplikasi dual bahasa (id dan en). arsitektur atur sebaik mungkain agar penambahan bahasa nantinya akan lebih mudah. dan bahasa yang diterapkan tidak hanya terjemahan tetapi betul2 adopsi bahasa standar yang di gunakan dalam tata bahasa itu sendiri), setiap pengembangan modul harus juga multi/dual bahasa. simpan di roadmop dan kerjakan dengan presisi tinggi
+
+Free
+17 minutes ago
+Exploring translation mechanisms
+
+Exploring translation mechanisms
+Saya akan mengerjakan ini sebagai fondasi lokalisasi, bukan tambalan terjemahan: satu sumber locale, pemilihan bahasa tersimpan, pemformatan angka/tanggal mengikuti locale, dan aturan agar hasil analisis tetap memakai identifier internal yang stabil. Saya juga akan memperbarui roadmap sebagai keputusan arsitektur, lalu menjalankan aplikasi dan memeriksa alur UI bilingual.
+
+
+
+10 actions
+Fondasi yang saya pilih adalah source-language English sebagai identifier/rujukan internal, dengan locale layer yang bisa menambah bahasa baru tanpa menyentuh engine risiko. Saya juga akan memakai istilah Indonesia yang lazim di bidang keamanan/kripto, sambil mempertahankan istilah teknis standar dalam bentuk bilingual bila terjemahan lokal berpotensi ambigu.
+
+
+
+5 actions
+Fondasi bilingual sudah masuk. Satu bagian dokumentasi roadmap belum terpasang karena konteks file berbeda dari patch awal; saya akan memasangnya terpisah, lalu merapikan seluruh pemformatan angka yang masih memaksa en-US agar benar-benar mengikuti bahasa aktif.
+
+
+
+8 actions
+Roadmap sudah diperbarui dan format angka/tanggal utama sudah mengikuti locale aktif. Berikutnya saya akan memastikan server benar-benar hidup, lalu melakukan pemeriksaan UI bilingual—termasuk memastikan perubahan bahasa tidak mengubah data atau scoring analisis.
+
+
+
+4 actions
+Saya menemukan satu celah konsistensi: sebagian pemformatan angka di dashboard dan laporan masih memakai locale Inggris secara eksplisit. Saya akan menyamakan semuanya dengan formatter locale aktif sebelum verifikasi, agar mode Indonesia bukan hanya mengganti label.
+
+
+
+Show less
+
+Searched for "toLocaleString\("en-US"…"
+Fixing patch issues
+
+Fixing patch issues
+
+Edited app.js
+
+Edited app.js
+Checking workflow issues
+
+Checking workflow issues
+
+Ran public/i18n.js
+
+Ran tests
+Setting up package installation
+
+Setting up package installation
+Verifikasi menemukan masalah lingkungan impor yang sudah tercatat: modul pg tercantum di manifest tetapi belum terpasang, sehingga server dan beberapa tes gagal start. Ini bukan kegagalan lokalisasi; saya akan memasang dependency yang memang sudah dideklarasikan, lalu restart workflow dan lanjutkan pemeriksaan visual.
+
+
+
+3 actions
+Server sudah hidup setelah dependency dilengkapi. Saya akan cek log terbaru dan screenshot halaman publik pada locale default, lalu memastikan mode Indonesia tampil dan dapat dikembalikan ke English tanpa error browser.
+
+
+
+10 actions
+Saya tambahkan satu detail penting untuk QA dan onboarding: locale dapat dipilih melalui ?lang=id atau ?lang=en selain tombol dan penyimpanan preferensi. Ini memudahkan deep-link, pengujian, serta nantinya SEO per bahasa tanpa membuat cabang aplikasi terpisah.
+
+
+
+5 actions
+Pemeriksaan visual berhasil: / tampil English dan /?lang=id benar-benar menampilkan Bahasa Indonesia, termasuk headline, navigasi, metadata, dan deskripsi; workflow juga bersih. Saya akan jalankan seluruh test suite setelah dependency tersedia dan melakukan audit akhir terhadap perubahan agar tidak ada modul yang diam-diam masih memaksa locale English.
+
+
+
+4 actions
+Seluruh test suite kini lulus (73/73), dan preview English/Indonesia berhasil. Saya tambahkan satu aturan kerja singkat di replit.md agar pengembangan berikutnya tidak kembali menaruh teks user-facing langsung di modul tanpa locale key.
+
+
+
+Edited replit.md
+Implementasi bilingual sudah selesai dan tervalidasi. Saya tidak membuat follow-up task baru karena opsi yang relevan sudah ada di daftar proyek dan tidak boleh diduplikasi. Aplikasi siap dipublikasikan bila Anda ingin menjadikannya preview publik.
+
+
+Implementasi dual bahasa Indonesia–English sudah selesai.
+
+Yang diterapkan:
+
+Tombol pengubah bahasa pada header publik dan dashboard privat.
+Bahasa aktif disimpan di browser.
+Dukungan URL:
+/?lang=en
+/?lang=id
+html lang dan metadata halaman mengikuti bahasa aktif.
+Terjemahan untuk halaman publik, navigasi, scan form, status, dashboard, watchtower, histori, pengaturan, dan elemen inti laporan.
+Format angka, persentase, tanggal, dan waktu mengikuti locale:
+English: en-US
+Indonesia: id-ID
+Istilah teknis blockchain tetap dipertahankan atau ditampilkan bilingual bila perlu, seperti ABI, bytecode, mint authority, holder, dan read-only.
+Status penting tetap dibedakan:
+unknown
+unavailable
+unverified
+conflict
+verified
+Engine risiko, evidence ID, API field, scoring, dan status internal tidak diubah oleh bahasa tampilan.
+Arsitektur locale dipisahkan ke public/i18n.js agar bahasa berikutnya dapat ditambahkan sebagai locale pack.
+Aturan bahwa setiap modul baru wajib mendukung kedua bahasa sudah ditambahkan ke replit.md.
+Kontrak lokalisasi regional sudah dicatat di doc/ROADMAP.md, termasuk rencana bahasa berikutnya: Malay, Vietnamese/Thai, lalu Filipino/Tagalog.
+Verifikasi:
+
+Workflow Start application berjalan normal.
+Preview English berhasil.
+Preview Bahasa Indonesia berhasil.
+Seluruh test suite lulus: 73/73.
+Tidak ada lagi pemformatan angka utama yang memaksa locale English.
+Aplikasi siap dipublish bila ingin dijadikan preview publik.
+
+
+
+Worked for 5 minutes
+Publish
+Domain
+Available
+ca-xray--zer16
+.replit.app
+Who can access your app
+
+Public
+Anyone on the internet with the URL
+
+Checkpoint made
+11 minutes ago
+lakukan auditt mendalam dan perbaikan. modul bahasa harus menyentuk seluruh frontpages dan halaman user termasuk hasil repot/analisis dan sejenisnya.
+
+Free
+10 minutes ago
+Planning i18n Audit
+
+Planning i18n Audit
+Saya akan audit seluruh permukaan user-facing—homepage, login/register, dashboard, histori, Risk Passport, Watchtower, settings, admin yang terlihat oleh pengguna, serta template report/analysis—lalu memperbaiki pola yang masih hard-coded atau tidak rerender saat bahasa diganti. Setelah itu saya akan uji kedua locale dan seluruh test suite.
+
+
+
+5 actions
+Audit awal menunjukkan masalah utama: mekanisme saat ini menerjemahkan banyak node HTML, tetapi template report dan pesan dinamis di app.js masih menghasilkan string Inggris langsung. Saya akan memetakan string dari seluruh renderer report/dashboard, lalu memindahkan penerjemahan ke satu fungsi yang juga bekerja untuk konten dinamis dan rerender.
+
+
+
+Show less
+Added support for python
+
+Ran a Python script
+Planning a report
+
+Planning a report
+
+Opened app.js
+
+Opened app.js
+
+Opened app.js
+
+Opened index.html
+Implementing regex patterns
+
+Implementing regex patterns
+
+Searched for "title:|why:|meaning:|la…"
+
+Processed text
+Planning translation automation
+
+Planning translation automation
+
+Edited i18n.js
+Ensuring code syntax
+
+Ensuring code syntax
+
+Processed text
+Implementing translation patterns
+
+Implementing translation patterns
+Audit report menemukan dua kelas masalah: label statis report bisa diterjemahkan, tetapi judul/penjelasan temuan yang berasal dari engine serta pesan status dinamis masih lolos sebagai English. Saya akan menutup celah itu dengan glossary analisis terpusat—tanpa menerjemahkan identifier atau mengubah isi evidence mentah.
+
+
+
+Edited i18n.js
+Saya menemukan satu bug arsitektural penting: mengganti bahasa setelah halaman report atau auth sudah aktif dapat meninggalkan beberapa textContent dinamis dalam bahasa lama. Saya akan membuat pergantian locale memicu rerender halaman aktif, sehingga report, login state, dan halaman user ikut diperbarui—bukan hanya node HTML awal.
+
+
+
+9 actions
+Workflow sudah direstart dengan perubahan terbaru. Sekarang saya verifikasi jalur report demo secara langsung dalam mode Indonesia dan English, karena itu bagian yang paling berisiko masih menyisakan teks hard-coded setelah audit.
+
+
+
+4 actions
+Audit visual menemukan bug nyata: saat pengguna membuka report demo tanpa sesi, redirect ke login membuang parameter bahasa, sehingga /dashboard/scans/demo-high?lang=id kembali ke login dalam English. Saya akan memperbaiki propagasi locale lintas redirect/auth, lalu audit ulang jalur report setelah login dan halaman user.
+
+
+
+5 actions
+Audit lanjutan menemukan celah kedua: beberapa assignment dinamis dijalankan setelah translator awal, sehingga judul login dan judul halaman user dapat menimpa terjemahan. Saya akan memperbaiki titik assignment tersebut langsung dengan JobenI18n.t, bukan mengandalkan observer saja.

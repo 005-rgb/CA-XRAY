@@ -506,6 +506,78 @@
       "In-app alerts are available now. Email delivery follows your workspace notification service configuration.": "Peringatan dalam aplikasi tersedia sekarang. Pengiriman email mengikuti konfigurasi layanan notifikasi workspace Anda.",
       "Save notification settings": "Simpan pengaturan notifikasi",
       "Plan changes and payment details will be available when billing is enabled for this workspace.": "Perubahan paket dan detail pembayaran tersedia setelah penagihan diaktifkan untuk workspace ini."
+      ,
+      "Visitor": "Pengunjung",
+      "User": "Pengguna",
+      "Dashboard →": "Dasbor →",
+      "Paste a contract address to begin.": "Tempel alamat kontrak untuk memulai.",
+      "Select a supported network for a live scan.": "Pilih jaringan yang didukung untuk pemindaian live.",
+      "Enter a valid Solana contract address.": "Masukkan alamat kontrak Solana yang valid.",
+      "Enter a valid native": "Masukkan alamat native yang valid untuk",
+      "Request failed.": "Permintaan gagal.",
+      "The scan failed.": "Pemindaian gagal.",
+      "The scan job could not be created.": "Job pemindaian tidak dapat dibuat.",
+      "The scan job could not be read.": "Job pemindaian tidak dapat dibaca.",
+      "The scan was cancelled.": "Pemindaian dibatalkan.",
+      "The scan timed out while waiting for the worker.": "Pemindaian melewati batas waktu saat menunggu worker.",
+      "No material risk was established.": "Tidak ada risiko material yang ditetapkan.",
+      "No observed addition.": "Tidak ada tambahan yang teramati.",
+      "Not available from current data source": "Tidak tersedia dari sumber data saat ini",
+      "Initial evidence snapshot.": "Snapshot bukti awal.",
+      "Changed": "Berubah",
+      "Increased": "Meningkat",
+      "Decreased": "Menurun",
+      "Upgradeable": "Dapat di-upgrade",
+      "Not upgradeable": "Tidak dapat di-upgrade",
+      "time unavailable": "waktu tidak tersedia",
+      "No prior scan is stored for this contract. A future scan will show evidence-backed changes here.": "Belum ada pemindaian sebelumnya untuk kontrak ini. Pemindaian berikutnya akan menampilkan perubahan berbasis bukti di sini.",
+      "The previous scan had the same comparable risk, trading, liquidity, holder, and control values.": "Pemindaian sebelumnya memiliki nilai risiko, trading, likuiditas, holder, dan kontrol yang sebanding.",
+      "Technical exitability assessment only. This is not investment advice and does not guarantee execution or safety.": "Penilaian kemampuan keluar secara teknis saja. Ini bukan nasihat investasi dan tidak menjamin eksekusi atau keamanan.",
+      "No eligible category contribution is available.": "Tidak ada kontribusi kategori yang memenuhi syarat.",
+      "No score driver established.": "Tidak ada pendorong skor yang ditetapkan.",
+      "Signal detected": "Sinyal terdeteksi",
+      "Positive": "Positif",
+      "High Impact": "Dampak Tinggi",
+      "Valid": "Valid",
+      "Not Checked": "Belum Diperiksa",
+      "Not Available": "Tidak Tersedia",
+      "Detected": "Terdeteksi",
+      "Dismiss notification": "Tutup notifikasi",
+      "Switch to dark mode": "Beralih ke mode gelap",
+      "Switch to light mode": "Beralih ke mode terang",
+      "Privileged supply control was detected.": "Kontrol suplai berprivilege terdeteksi.",
+      "A privileged tax-setting capability was detected.": "Kemampuan pengaturan pajak oleh pihak berprivilege terdeteksi.",
+      "Upgradeable contract control was detected.": "Kontrol kontrak yang dapat di-upgrade terdeteksi.",
+      "No mint capability was detected in available evidence.": "Tidak ada kemampuan mint yang terdeteksi dalam bukti yang tersedia.",
+      "No major contract-control signal was detected.": "Tidak ada sinyal kontrol kontrak utama yang terdeteksi.",
+      "A sell restriction was detected.": "Pembatasan jual terdeteksi.",
+      "A honeypot signal was detected.": "Sinyal honeypot terdeteksi.",
+      "Observed sell tax meets the high-tax threshold.": "Pajak jual yang teramati memenuhi ambang pajak tinggi.",
+      "No sell restriction was detected in available evidence.": "Tidak ada pembatasan jual yang terdeteksi dalam bukti yang tersedia.",
+      "Trading controls are only partially covered.": "Kontrol trading hanya tercakup sebagian.",
+      "Holder concentration is not sufficiently evidenced.": "Konsentrasi holder belum memiliki bukti yang memadai.",
+      "Liquidity depth is not sufficiently evidenced.": "Kedalaman likuiditas belum memiliki bukti yang memadai.",
+      "Suspicious deployer behavior was reported.": "Perilaku deployer mencurigakan dilaporkan.",
+      "Material deployer token concentration was detected.": "Konsentrasi token deployer yang material terdeteksi.",
+      "No major deployer signal was detected.": "Tidak ada sinyal deployer utama yang terdeteksi.",
+      "Large short-term market movement was observed.": "Pergerakan pasar jangka pendek yang besar teramati.",
+      "Market and project context is based on available evidence.": "Konteks pasar dan proyek didasarkan pada bukti yang tersedia.",
+      "Additional supply could dilute existing holders and create selling pressure.": "Suplai tambahan dapat mengencerkan kepemilikan holder dan menciptakan tekanan jual.",
+      "Transfers could become temporarily unavailable for users.": "Transfer dapat menjadi tidak tersedia sementara bagi pengguna.",
+      "The contract may be able to restrict specific addresses.": "Kontrak mungkin dapat membatasi alamat tertentu.",
+      "Transfer access or exemptions may be selectively changed.": "Akses transfer atau pengecualian mungkin dapat diubah secara selektif.",
+      "Transfer economics could change after deployment.": "Ekonomi transfer dapat berubah setelah deployment.",
+      "A privileged change could restrict transaction size or wallet balances.": "Perubahan berprivilege dapat membatasi ukuran transaksi atau saldo wallet.",
+      "Future implementation changes could alter contract behavior.": "Perubahan implementasi di masa depan dapat mengubah perilaku kontrak.",
+      "An active privileged address was identified.": "Alamat berprivilege yang aktif teridentifikasi.",
+      "Available evidence checked and did not detect mint capability.": "Bukti yang tersedia telah diperiksa dan tidak mendeteksi kemampuan mint.",
+      "Verified source improves inspectability, although it does not guarantee safety.": "Source terverifikasi meningkatkan kemampuan pemeriksaan, meskipun tidak menjamin keamanan.",
+      "This is a positive result for the current snapshot, not a guarantee of safe trading.": "Ini adalah hasil positif untuk snapshot saat ini, bukan jaminan trading yang aman.",
+      "No project website was available in the normalized data.": "Tidak ada situs web proyek dalam data ternormalisasi.",
+      "The project context cannot be independently reviewed from this scan.": "Konteks proyek tidak dapat ditinjau secara independen dari pemindaian ini.",
+      "An unverified audit claim is a limitation; it does not establish that the contract is unsafe.": "Klaim audit yang belum terverifikasi adalah keterbatasan; hal ini tidak menetapkan bahwa kontrak tidak aman.",
+      "A detected pause capability is paired with an active privileged control address.": "Kemampuan jeda yang terdeteksi dipasangkan dengan alamat kontrol berprivilege yang aktif.",
+      "Insufficient evidence is available to assess practical exit conditions.": "Bukti yang tersedia tidak mencukupi untuk menilai kondisi keluar secara praktis."
     }
   };
 
@@ -545,7 +617,29 @@
         .replace(/^avg (.+) ms$/, "rata-rata $1 ms")
         .replace(/^(\d[\d.,]*) hr$/, "$1 jam")
         .replace(/^(\d[\d.,]*) days$/, "$1 hari")
-        .replace(/^(\d[\d.,]*) pts$/, "$1 poin");
+        .replace(/^(\d[\d.,]*) pts$/, "$1 poin")
+        .replace(/^(\d[\d.,]*) SNAPSHOT(S?) STORED$/, "$1 SNAPSHOT TERSIMPAN")
+        .replace(/^(\d[\d.,]*) member(S?)$/, "$1 anggota")
+        .replace(/^(\d[\d.,]*) workspace(S?)$/, "$1 workspace")
+        .replace(/^(\d[\d.,]*) session(S?)$/, "$1 sesi")
+        .replace(/^(\d[\d.,]*) provider(S?) healthy · telemetry live$/, "$1 provider sehat · telemetri live")
+        .replace(/^(\d[\d.,]*) provider(S?) · (.+) networks$/, "$1 provider · $3 jaringan")
+        .replace(/^(\d[\d.,]*) pending$/, "$1 tertunda")
+        .replace(/^(\d[\d.,]*) running · (\d[\d.,]*) pending$/, "$1 berjalan · $2 tertunda")
+        .replace(/^avg (.+) ms$/, "rata-rata $1 ms")
+        .replace(/^(\d[\d.,]*) failed · (\d[\d.,]*) terminal$/, "$1 gagal · $2 terminal")
+        .replace(/^Snapshot (.+)$/, "Snapshot $1")
+        .replace(/^The observed evidence maps to a (.+) risk level\. (.+) (The assessment is partial because some categories are not sufficiently covered\.|The available evidence covers the six risk categories for this snapshot\.) This is an assessment based on available data at scan time, not financial advice\.$/, "Bukti yang diamati menunjukkan tingkat risiko $1. $2 $3 Ini adalah penilaian berdasarkan data yang tersedia saat pemindaian, bukan nasihat keuangan.")
+        .replace(/^The observed (buy|sell) tax is (.+)\.$/, "Pajak $1 yang teramati adalah $2.")
+        .replace(/^The observed 24-hour change is (.+)\.$/, "Perubahan 24 jam yang teramati adalah $1.")
+        .replace(/^Top-10 holders account for (.+)%\.$/, "Holder 10 teratas mencakup $1%.")
+        .replace(/^The deployer concentration is (.+)%\.$/, "Konsentrasi deployer adalah $1%.")
+        .replace(/^A non-contract, non-burn wallet holds (.+)% of supply\.$/, "Wallet non-kontrak dan non-burn memegang $1% suplai.")
+        .replace(/^Primary-pair liquidity is (.+)\.$/, "Likuiditas pair utama adalah $1.")
+        .replace(/^24-hour volume is (.+) against (.+) liquidity\.$/, "Volume 24 jam adalah $1 dibandingkan likuiditas $2.")
+        .replace(/^(\d+) related contract\(s\) were detected\.$/, "$1 kontrak terkait terdeteksi.")
+        .replace(/^Development verification token: (.+)$/, "Token verifikasi development: $1")
+        .replace(/^Development recovery token: (.+)$/, "Token pemulihan development: $1");
     }
     return value.replace(trimmed, translated);
   }
@@ -594,6 +688,7 @@
     get locale() { return locale; },
     setLocale,
     t: (value) => translateText(String(value)),
+    translate,
     formatNumber: (value, options) => Number(value).toLocaleString(locale === "id" ? "id-ID" : "en-US", options),
     formatDate: (value, options) => new Intl.DateTimeFormat(locale === "id" ? "id-ID" : "en-US", options).format(new Date(value))
   };
