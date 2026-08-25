@@ -1235,7 +1235,7 @@ class IntelligenceStore {
     return clone(comment);
   }
 
-  createCase({ workspaceId, actorId, title, priority = "NORMAL", contracts = [] }) {
+  createCase({ workspaceId, actorId, title, priority = "NORMAL", contracts = [], sourceAlert = null }) {
     if (!String(title || "").trim() || String(title).length > 160) invalid("INVALID_CASE", "Case title must be between 1 and 160 characters.");
     if (!["LOW", "NORMAL", "HIGH", "URGENT"].includes(priority)) invalid("INVALID_CASE_PRIORITY", "Case priority is invalid.");
     if (!Array.isArray(contracts) || contracts.length < 1 || contracts.length > 20) invalid("INVALID_CASE_CONTRACTS", "A case must contain between 1 and 20 contracts.");
@@ -1244,10 +1244,18 @@ class IntelligenceStore {
       return publicContract(contract.networkId, contract.address);
     });
     const now = this.clock().toISOString();
+    const linkedAlert = sourceAlert ? {
+      alertId: sourceAlert.id || null,
+      snapshotIds: [sourceAlert.beforeSnapshotId, sourceAlert.afterSnapshotId || sourceAlert.snapshotId].filter(Boolean),
+      evidenceRefs: (sourceAlert.evidence || []).map((item) => item.evidenceId || item.id || item.reference).filter(Boolean),
+    } : null;
     const item = {
       id: id("case"), workspaceId, title: String(title).trim(), priority, status: "OPEN",
       contracts: normalized, assigneeId: null, createdBy: actorId, createdAt: now, updatedAt: now,
-      decision: null, reportIds: [], evidenceRequests: [], timeline: [{ id: id("case_event"), type: "CASE_CREATED", actorId, at: now, metadata: { title: String(title).trim() } }],
+      decision: null, reportIds: [], linkedAlert, timeline: [
+        { id: id("case_event"), type: "CASE_CREATED", actorId, at: now, metadata: { title: String(title).trim() } },
+        ...(linkedAlert?.alertId ? [{ id: id("case_event"), type: "CASE_LINKED_TO_ALERT", actorId, at: now, metadata: { alertId: linkedAlert.alertId, snapshotIds: linkedAlert.snapshotIds } }] : []),
+      ],
     };
     this.cases.set(item.id, item);
     this.#persist();

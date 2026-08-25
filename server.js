@@ -1444,12 +1444,21 @@ async function handleApiUnsafe(req, res, url, context) {
   if (req.method === "POST" && url.pathname === "/api/cases") {
     const authenticated = requireAuthenticated(context);
     const body = await readBody(req);
+    let sourceAlert = null;
+    if (body.alertId) {
+      sourceAlert = intelligenceStore.getAlertDetail(authenticated.workspaceId, body.alertId);
+      if (!sourceAlert) {
+        sendJson(res, 404, { error: "ALERT_NOT_FOUND", message: "The linked alert was not found." }, { context });
+        return true;
+      }
+    }
     const item = intelligenceStore.createCase({
       workspaceId: authenticated.workspaceId,
       actorId: authenticated.actor.id,
       title: body.title,
       priority: body.priority,
       contracts: body.contracts || [{ networkId: body.networkId || body.network, address: body.address }],
+      sourceAlert,
     });
     sendJson(res, 201, { case: item }, { context });
     return true;

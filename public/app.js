@@ -55,6 +55,7 @@ const watchtowerMenuCards = document.querySelectorAll("[data-watchtower-card]");
 const watchlistList = document.querySelector("#watchlist-list");
 const watchlistCount = document.querySelector("#watchlist-count");
 const alertList = document.querySelector("#alert-list");
+const alertReviewPanel = document.querySelector("#alert-review-panel");
 const caseForm = document.querySelector("#case-form");
 const caseList = document.querySelector("#case-list");
 const caseCount = document.querySelector("#case-count");
@@ -1616,6 +1617,7 @@ function renderAlertList(events) {
     <div class="intelligence-row">
       <div><strong>${escapeHtml(event.message)}</strong><span>${escapeHtml(event.networkId)} · ${escapeHtml(formatDate(event.createdAt))}</span></div>
       <div class="intelligence-row-action"><span class="watch-status ${statusClass(event.status)}">${escapeHtml(event.status)}</span>
+        <button type="button" class="text-button" data-alert-review="${escapeHtml(event.id)}">Review evidence</button>
         ${event.status !== "RESOLVED" ? `<button type="button" class="text-button" data-alert-status="${escapeHtml(event.id)}" data-alert-next="ACKNOWLEDGED">Acknowledge</button><button type="button" class="text-button" data-alert-status="${escapeHtml(event.id)}" data-alert-next="INVESTIGATING">Investigate</button><button type="button" class="text-button" data-alert-status="${escapeHtml(event.id)}" data-alert-next="RESOLVED">Resolve</button>` : `<button type="button" class="text-button" data-alert-status="${escapeHtml(event.id)}" data-alert-next="OPEN">Reopen</button>`}
       </div>
     </div>`).join("") : `<div class="unknown-message">NO ALERTS. Watchtower changes will appear here for review.</div>`;
@@ -1633,7 +1635,58 @@ function renderAlertList(events) {
       if (watchtowerTickStatus) watchtowerTickStatus.textContent = `Alert update failed: ${error.message}`;
     }
   }));
+  alertList.querySelectorAll("[data-alert-review]").forEach((button) => button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      const body = await apiJson(`/api/alerts/${encodeURIComponent(button.dataset.alertReview)}`);
+      renderAlertReview(body.alert);
+    } catch (error) {
+      if (watchtowerTickStatus) watchtowerTickStatus.textContent = `Review unavailable: ${error.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  }));
   JobenI18n.translate(alertList);
+}
+
+function renderAlertReview(alert) {
+  if (!alertReviewPanel) return;
+  const before = alert.before;
+  const after = alert.after;
+  const evidence = alert.evidenceRegister || [];
+  alertReviewPanel.hidden = false;
+  alertReviewPanel.innerHTML = `
+    <div class="alert-review-heading">
+      <div><span class="card-kicker">EVIDENCE PULSE</span><h4>${escapeHtml(alert.message || "Alert review")}</h4><p>${escapeHtml(alert.networkId)} · ${escapeHtml(truncateAddress(alert.address))} · ${escapeHtml(formatDate(alert.createdAt))}</p></div>
+      <button type="button" class="text-button" data-alert-review-close>Close</button>
+    </div>
+    <div class="alert-review-summary">
+      <div><span>Materiality</span><strong>${escapeHtml(alert.materiality || alert.severity || "UNKNOWN")}</strong></div>
+      <div><span>Confidence</span><strong>${escapeHtml(alert.confidence || "UNKNOWN")}</strong></div>
+      <div><span>Evidence</span><strong>${evidence.length} reference${evidence.length === 1 ? "" : "s"}</strong></div>
+    </div>
+    <div class="alert-review-compare">
+      <div><span class="card-kicker">BEFORE</span><strong>${escapeHtml(before ? formatDate(before.capturedAt) : "Unavailable")}</strong><small>${escapeHtml(before?.evidenceHash ? `Hash ${before.evidenceHash.slice(0, 12)}…` : "No comparable snapshot")}</small></div>
+      <div class="alert-review-arrow">→</div>
+      <div><span class="card-kicker">AFTER</span><strong>${escapeHtml(after ? formatDate(after.capturedAt) : "Unavailable")}</strong><small>${escapeHtml(after?.evidenceHash ? `Hash ${after.evidenceHash.slice(0, 12)}…` : "No current snapshot")}</small></div>
+    </div>
+    <div class="alert-review-actions">
+      <button type="button" class="primary-button" data-alert-create-case="${escapeHtml(alert.id)}"><span>Create investigation case</span><span>→</span></button>
+      <a class="secondary-button" href="/dashboard/passport">Open Risk Passport <span>↗</span></a>
+    </div>
+    <p class="alert-review-note">This review preserves the original alert, snapshots, and evidence references. Creating a case does not alter the source evidence.</p>`;
+  alertReviewPanel.querySelector("[data-alert-review-close]")?.addEventListener("click", () => { alertReviewPanel.hidden = true; });
+  alertReviewPanel.querySelector("[data-alert-create-case]")?.addEventListener("click", () => {
+    document.querySelector("#case-title").value = alert.message || "Investigate Watchtower alert";
+    document.querySelector("#case-priority").value = ["CRITICAL", "HIGH"].includes(String(alert.materiality || alert.severity).toUpperCase()) ? "HIGH" : "NORMAL";
+    document.querySelector("#case-network").value = alert.networkId;
+    document.querySelector("#case-address").value = alert.address;
+    caseForm.dataset.alertId = alert.id;
+    caseStatus.textContent = "Alert linked. Complete the case details to create an auditable investigation.";
+    document.querySelector("#case-workspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.querySelector("#case-title")?.focus();
+  });
+  alertReviewPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function renderCaseList(cases) {
@@ -1642,7 +1695,7 @@ function renderCaseList(cases) {
   caseCount.textContent = `${open} OPEN`;
   caseList.innerHTML = cases.length ? cases.map((item) => `
     <div class="case-row">
-      <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.priority)} · ${escapeHtml(item.contracts.map((contract) => `${contract.networkId} ${truncateAddress(contract.address)}`).join(" · "))}</span></div>
+      <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.priority)} · ${escapeHtml(item.contracts.map((contract) => `${contract.networkId} ${truncateAddress(contract.address)}`).join(" · "))}</span>${item.linkedAlert?.alertId ? `<small class="case-linked-alert">Linked to Watchtower alert · ${escapeHtml(item.linkedAlert.snapshotIds?.length || 0)} snapshots · ${escapeHtml(item.linkedAlert.evidenceRefs?.length || 0)} evidence refs</small>` : ""}</div>
       <div class="case-row-actions"><span class="watch-status ${statusClass(item.status)}">${escapeHtml(item.status)}</span><select data-case-status="${escapeHtml(item.id)}"><option value="OPEN" ${item.status === "OPEN" ? "selected" : ""}>Open</option><option value="IN_REVIEW" ${item.status === "IN_REVIEW" ? "selected" : ""}>In review</option><option value="DECIDED" ${item.status === "DECIDED" ? "selected" : ""}>Decided</option><option value="CLOSED" ${item.status === "CLOSED" ? "selected" : ""}>Closed</option></select></div>
       ${item.decision ? `<div class="case-decision"><b>${escapeHtml(item.decision.decision)}</b><span>${escapeHtml(item.decision.rationale)}</span></div>` : ""}
       <details class="case-detail"><summary>VIEW TIMELINE (${item.timeline.length})</summary><div class="case-timeline">${item.timeline.map((event) => `<div><i></i><span><b>${escapeHtml(event.type)}</b><small>${escapeHtml(formatDate(event.at))}</small></span></div>`).join("")}</div></details>
@@ -1773,9 +1826,11 @@ caseForm?.addEventListener("submit", async (event) => {
         priority: document.querySelector("#case-priority").value,
         networkId: document.querySelector("#case-network").value,
         address: document.querySelector("#case-address").value.trim(),
+        alertId: caseForm.dataset.alertId || null,
       }),
     });
     caseForm.reset();
+    delete caseForm.dataset.alertId;
     await loadIntelligenceDashboard();
   } catch (error) {
     caseStatus.textContent = error.message;
