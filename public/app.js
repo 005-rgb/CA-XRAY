@@ -560,7 +560,7 @@ function showLanding({ privateView = false } = {}) {
   const page = privateView ? privatePage() : "public";
   const pageCopy = {
     dashboard: ["Dashboard", "Your evidence-backed contract intelligence workspace."],
-    "new-scan": ["Scan New Contract", "Evidence-backed forensic assessment for the selected contract."],
+    "new-scan": ["Core Scan", "Evidence-based contract analysis for the selected network and address."],
     history: ["Scan History", "Previous analyses available to this workspace."],
     passport: ["Risk Passport", "Track evidence-backed changes across monitored contracts."],
     watchtower: ["Watchtower", "Review scheduled monitoring and evidence alerts."],
