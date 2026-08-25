@@ -596,10 +596,30 @@ class IntelligenceStore {
     if (!passport?.snapshots.length) return [];
     const freshness = this.getFreshness(workspaceId, networkId, address);
     const definitions = this.#reviewDefinitions(passport, freshness);
+    const currentSnapshot = passport.snapshots.at(-1);
+    let changed = false;
     return definitions.map((definition) => {
       const key = `${this.#key(workspaceId, networkId, address)}:${definition.rule}`;
       const existing = this.passportReviews.get(key);
-      if (existing) return clone(existing);
+      if (existing) {
+        if (existing.snapshotId !== currentSnapshot.id) {
+          const previousStatus = existing.status;
+          Object.assign(existing, definition, {
+            snapshotId: currentSnapshot.id,
+            updatedAt: this.clock().toISOString(),
+          });
+          if (previousStatus !== "OPEN") existing.status = "OPEN";
+          existing.timeline.push({
+            type: "REFRESHED",
+            at: existing.updatedAt,
+            snapshotId: currentSnapshot.id,
+            previousStatus,
+          });
+          this.passportReviews.set(key, existing);
+          changed = true;
+        }
+        return clone(existing);
+      }
       const item = {
         id: `passport_review_${hash(key).slice(0, 20)}`,
         workspaceId, ...publicContract(networkId, address),
@@ -611,9 +631,10 @@ class IntelligenceStore {
         timeline: [{ type: "OPENED", at: this.clock().toISOString(), snapshotId: passport.currentSnapshotId }],
       };
       this.passportReviews.set(key, item);
-      this.#persist();
+      changed = true;
       return clone(item);
     }).sort((a, b) => ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[a.priority] ?? 3) - ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[b.priority] ?? 3));
+    if (changed) this.#persist();
   }
 
   updatePassportReview({ workspaceId, networkId, address, reviewId, status, actorId }) {

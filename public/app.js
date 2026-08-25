@@ -1834,7 +1834,7 @@ document.querySelector("#watchtower-tick")?.addEventListener("click", async (eve
     if (watchtowerTickStatus) {
       watchtowerTickStatus.textContent = processed
         ? `${processed} due check${processed === 1 ? "" : "s"} queued.`
-        : "No due checks right now.";
+        : "No due checks right now. Add a Passport to Watchtower to schedule one.";
     }
     await loadIntelligenceDashboard();
   } catch (error) {

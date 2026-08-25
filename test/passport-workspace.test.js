@@ -64,4 +64,16 @@ test("Passport freshness, evidence-backed review lifecycle, and audit export", (
   assert.equal(audit.manifest.evidenceHashes[0], audit.snapshots[0].evidenceHash);
   assert.match(audit.verificationHash, /^[a-f0-9]{64}$/);
   assert.equal(audit.reviewQueue.find((item) => item.id === refresh.id).status, "DEFERRED");
+
+  store.recordSnapshot({
+    workspaceId: "workspace-a",
+    scan: scan("2026-08-25T00:00:00.000Z", "2026-08-24T00:00:00.000Z"),
+    jobId: "scan-2",
+    capturedAt: "2026-08-25T00:00:00.000Z",
+  });
+  const refreshed = store.listPassportReviews("workspace-a", "ethereum", address)
+    .find((item) => item.rule === "refresh_liquidity");
+  assert.equal(refreshed.status, "OPEN");
+  assert.equal(refreshed.snapshotId, store.getPassport("workspace-a", "ethereum", address).current.id);
+  assert.equal(refreshed.timeline.at(-1).type, "REFRESHED");
 });
