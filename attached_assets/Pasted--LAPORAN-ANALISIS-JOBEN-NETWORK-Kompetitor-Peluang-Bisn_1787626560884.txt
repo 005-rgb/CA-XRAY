@@ -1,0 +1,141 @@
+# LAPORAN ANALISIS JOBEN NETWORK
+### Kompetitor, Peluang Bisnis, dan Skoring Daya Tahan 10 Tahun
+*Disusun Agustus 2026*
+
+---
+
+## 0. Ringkasan Eksekutif
+
+JOBEN NETWORK sudah membangun fondasi teknis yang **jauh lebih dalam dari kebanyakan "token scanner"** di pasar — pemisahan risk score vs reliability score, evidence provenance dengan hash, status data yang jujur (`UNKNOWN`/`UNAVAILABLE` dipisah dari "aman"), scan job system dengan retry/idempotency, dan konsep Risk Passport yang bisa berkembang jadi reputasi kontrak lintas waktu. Ini adalah arsitektur kelas enterprise, bukan sekadar wrapper API.
+
+Masalahnya bukan di kualitas rekayasa. Masalahnya: **layer yang belum dibangun — komunitas publik, knowledge base terbuka, reputasi researcher — adalah persis layer yang sudah lebih dulu dibangun dan dimonetisasi oleh pemain besar** (GoPlus, CertiK Skynet, De.Fi, Bubblemaps, RugCheck). Mereka punya jutaan wallet terproteksi, integrasi native ke wallet/exchange/DEX, dan pendanaan puluhan-ratusan juta dolar. JOBEN akan sangat sulit menang di medan yang sama dengan strategi yang sama.
+
+**Skor keseluruhan: 5,6 / 10 — "Fondasi kuat, positioning belum tajam."**
+Peluang realistis JOBEN bukan menjadi "GoPlus versi Indonesia" secara generik, tapi menjadi **evidence & compliance layer untuk pasar aset kripto Indonesia/Asia Tenggara yang sedang diregulasi ketat oleh OJK** — sebuah ceruk yang, secara mengejutkan, belum digarap serius oleh satupun pemain global di atas.
+
+Rincian skoring dan alasan ada di Bagian 4. Analisis kompetitor di Bagian 1. Peluang bisnis di Bagian 2. Skenario 10 tahun di Bagian 3.
+
+---
+
+## 1. Analisis Kompetitor
+
+### 1.1 Peta pemain utama (per Agustus 2026)
+
+| Pemain | Fokus utama | Model bisnis | Kekuatan | Kelemahan relatif terhadap JOBEN |
+|---|---|---|---|---|
+| **GoPlus Security** | Token/NFT/approval/malicious-address security API, real-time, 30+ chain | Freemium API + x402 pay-as-you-go untuk AI agent, investasi strategis dari OKX | <cite index="12-1">Mengklaim mendukung lebih dari 30 blockchain dan melindungi lebih dari 12 juta wallet</cite>; sudah tertanam di DexScreener, OKX Wallet, Binance Wallet dsb; sudah punya produk khusus agent-to-agent commerce | Output bersifat boolean/mentah, minim narasi evidence yang bisa diverifikasi manusia; tidak punya konsep "reliability score" terpisah dari "risk score" |
+| **CertiK Skynet** | Skor keamanan proyek real-time + audit + leaderboard + laporan intelijen ancaman | Enterprise audit fee + Skynet freemium + badge/branding untuk proyek | <cite index="30-1">CertiK diklaim telah mengamankan lebih dari 600 miliar dolar aset kripto sejak 2017, dengan platform Skynet yang melayani 1,8 juta pengguna</cite>, <cite index="22-1">Skynet terintegrasi dengan Binance Wallet, Binance DappBay, dan OKX Wallet, serta menyediakan leaderboard discovery lintas ekosistem</cite>; brand institusional kuat, dipakai untuk listing exchange | Skoring lebih ke arah "badge kepercayaan proyek", bukan evidence per-finding yang bisa didiskusikan; tertutup untuk kontribusi komunitas independen |
+| **De.Fi Scanner** | Scanner token + revoke approval terintegrasi | Freemium, terhubung ke tool revoke | Dianggap kuat di deteksi proxy dan variable tax; UX rapi | Fokus tetap "quick check", bukan workspace investigasi berkelanjutan |
+| **Bubblemaps** | Visualisasi cluster wallet, deteksi insider/bundling, **investigasi crowdsource ("Intel Desk")** | Freemium + token BMT untuk fitur premium & governance | <cite index="50-1">Punya fitur "Intel Desk" di mana pemegang token BMT dapat mengusulkan, memilih (voting), dan mendanai investigasi crowdsourced terhadap proyek</cite> — ini **secara langsung memvalidasi model komunitas riset yang ingin dibangun JOBEN di Phase 2–3**, dan mereka sudah lebih dulu di sana | Cakupan analisis kontrak (tax, mint, blacklist dsb.) tidak sekuat GoPlus/JOBEN; kekuatan mereka di visual graph, bukan evidence engine |
+| **RugCheck.xyz** | Scanner risiko token native Solana (mint/freeze authority, holder, insider, LP) | Freemium, embed di trading terminal (Photon, BullX) | <cite index="77-1">Tumbuh menjadi alat keamanan token paling dikenal di jaringan Solana, memproses ribuan penilaian token setiap hari, hingga istilah "passed RugCheck" jadi standar informal untuk due diligence dasar di komunitas trading Solana</cite>; <cite index="81-1">sudah menggabungkan heuristik on-chain, bukti identitas off-chain, analitik graph, dan community flagging berbasis crowdsourced label untuk penilaian hybrid manusia-mesin</cite> | Solana-sentris; belum punya lapisan reputasi researcher publik yang matang |
+| **TokenSniffer / Honeypot.is / Webacy / CredShields** | Niche tools (pattern scoring, honeypot yes/no, wallet protection, audit) | Freemium/API | Cepat, fokus, gratis | Single-purpose, tidak menyaingi kedalaman analisis JOBEN sama sekali |
+
+### 1.2 Insight paling penting dari riset kompetitor
+
+1. **Model komunitas yang direncanakan JOBEN (Fase 2–6: public profile, reputasi, investigasi kolaboratif) sudah punya bukti konsep nyata di Bubblemaps dan RugCheck.** Ini kabar baik (model terbukti berjalan) dan kabar buruk (JOBEN bukan first-mover di konsep ini, dan mereka sudah punya jaringan aktif serta token insentif untuk menarik kontributor).
+2. **GoPlus dan CertiK sudah bergerak ke arah "agentic security"** — API pay-per-call untuk AI agent yang bertransaksi otonom. Ini sinyal ke mana industri bergerak dalam 3–5 tahun ke depan; JOBEN perlu memasukkan ini ke roadmap lebih awal daripada Fase 5–6.
+3. **Tidak ada satu pemain besar pun di atas yang secara eksplisit melokalisasi diri untuk kepatuhan regulasi Indonesia** (bahasa, format laporan sesuai kebutuhan OJK/PAKD, dukungan Rupiah/CEX lokal seperti Indodax/Pintu/Tokocrypto). Ini adalah celah nyata (lihat Bagian 2).
+4. **Barrier to entry di sisi "raw detection" makin rendah** (banyak API gratis/murah: GoPlus, RugCheck, TokenSniffer), sementara barrier di sisi **"trust layer" (reputasi, evidence yang bisa diaudit, komunitas yang tidak asal upvote)** makin tinggi karena efek jaringan sudah mulai terbentuk di pemain incumbent. Artinya JOBEN sebaiknya **tidak bersaing di layer deteksi mentah**, tapi masuk sebagai *aggregator + evidence workspace + compliance layer* — persis arah yang sudah diarahkan pada bagian "Provider dan evidence provenance" dalam spek JOBEN sendiri (provider adapter terpisah dari scoring engine).
+
+### 1.3 Skor daya saing kompetitor (semakin tinggi = ancaman semakin besar bagi JOBEN)
+
+| Kompetitor | Ancaman langsung (produk) | Ancaman modal/distribusi | Ancaman jangka panjang |
+|---|---|---|---|
+| GoPlus | Tinggi (8/10) | Sangat tinggi (9/10) | Tinggi |
+| CertiK Skynet | Sedang (6/10) | Sangat tinggi (9/10) | Tinggi |
+| Bubblemaps | Sedang (6/10) — beda fokus (graph vs evidence) | Sedang (5/10) | Sedang–tinggi (mereka menuju arah yang sama: komunitas riset) |
+| RugCheck | Rendah untuk EVM (3/10), tinggi untuk Solana (8/10) | Sedang | Sedang |
+| De.Fi / TokenSniffer / Webacy dll | Sedang (5/10) | Rendah–sedang | Rendah–sedang |
+
+---
+
+## 2. Peluang Bisnis
+
+### 2.1 Ukuran pasar (perlu dibaca dengan hati-hati — angka industri riset pasar sangat bervariasi antar lembaga)
+
+Beberapa estimasi independen untuk konteks skala peluang (bukan angka pasti, tapi rentang order-of-magnitude yang konsisten arah pertumbuhannya):
+
+- <cite index="31-1">Pasar keamanan blockchain global diperkirakan senilai sekitar 6,4 miliar dolar AS pada 2025 dan diproyeksikan mencapai sekitar 31,3 miliar dolar AS pada 2033, tumbuh dengan CAGR 22,4% mulai 2026</cite>.
+- <cite index="37-1">Pasar keamanan Web3 secara spesifik diperkirakan tumbuh dari 2,31 miliar dolar AS pada 2025 menjadi 2,86 miliar dolar AS pada 2026, dan diproyeksikan mencapai 6,84 miliar dolar AS pada 2030 dengan CAGR sekitar 24%</cite>.
+- <cite index="42-1">Sektor keamanan kripto global diproyeksikan mencapai 28,5 miliar dolar AS pada 2036, naik dari sekitar 4 miliar dolar AS pada 2026, dengan CAGR 21,7%</cite>, didorong institusionalisasi custody dan formalisasi regulasi kepatuhan kripto.
+
+**Kesimpulan yang aman:** pasar ini bertumbuh double-digit CAGR secara konsisten di semua lembaga riset, dengan estimasi total addressable market (TAM) global tahun 2026 di kisaran **US$3–8 miliar**, dan berpotensi 4–10x lipat dalam 8–10 tahun. JOBEN, sebagai pemain baru tanpa nama besar, realistisnya menyasar SAM (serviceable available market) yang jauh lebih kecil: segmen SEA/Indonesia + segmen "workspace/monitoring" (bukan segmen audit formal bernilai tinggi yang dikuasai CertiK/Hacken).
+
+### 2.2 Peluang spesifik yang relevan untuk JOBEN (bukan generik)
+
+**A. Tailwind regulasi Indonesia — ini peluang paling konkret dan paling dekat.**
+- <cite index="74-1">Undang-Undang Nomor 4 Tahun 2026 (amandemen UU P2SK) yang berlaku sejak 17 Juni 2026 menempatkan platform kripto sebagai Lembaga Jasa Keuangan Aset Keuangan Digital (LJK AKD) resmi di bawah OJK, dengan standar tata kelola, fit-and-proper test, perlindungan konsumen, dan ekspektasi prudensial layaknya lembaga jasa keuangan</cite>.
+- <cite index="61-1">Hingga Mei 2026, OJK bersama Satgas PASTI telah menghentikan 228 platform perdagangan aset kripto ilegal</cite>, dan proses transisi pengawasan dari Bappebti ke OJK <cite index="63-1">dinyatakan tuntas pada 20 Januari 2026, dengan OJK tengah menyusun Roadmap IAKD 2026–2031 sebagai arah kebijakan lima tahun ke depan</cite>.
+- Implikasi langsung: exchange/pedagang aset kripto berizin (PAKD) di Indonesia sekarang **wajib punya proses manajemen risiko dan tata kelola yang bisa diaudit** untuk listing token dan pelaporan ke OJK. Ini adalah kebutuhan B2B nyata — bukan "nice to have" — yang cocok persis dengan kekuatan JOBEN: evidence provenance, audit trail, Risk Passport, admin control plane dengan four-eyes approval. **Tidak ada kompetitor global di atas yang melokalisasi produk untuk kebutuhan spesifik ini.**
+- Model bisnis konkret: **B2B "Compliance & Listing Due-Diligence API/Dashboard"** untuk PAKD/exchange lokal (Indodax, Pintu, Tokocrypto, Reku, dll.), dijual sebagai kontrak tahunan/enterprise — bukan freemium konsumen yang margin-nya tipis dan langsung dilawan GoPlus gratis.
+
+**B. Evidence-as-a-service untuk agentic economy.**
+GoPlus sudah membangun API pay-per-call untuk AI agent. Ini akan jadi kategori besar 3–7 tahun ke depan (agen trading otonom butuh cara murah dan cepat membeli "opini keamanan" per transaksi). JOBEN sudah punya fondasi evidence ID + confidence + hash yang justru **lebih cocok untuk dikonsumsi mesin/agent** dibanding dashboard visual kompetitor. Ini peluang differensiasi teknis nyata jika dieksekusi lebih awal.
+
+**C. Niche "evidence discussion" vs "vote aman/scam tanpa evidence".**
+Riset kompetitor menegaskan sebagian besar komunitas kripto masih berbasis vote/hype (leaderboard, badge berbayar, ranking follower). Spek JOBEN secara eksplisit menghindari pola ini (Bagian 6 spek: tidak membuat voting aman/scam tanpa evidence, tidak ada badge berbayar). Ini secara strategis benar dan bisa jadi positioning yang tajam: **"komunitas yang wajib menyertakan evidence, bukan opini."** Tapi ini juga berarti pertumbuhan komunitas akan jauh lebih lambat daripada kompetitor yang mengejar viralitas — trade-off yang harus disadari sejak awal, bukan efek samping.
+
+**D. Cross-network intelligence graph (Fase 5 di roadmap JOBEN).**
+Bubblemaps sudah membuktikan permintaan pasar untuk visualisasi cluster wallet/deployer. Tapi Bubblemaps kuat di visual, lemah di integrasi tax/liquidity/holder yang justru sudah dimiliki JOBEN. Jika JOBEN bisa menggabungkan **deployer relationship graph + evidence-based scoring** dalam satu produk, itu kombinasi yang belum ada persis di pasar saat ini.
+
+### 2.3 Risiko bisnis yang harus disadari
+
+1. **Commoditization risk** — data mentah (tax, mint authority, holder concentration) makin lama makin jadi komoditas gratis (GoPlus API gratis, RugCheck gratis). Jika JOBEN menjual "kami juga bisa cek tax dan mint authority", itu bukan bisnis yang bertahan; nilai jual JOBEN harus di layer *evidence workspace, provenance, compliance, dan komunitas terverifikasi*, bukan di layer deteksi itu sendiri.
+2. **Cold start komunitas** — bagian yang paling belum ada (public profile, reputasi, feed) juga bagian yang paling sulit tumbuh tanpa modal marketing besar atau insentif token seperti Bubblemaps/RugCheck.
+3. **Biaya infrastruktur data provider** — GoPlus, DexScreener, Blockscout API sering punya rate limit/biaya di skala tinggi; model bisnis JOBEN harus memperhitungkan unit economics per-scan, bukan cuma engineering-nya.
+4. **Ambiguitas status hukum "penasihat/skoring risiko" di Indonesia** — dengan aset kripto kini masuk rezim LJK di bawah OJK, perlu dipastikan apakah JOBEN, jika menjual skor risiko yang memengaruhi keputusan investasi, berpotensi disenggol definisi jasa terkait pasar modal/penasihat investasi. Ini bukan blocker, tapi butuh kajian hukum sebelum go-to-market B2B ke exchange.
+
+---
+
+## 3. Skenario Daya Tahan 10 Tahun (2026–2036)
+
+### Skenario A — Bear case (probabilitas ~35%)
+JOBEN tetap menjadi "workspace scanner" generik, layer komunitas tidak pernah mencapai massa kritis, dan pemain besar (GoPlus/CertiK) terus menurunkan biaya deteksi mentah mendekati nol sambil memperluas ke agentic API. JOBEN kehabisan diferensiasi, monetisasi B2C tidak jalan, dan tanpa pivot ke B2B compliance lokal, produk stagnan atau tutup dalam 3–5 tahun.
+
+### Skenario B — Base case (probabilitas ~45%)
+JOBEN berhasil memposisikan diri sebagai **evidence & compliance layer niche untuk pasar Indonesia/SEA**, mendapatkan beberapa kontrak B2B dengan PAKD/exchange lokal, dan komunitas investigator tumbuh lambat tapi berkualitas (ratusan, bukan jutaan pengguna). Produk bertahan sebagai bisnis menengah yang menguntungkan di ceruknya, tapi tidak menjadi pemain global. Daya tahan 10 tahun: **cukup tinggi**, karena regulasi hanya akan makin ketat (bukan makin longgar), yang justru memperkuat kebutuhan produk ini — tapi ukurannya tetap regional.
+
+### Skenario C — Bull case (probabilitas ~20%)
+JOBEN mengeksekusi Fase 1–3 dengan cepat, memenangkan mandat resmi/semi-resmi dari OJK atau asosiasi PAKD sebagai salah satu rujukan due-diligence, lalu memperluas evidence graph (Fase 5) dan agentic API ke pasar SEA lebih luas (Malaysia, Filipina, Vietnam) yang menghadapi tren regulasi serupa. Dalam skenario ini JOBEN bisa menjadi "CertiK-nya Asia Tenggara untuk retail & mid-market", dengan opsi diakuisisi oleh exchange besar atau pemain keamanan global yang ingin masuk SEA.
+
+### Faktor penentu paling kritis untuk bertahan 10 tahun
+1. **Jangan bersaing di layer deteksi mentah** — di situ JOBEN akan selalu kalah modal dan kecepatan iterasi vs GoPlus/CertiK.
+2. **Percepat B2B compliance lokal (Fase 1 + kepatuhan OJK) sebelum Fase 2 komunitas publik** — ini sumber pendapatan yang paling realistis dan paling sedikit pesaingnya saat ini.
+3. **Bangun evidence API yang machine-consumable sejak dini**, bukan cuma dashboard manusia — supaya JOBEN relevan saat ekonomi agent AI tumbuh (ini datang lebih cepat dari perkiraan banyak roadmap 2026 yang masih berpikir dashboard-first).
+4. **Jaga disiplin "evidence over hype"** yang sudah ditegaskan di spek — ini aset reputasi jangka panjang meski memperlambat pertumbuhan jangka pendek.
+5. **Persistence production (PostgreSQL, durable queue, backup/restore) harus selesai sebelum menjual ke B2B enterprise** — exchange berizin OJK tidak akan mempercayakan compliance workflow ke sistem yang masih memory-backed di development.
+
+---
+
+## 4. Skoring Terstruktur
+
+Skala 1–10 (10 = terbaik/terkuat). Bobot mencerminkan seberapa menentukan dimensi tersebut untuk keberlangsungan bisnis 10 tahun ke depan.
+
+| Dimensi | Skor | Bobot | Catatan |
+|---|:---:|:---:|---|
+| Kedalaman teknis engine (contract intelligence, evidence provenance, dual score) | **8,0** | 15% | Lebih dalam dari rata-rata kompetitor kelas menengah; setara arsitektur CertiK dari sisi konsep, belum dari sisi skala data |
+| Kesiapan infrastruktur produksi (queue, DB, backup, worker) | **4,0** | 10% | Masih memory-backed di development; blocker nyata untuk B2B enterprise |
+| Diferensiasi vs kompetitor besar (GoPlus, CertiK, De.Fi) | **5,0** | 15% | Kuat di evidence/audit trail, lemah di distribusi dan cakupan chain/data real-time |
+| Komunitas & network effect | **3,0** | 15% | Belum ada sama sekali (diakui sendiri di spek); ini gap terbesar dan sudah direbut sebagian oleh Bubblemaps/RugCheck |
+| Model monetisasi & kesiapan bisnis (billing, API access) | **4,0** | 10% | Plan sudah ada tapi checkout belum aktif; belum ada bukti unit economics |
+| Peluang pasar spesifik (regulasi Indonesia/SEA) | **8,5** | 15% | Tailwind regulasi sangat kuat dan hampir tidak ada kompetitor lokal yang menggarap serius |
+| Risiko regulasi/hukum atas produk skoring risiko | **6,0** | 5% | Perlu kajian hukum, tapi bukan hambatan struktural |
+| Ketahanan model terhadap komoditisasi deteksi mentah | **5,5** | 15% | Tergantung eksekusi — jika tetap jual "deteksi", nilai turun; jika pivot ke evidence/compliance layer, nilai naik signifikan |
+
+**Skor akhir tertimbang: 5,6 / 10**
+
+Interpretasi: **produk dengan fondasi teknis di atas rata-rata, tapi model bisnis dan strategi go-to-market belum menemukan celah yang benar-benar sulit ditiru pesaing besar** — kecuali JOBEN secara sadar dan cepat memutar fokus ke B2B compliance Indonesia/SEA (bukan komunitas publik global) sebagai jalur utama, bukan jalur sampingan.
+
+---
+
+## 5. Rekomendasi Prioritas (ringkas)
+
+1. **Selesaikan persistence production** (PostgreSQL, durable queue, backup/restore) — prasyarat mutlak sebelum jualan ke exchange/enterprise.
+2. **Bangun paket "OJK/PAKD Compliance Due-Diligence"** sebagai produk B2B utama, bukan fitur sampingan — ini pintu masuk pendapatan tercepat dan paling sedikit pesaingnya.
+3. **Tunda ambisi komunitas publik skala besar (Fase 6) sampai Fase 1–3 solid** — jangan bersaing head-to-head dengan Bubblemaps/RugCheck di volume komunitas; menang di kualitas evidence dulu.
+4. **Desain evidence API agar machine-consumable (siap untuk AI agent)** sejak awal, bukan ditambahkan belakangan di Fase 5–6.
+5. **Kaji status hukum produk skoring risiko** terhadap rezim LJK AKD yang baru, sebelum menjual skor sebagai dasar keputusan investasi kepada pihak ketiga.
+
+---
+
+*Catatan metodologi: skor di atas adalah penilaian kualitatif berbasis riset pasar publik per Agustus 2026 dan spesifikasi produk yang dilampirkan, bukan valuasi finansial formal. Angka pasar dari berbagai lembaga riset (Grand View Research, Fortune Business Insights, Future Market Insights, Research and Markets) memiliki metodologi berbeda-beda sehingga rentangnya lebar — gunakan sebagai indikasi arah dan skala, bukan angka presisi tunggal.*
