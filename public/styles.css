@@ -1582,10 +1582,20 @@ body, body.private-view { background: var(--joben-void); color: var(--joben-text
 .passport-workspace-head p { margin: 0; color: var(--joben-muted); font-size: 11px; }
 .passport-select-label { display: grid; gap: 6px; min-width: 190px; color: var(--joben-dim); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
 .passport-select-label select { padding: 9px 10px; border: 1px solid var(--joben-line-bright); border-radius: 4px; color: var(--joben-text); background: #09121b; font: inherit; letter-spacing: normal; }
-.passport-area-nav { display: flex; padding-bottom: 12px; border-bottom: 1px solid var(--joben-line); }
-.passport-area-nav label { display: grid; gap: 6px; min-width: min(100%, 330px); color: var(--joben-dim); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
-.passport-area-nav select { appearance: none; padding: 11px 35px 11px 12px; border: 1px solid var(--joben-cyan); border-radius: 5px; color: var(--joben-text); background: linear-gradient(135deg, rgba(77,225,208,.1), rgba(255,255,255,.025)); font: inherit; font-size: 11px; letter-spacing: normal; cursor: pointer; }
-.passport-area-nav select:focus { outline: 2px solid rgba(77,225,208,.3); outline-offset: 2px; }
+.passport-area-nav { padding-bottom: 16px; border-bottom: 1px solid var(--joben-line); }
+.passport-area-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.passport-area-card { position: relative; min-height: 92px; overflow: hidden; padding: 14px; border: 1px solid var(--joben-line); border-radius: 7px; color: var(--joben-muted); background: linear-gradient(145deg, rgba(20,34,45,.9), rgba(8,16,25,.92)); text-align: left; cursor: pointer; opacity: 0; animation: passport-card-in .45s cubic-bezier(.2,.8,.2,1) forwards; transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease, background .25s ease; }
+.passport-area-card:nth-child(2) { animation-delay: .05s; }.passport-area-card:nth-child(3) { animation-delay: .1s; }.passport-area-card:nth-child(4) { animation-delay: .15s; }.passport-area-card:nth-child(5) { animation-delay: .2s; }.passport-area-card:nth-child(6) { animation-delay: .25s; }
+.passport-area-card::after { position: absolute; right: -24px; bottom: -32px; width: 90px; height: 90px; border: 1px solid rgba(77,225,208,.08); border-radius: 50%; content: ""; transition: transform .35s ease, border-color .35s ease; }
+.passport-area-card:hover, .passport-area-card.active { transform: translateY(-3px); border-color: rgba(77,225,208,.65); color: var(--joben-text); background: linear-gradient(145deg, rgba(25,57,65,.95), rgba(9,20,29,.98)); box-shadow: 0 10px 28px rgba(0,0,0,.22), 0 0 22px rgba(77,225,208,.1); }
+.passport-area-card:hover::after, .passport-area-card.active::after { transform: scale(1.35); border-color: rgba(77,225,208,.25); }
+.passport-area-card.active { box-shadow: inset 0 2px var(--joben-cyan), 0 10px 28px rgba(0,0,0,.22), 0 0 24px rgba(77,225,208,.12); }
+.passport-area-number, .passport-area-icon, .passport-area-card strong, .passport-area-card small { display: block; position: relative; z-index: 1; }
+.passport-area-number { color: var(--joben-cyan); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
+.passport-area-icon { margin: 6px 0 8px; color: var(--joben-cyan); font-size: 16px; line-height: 1; text-shadow: 0 0 12px rgba(77,225,208,.45); }
+.passport-area-card strong { color: inherit; font-size: 10px; font-weight: 750; }
+.passport-area-card small { margin-top: 4px; color: var(--joben-dim); font-size: 8px; }
+@keyframes passport-card-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .passport-area-content { padding-top: 16px; }
 .passport-empty-state { padding: 22px; border: 1px dashed var(--joben-line-bright); border-radius: 5px; background: rgba(77,225,208,.035); }
 .passport-empty-state strong { color: var(--joben-text); font-size: 12px; }
@@ -1612,6 +1622,8 @@ body, body.private-view { background: var(--joben-void); color: var(--joben-text
   .passport-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .passport-evidence-row { grid-template-columns: 1fr auto; }
   .passport-evidence-row small { grid-column: 1 / -1; }
+  .passport-area-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .passport-area-card { min-height: 88px; padding: 11px; }
 }
 
 html[data-theme="light"] {

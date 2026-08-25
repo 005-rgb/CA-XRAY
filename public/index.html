@@ -427,16 +427,14 @@
                       <label class="passport-select-label" for="passport-selector">OPEN PASSPORT<select id="passport-selector"></select></label>
                     </div>
                     <div class="passport-area-nav" aria-label="Risk Passport areas">
-                      <label for="passport-area-selector">WORKSPACE AREA
-                        <select id="passport-area-selector">
-                          <option value="overview">Overview</option>
-                          <option value="evidence">Risk &amp; Evidence</option>
-                          <option value="changes">Changes &amp; Trajectory</option>
-                          <option value="control">Control &amp; Market</option>
-                          <option value="review">Review &amp; Monitoring</option>
-                          <option value="audit">Compare &amp; Audit</option>
-                        </select>
-                      </label>
+                      <div class="passport-area-grid">
+                        <button type="button" class="passport-area-card active" data-passport-area="overview"><span class="passport-area-number">01</span><span class="passport-area-icon">◈</span><strong>Overview</strong><small>Posture &amp; health</small></button>
+                        <button type="button" class="passport-area-card" data-passport-area="evidence"><span class="passport-area-number">02</span><span class="passport-area-icon">⌁</span><strong>Risk &amp; Evidence</strong><small>Signals &amp; provenance</small></button>
+                        <button type="button" class="passport-area-card" data-passport-area="changes"><span class="passport-area-number">03</span><span class="passport-area-icon">↗</span><strong>Changes &amp; Trajectory</strong><small>Movement over time</small></button>
+                        <button type="button" class="passport-area-card" data-passport-area="control"><span class="passport-area-number">04</span><span class="passport-area-icon">⌘</span><strong>Control &amp; Market</strong><small>Influence &amp; exitability</small></button>
+                        <button type="button" class="passport-area-card" data-passport-area="review"><span class="passport-area-number">05</span><span class="passport-area-icon">✓</span><strong>Review &amp; Monitoring</strong><small>Actions &amp; alerts</small></button>
+                        <button type="button" class="passport-area-card" data-passport-area="audit"><span class="passport-area-number">06</span><span class="passport-area-icon">▤</span><strong>Compare &amp; Audit</strong><small>Replay &amp; history</small></button>
+                      </div>
                     </div>
                     <div id="passport-area-content" class="passport-area-content"><div class="unknown-message">Loading Passport workspace…</div></div>
                   </div>

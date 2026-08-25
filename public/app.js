@@ -46,7 +46,6 @@ const passportSelector = document.querySelector("#passport-selector");
 const passportAreaContent = document.querySelector("#passport-area-content");
 const passportWorkspaceTitle = document.querySelector("#passport-workspace-title");
 const passportWorkspaceMeta = document.querySelector("#passport-workspace-meta");
-const passportAreaSelector = document.querySelector("#passport-area-selector");
 const watchlistList = document.querySelector("#watchlist-list");
 const watchlistCount = document.querySelector("#watchlist-count");
 const alertList = document.querySelector("#alert-list");
@@ -1473,11 +1472,11 @@ async function openPassportWorkspace(passport) {
   } catch (error) { passportAreaContent.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`; }
 }
 passportSelector?.addEventListener("change", () => openPassportWorkspace(passportCatalog[Number(passportSelector.value)]));
-passportAreaSelector?.addEventListener("change", () => {
-  passportArea = passportAreaSelector.value;
+document.querySelectorAll("[data-passport-area]").forEach((button) => button.addEventListener("click", () => {
+  passportArea = button.dataset.passportArea;
+  document.querySelectorAll("[data-passport-area]").forEach((item) => item.classList.toggle("active", item === button));
   renderPassportArea();
-});
-
+}));
 function renderWatchlistList(watchlists) {
   const active = watchlists.filter((item) => item.status === "active").length;
   watchlistCount.textContent = `${active} ACTIVE`;
