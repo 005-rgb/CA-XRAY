@@ -46,6 +46,7 @@ npm test
 - Private scan history is available at `/api/scans` and only returns jobs for the authenticated workspace. Scan job reads require the same server-side workspace scope.
 - The platform-scoped superadmin control plane is available at `/admin`: it provides live provider/network posture, runtime health, feature-flag drafts and publishing, four-eyes approvals, user/workspace inventory search, subscription/webhook signals, and an append-only audit view. All privileged reads and writes require a fresh MFA step-up and server-side platform RBAC.
 - Phase 5 listing/compliance controls are available through tenant-scoped `/api/policies`, `/api/governance`, and `/api/cases/:caseId/compliance-review` routes. Policies are versioned and evidence checks preserve PASS/FAIL/UNKNOWN; reviews record an evidence register, require an independent approver, support APPROVE/CONDITIONAL/REJECT outcomes with expiry, and expose English plus Bahasa Indonesia report text. Active policies cannot be edited in place.
+- Phase 6 Evidence API v1 is available at `/api/v1`: authenticated workspace owners can issue and revoke scoped API keys (the raw key is returned once), create/poll asynchronous scans, retrieve uncertainty-safe evidence bundles, request HMAC-SHA256 signed reports, and inspect usage metering. The dependency-free client is served from `/sdk.js`; bundles preserve UNKNOWN, UNAVAILABLE, UNVERIFIED, CONFLICT, and VERIFIED states rather than inferring safety.
 
 ## User preferences
 

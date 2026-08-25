@@ -40,6 +40,7 @@ const {
   resolveEffectiveEntitlements,
 } = require("./src/platform/entitlements");
 const { IntelligenceStore } = require("./src/intelligence/store");
+const { DeveloperApi } = require("./src/api/developer");
 
 const PORT = Number(process.env.PORT || 5000);
 const HOST = "0.0.0.0";
@@ -59,6 +60,7 @@ const controlPlane = new PlatformControlPlane({
 });
 const providerRegistry = createDefaultProviderRegistry();
 const intelligenceStore = new IntelligenceStore({ persistence });
+const developerApi = new DeveloperApi({ secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex") });
 const intelligenceReady = persistenceReady.then(() => intelligenceStore.init());
 const scanQueue = createScanJobQueue({
   processor: (payload, jobContext) => scanLive({
@@ -187,6 +189,14 @@ function signVisitorId(visitorId) {
 }
 
 async function requestContext(req) {
+  const apiKey = typeof req.headers["x-api-key"] === "string" ? developerApi.authenticate(req.headers["x-api-key"]) : null;
+  if (apiKey) {
+    return {
+      kind: "authenticated", actor: { id: apiKey.actorId, role: "Workspace Member", authenticated: true, workspaceId: apiKey.workspaceId },
+      user: { id: apiKey.actorId, displayName: "API client", email: null }, workspace: { id: apiKey.workspaceId }, membership: { workspaceId: apiKey.workspaceId, role: "Workspace Member" },
+      workspaceId: apiKey.workspaceId, workspaceType: "team", planId: "free", apiKey, ip: req.socket.remoteAddress || "unknown", apiClient: "sdk", requestId: correlationId(req),
+    };
+  }
   const authenticated = await authService.authenticateRequest(req);
   if (["authenticated", "mfa_pending", "email_pending"].includes(authenticated.kind)) {
     return {
@@ -1405,6 +1415,79 @@ async function handleApiUnsafe(req, res, url, context) {
       scans: page.items,
       pagination: { hasMore: page.hasMore, nextCursor: page.nextCursor },
     }, { context });
+    return true;
+  }
+
+  if (url.pathname.startsWith("/api/v1/")) {
+    const authenticated = requireAuthenticated(context);
+    const hasScope = (scope) => !context.apiKey || context.apiKey.scopes.includes(scope);
+    if (req.method === "POST" && url.pathname === "/api/v1/keys") {
+      if (context.apiKey) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const body = await readBody(req);
+      const issued = developerApi.issue({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, name: body.name, scopes: Array.isArray(body.scopes) ? body.scopes : undefined, expiresAt: body.expiresAt || null });
+      await authService.audit("API_KEY_ISSUED", authenticated.actor.id, authenticated.workspaceId, { keyId: issued.id, scopes: issued.scopes });
+      sendJson(res, 201, { key: issued, warning: "Store this key now. It will not be shown again." }, { context });
+      return true;
+    }
+    if (req.method === "GET" && url.pathname === "/api/v1/keys") {
+      sendJson(res, 200, { keys: developerApi.list(authenticated.workspaceId) }, { context });
+      return true;
+    }
+    const keyRevoke = url.pathname.match(/^\/api\/v1\/keys\/([^/]+)$/);
+    if (req.method === "DELETE" && keyRevoke) {
+      sendJson(res, 200, { revoked: developerApi.revoke(authenticated.workspaceId, keyRevoke[1]) }, { context });
+      return true;
+    }
+    if (req.method === "GET" && url.pathname === "/api/v1/usage") {
+      sendJson(res, 200, { usage: developerApi.usageFor(authenticated.workspaceId), limits: { monthlyRequests: PLAN_CATALOG[authenticated.planId]?.scanLimitPerMonth ?? null } }, { context });
+      return true;
+    }
+    const v1Scan = url.pathname.match(/^\/api\/v1\/scans\/([^/]+)$/);
+    const v1Bundle = url.pathname.match(/^\/api\/v1\/scans\/([^/]+)\/evidence-bundle$/);
+    const v1Signed = url.pathname.match(/^\/api\/v1\/scans\/([^/]+)\/signed-report$/);
+    if (req.method === "POST" && url.pathname === "/api/v1/scans") {
+      if (!hasScope("scan:create")) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const body = await readBody(req);
+      const address = String(body.address || "").trim();
+      const networkId = String(body.network || body.networkId || "");
+      const validation = validateAddress(address);
+      if (!validation.valid || !NETWORKS.some((network) => network.id === networkId)) throw Object.assign(new Error("INVALID_SCAN_REQUEST"), { code: "INVALID_SCAN_REQUEST" });
+      await enforceScanProtection(req, authenticated, networkId);
+      const key = req.headers["idempotency-key"] || `api:${sha256(`${address.toLowerCase()}:${networkId}`)}`;
+      const created = await persistence.createScanRequest({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, planId: authenticated.planId, limit: PLAN_CATALOG[authenticated.planId].scanLimitPerMonth, idempotencyKey: key, address, networkId, engineVersion: "2.0.0", correlationId: context.requestId });
+      if (!created.duplicate) await scanQueue.enqueue({ jobId: created.job.id, address, networkId, workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, correlationId: context.requestId });
+      const usage = developerApi.consume(authenticated.workspaceId, "scan");
+      sendJson(res, 202, { ...created.response, apiVersion: "v1", usage }, { context });
+      return true;
+    }
+    if (req.method === "GET" && v1Scan) {
+      if (!hasScope("scan:read")) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const job = await persistence.getScanJob(v1Scan[1], authenticated.workspaceId);
+      if (!job) { sendJson(res, 404, { error: "JOB_NOT_FOUND", message: "Scan job not found." }, { context }); return true; }
+      sendJson(res, 200, { apiVersion: "v1", job: job.scan ? { ...job, scan: toPublicScan(job.scan) } : job }, { context });
+      return true;
+    }
+    if (req.method === "GET" && v1Bundle) {
+      if (!hasScope("evidence:read")) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const job = await persistence.getScanJob(v1Bundle[1], authenticated.workspaceId);
+      if (!job) { sendJson(res, 404, { error: "JOB_NOT_FOUND", message: "Scan job not found." }, { context }); return true; }
+      if (job.status !== "SUCCEEDED" || !job.scan) { sendJson(res, 409, { error: "EVIDENCE_NOT_READY", message: "Evidence bundle is available after scan completion.", status: job.status }, { context }); return true; }
+      const scan = toPublicScan(job.scan);
+      const bundle = { schema: job.evidenceSchemaVersion || scan.evidenceSchemaVersion || "1.0.0", reportVersion: job.reportVersion || 1, reportHash: job.reportHash, capturedAt: scan.timestamp, subject: { network: scan.network?.id, address: scan.contract?.address }, evidence: scan.evidence || [], findings: scan.findings || [], uncertainty: developerApi.uncertaintyContract(scan), provenance: "Provider identities are redacted in public bundles; evidence references and statuses are preserved." };
+      developerApi.consume(authenticated.workspaceId, "bundle");
+      sendJson(res, 200, { apiVersion: "v1", bundle }, { context });
+      return true;
+    }
+    if (req.method === "POST" && v1Signed) {
+      if (!hasScope("evidence:read")) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const job = await persistence.getScanJob(v1Signed[1], authenticated.workspaceId);
+      if (!job || job.status !== "SUCCEEDED" || !job.scan) { sendJson(res, 409, { error: "REPORT_NOT_READY", message: "A completed scan is required." }, { context }); return true; }
+      const signed = developerApi.sign({ schema: job.evidenceSchemaVersion || "1.0.0", reportVersion: job.reportVersion || 1, reportHash: job.reportHash, scan: toPublicScan(job.scan), uncertainty: developerApi.uncertaintyContract(job.scan) });
+      developerApi.consume(authenticated.workspaceId, "signed-report");
+      sendJson(res, 200, { apiVersion: "v1", signedReport: signed }, { context });
+      return true;
+    }
+    sendJson(res, 404, { error: "NOT_FOUND", message: "Versioned API route not found." }, { context });
     return true;
   }
 
