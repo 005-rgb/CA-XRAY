@@ -1252,7 +1252,7 @@ class IntelligenceStore {
     const item = {
       id: id("case"), workspaceId, title: String(title).trim(), priority, status: "OPEN",
       contracts: normalized, assigneeId: null, createdBy: actorId, createdAt: now, updatedAt: now,
-      decision: null, reportIds: [], linkedAlert, timeline: [
+      decision: null, reportIds: [], linkedAlert, evidenceRequests: [], timeline: [
         { id: id("case_event"), type: "CASE_CREATED", actorId, at: now, metadata: { title: String(title).trim() } },
         ...(linkedAlert?.alertId ? [{ id: id("case_event"), type: "CASE_LINKED_TO_ALERT", actorId, at: now, metadata: { alertId: linkedAlert.alertId, snapshotIds: linkedAlert.snapshotIds } }] : []),
       ],
