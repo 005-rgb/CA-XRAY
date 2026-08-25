@@ -14,6 +14,21 @@ The app listens on port 5000 and targets Node.js 20 LTS (the Replit runtime). Ru
 npm test
 ```
 
+Run the private-route visual regression suite with:
+
+```bash
+npm run test:visual
+```
+
+The suite starts an isolated memory-backed server, creates a disposable test
+account, and compares dark-mode screenshots for all 10 private workspace
+routes at desktop and mobile sizes. To intentionally create or refresh
+baselines after an approved UI change, run:
+
+```bash
+npm run test:visual -- --update-snapshots
+```
+
 ## Product boundaries
 
 - No wallet connection, private keys, signatures, transactions, trading, or financial recommendations.
