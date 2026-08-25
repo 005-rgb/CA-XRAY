@@ -43,6 +43,10 @@ const passportCount = document.querySelector("#passport-count");
 const watchlistList = document.querySelector("#watchlist-list");
 const watchlistCount = document.querySelector("#watchlist-count");
 const alertList = document.querySelector("#alert-list");
+const caseForm = document.querySelector("#case-form");
+const caseList = document.querySelector("#case-list");
+const caseCount = document.querySelector("#case-count");
+const caseStatus = document.querySelector("#case-status");
 const alertCount = document.querySelector("#alert-count");
 const watchlistForm = document.querySelector("#watchlist-form");
 const watchlistStatus = document.querySelector("#watchlist-status");
@@ -1411,22 +1415,61 @@ function renderAlertList(events) {
   JobenI18n.translate(alertList);
 }
 
+function renderCaseList(cases) {
+  if (!caseList || !caseCount) return;
+  const open = cases.filter((item) => !["DECIDED", "CLOSED"].includes(item.status)).length;
+  caseCount.textContent = `${open} OPEN`;
+  caseList.innerHTML = cases.length ? cases.map((item) => `
+    <div class="case-row">
+      <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.priority)} · ${escapeHtml(item.contracts.map((contract) => `${contract.networkId} ${truncateAddress(contract.address)}`).join(" · "))}</span></div>
+      <div class="case-row-actions"><span class="watch-status ${statusClass(item.status)}">${escapeHtml(item.status)}</span><select data-case-status="${escapeHtml(item.id)}"><option value="OPEN" ${item.status === "OPEN" ? "selected" : ""}>Open</option><option value="IN_REVIEW" ${item.status === "IN_REVIEW" ? "selected" : ""}>In review</option><option value="DECIDED" ${item.status === "DECIDED" ? "selected" : ""}>Decided</option><option value="CLOSED" ${item.status === "CLOSED" ? "selected" : ""}>Closed</option></select></div>
+      ${item.decision ? `<div class="case-decision"><b>${escapeHtml(item.decision.decision)}</b><span>${escapeHtml(item.decision.rationale)}</span></div>` : ""}
+      <details class="case-detail"><summary>VIEW TIMELINE (${item.timeline.length})</summary><div class="case-timeline">${item.timeline.map((event) => `<div><i></i><span><b>${escapeHtml(event.type)}</b><small>${escapeHtml(formatDate(event.at))}</small></span></div>`).join("")}</div></details>
+    </div>`).join("") : `<div class="unknown-message">NO CASES. Create a case when a contract needs human review.</div>`;
+  caseList.querySelectorAll("[data-case-status]").forEach((select) => select.addEventListener("change", async () => {
+    await apiJson(`/api/cases/${encodeURIComponent(select.dataset.caseStatus)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: select.value }) });
+    await loadIntelligenceDashboard();
+  }));
+}
+
 async function loadIntelligenceDashboard() {
   if (!authState?.authenticated || !intelligenceDashboard) return;
   intelligenceDashboard.hidden = false;
   try {
-    const [passports, watchlists, alerts] = await Promise.all([
+    const [passports, watchlists, alerts, cases] = await Promise.all([
       apiJson("/api/risk-passports"),
       apiJson("/api/watchlists"),
       apiJson("/api/alerts"),
+      apiJson("/api/cases"),
     ]);
     renderPassportList(passports.passports || []);
     renderWatchlistList(watchlists.watchlists || []);
     renderAlertList(alerts.events || []);
+    renderCaseList(cases.cases || []);
   } catch (error) {
     passportList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
   }
 }
+
+caseForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  caseStatus.textContent = "";
+  try {
+    await apiJson("/api/cases", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: document.querySelector("#case-title").value.trim(),
+        priority: document.querySelector("#case-priority").value,
+        networkId: document.querySelector("#case-network").value,
+        address: document.querySelector("#case-address").value.trim(),
+      }),
+    });
+    caseForm.reset();
+    await loadIntelligenceDashboard();
+  } catch (error) {
+    caseStatus.textContent = error.message;
+  }
+});
 
 let comparisonPassports = [];
 

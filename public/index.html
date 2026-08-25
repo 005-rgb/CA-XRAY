@@ -436,6 +436,18 @@
                 <div class="card-heading"><div><span class="card-kicker">ALERTS</span><h3>Review queue</h3></div><span class="data-label" id="alert-count">0 OPEN</span></div>
                 <div id="alert-list" class="intelligence-list"><div class="unknown-message">Loading alerts…</div></div>
               </section>
+              <section class="intelligence-card case-workspace" id="case-workspace">
+                <div class="card-heading"><div><span class="card-kicker">INVESTIGATION CASES</span><h3>Review queue</h3></div><span class="data-label" id="case-count">0 OPEN</span></div>
+                <form id="case-form" class="case-form">
+                  <input id="case-title" maxlength="160" placeholder="Case title" required />
+                  <select id="case-priority"><option value="NORMAL">Normal priority</option><option value="HIGH">High priority</option><option value="URGENT">Urgent priority</option><option value="LOW">Low priority</option></select>
+                  <select id="case-network"><option value="ethereum">Ethereum</option><option value="bsc">BNB Chain</option><option value="base">Base</option><option value="arbitrum">Arbitrum</option><option value="polygon">Polygon</option></select>
+                  <input id="case-address" placeholder="0x contract address" required />
+                  <button type="submit" class="primary-button"><span>Create case</span><span>→</span></button>
+                  <p id="case-status" class="field-error" role="alert"></p>
+                </form>
+                <div id="case-list" class="intelligence-list"><div class="unknown-message">Loading cases…</div></div>
+              </section>
             </section>
             <section id="comparison" class="settings-page" hidden>
               <div class="settings-heading"><div><span class="card-kicker">SIDE-BY-SIDE EVIDENCE</span><h2>Compare contracts</h2><p>Compare the latest saved passport snapshots. Unknown and unavailable values remain visible.</p></div></div>

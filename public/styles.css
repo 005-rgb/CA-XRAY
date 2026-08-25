@@ -1879,7 +1879,26 @@ html[data-theme="light"] .map-value-pitch > a { color: #08766f; }
 .lineage-table { width: 100%; min-width: 650px; border-collapse: collapse; }
 .lineage-table th, .lineage-table td { padding: 11px 10px; border-bottom: 1px solid var(--joben-line); text-align: left; }
 .lineage-table th { color: var(--joben-muted); font-size: 9px; letter-spacing: .1em; }
+.case-form { display: grid; grid-template-columns: 1.5fr .8fr .8fr 1.5fr auto; gap: 10px; margin: 14px 0 18px; }
+.case-form input, .case-form select, .case-row-actions select { min-width: 0; border: 1px solid var(--joben-line); background: var(--joben-panel); color: inherit; padding: 10px 12px; font: inherit; }
+.case-form .primary-button { white-space: nowrap; }
+.case-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; padding: 14px 0; border-top: 1px solid var(--joben-line); }
+.case-row > div:first-child { display: grid; gap: 4px; }
+.case-row span { color: var(--joben-muted); font-size: 10px; }
+.case-row-actions { display: flex; align-items: center; gap: 10px; }
+.case-row-actions select { padding: 5px 8px; font-size: 10px; }
+.case-decision { grid-column: 1 / -1; display: flex; gap: 10px; align-items: baseline; padding: 8px; background: color-mix(in srgb, var(--joben-cyan) 7%, transparent); }
+.case-decision b { color: var(--joben-cyan); font-size: 10px; }
+.case-detail { grid-column: 1 / -1; color: var(--joben-muted); font-size: 10px; }
+.case-timeline { display: grid; gap: 7px; margin-top: 10px; padding-left: 8px; }
+.case-timeline > div { display: flex; gap: 9px; align-items: flex-start; }
+.case-timeline i { width: 6px; height: 6px; margin-top: 4px; border-radius: 50%; background: var(--joben-cyan); }
+.case-timeline span { display: grid; gap: 2px; }
+.case-timeline small { color: var(--joben-muted); }
 @media (max-width: 640px) {
   .graph-node, .provider-posture-row { grid-template-columns: 1fr; gap: 4px; }
   .coverage-map-row { grid-template-columns: 90px 1fr 36px; }
+  .case-form { grid-template-columns: 1fr; }
+  .case-row { grid-template-columns: 1fr; }
+  .case-row-actions { justify-content: space-between; }
 }

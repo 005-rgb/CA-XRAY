@@ -255,6 +255,7 @@ class IntelligenceStore {
     this.reports = new Map();
     this.comments = new Map();
     this.approvals = new Map();
+    this.cases = new Map();
   }
 
   async init() {
@@ -268,6 +269,7 @@ class IntelligenceStore {
     for (const [key, value] of state.reports || []) this.reports.set(key, value);
     for (const [key, value] of state.comments || []) this.comments.set(key, value);
     for (const [key, value] of state.approvals || []) this.approvals.set(key, value);
+    for (const [key, value] of state.cases || []) this.cases.set(key, value);
   }
 
   #persist() {
@@ -280,6 +282,7 @@ class IntelligenceStore {
       reports: [...this.reports.entries()],
       comments: [...this.comments.entries()],
       approvals: [...this.approvals.entries()],
+      cases: [...this.cases.entries()],
     };
     this.persistChain = this.persistChain
       .then(() => this.persistence.saveIntelligenceState(state))
@@ -765,6 +768,118 @@ class IntelligenceStore {
     this.comments.set(comment.id, comment);
     this.#persist();
     return clone(comment);
+  }
+
+  createCase({ workspaceId, actorId, title, priority = "NORMAL", contracts = [] }) {
+    if (!String(title || "").trim() || String(title).length > 160) invalid("INVALID_CASE", "Case title must be between 1 and 160 characters.");
+    if (!["LOW", "NORMAL", "HIGH", "URGENT"].includes(priority)) invalid("INVALID_CASE_PRIORITY", "Case priority is invalid.");
+    if (!Array.isArray(contracts) || contracts.length < 1 || contracts.length > 20) invalid("INVALID_CASE_CONTRACTS", "A case must contain between 1 and 20 contracts.");
+    const normalized = contracts.map((contract) => {
+      if (!contract?.networkId || !validateAddress(contract.address)) invalid("INVALID_CASE_CONTRACT", "Each case contract needs a supported network and EVM address.");
+      return publicContract(contract.networkId, contract.address);
+    });
+    const now = this.clock().toISOString();
+    const item = {
+      id: id("case"), workspaceId, title: String(title).trim(), priority, status: "OPEN",
+      contracts: normalized, assigneeId: null, createdBy: actorId, createdAt: now, updatedAt: now,
+      decision: null, reportIds: [], evidenceRequests: [], timeline: [{ id: id("case_event"), type: "CASE_CREATED", actorId, at: now, metadata: { title: String(title).trim() } }],
+    };
+    this.cases.set(item.id, item);
+    this.#persist();
+    return clone(item);
+  }
+
+  listCases(workspaceId, { status = null } = {}) {
+    return [...this.cases.values()].filter((item) => item.workspaceId === workspaceId && (!status || item.status === status))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(clone);
+  }
+
+  getCase(workspaceId, caseId) {
+    const item = this.cases.get(caseId);
+    return item && item.workspaceId === workspaceId ? clone(item) : null;
+  }
+
+  updateCase({ workspaceId, actorId, caseId, status, assigneeId, priority }) {
+    const item = this.cases.get(caseId);
+    if (!item || item.workspaceId !== workspaceId) return null;
+    if (status !== undefined && !["OPEN", "IN_REVIEW", "DECIDED", "CLOSED"].includes(status)) invalid("INVALID_CASE_STATUS", "Case status is invalid.");
+    if (priority !== undefined && !["LOW", "NORMAL", "HIGH", "URGENT"].includes(priority)) invalid("INVALID_CASE_PRIORITY", "Case priority is invalid.");
+    const changes = {};
+    if (status !== undefined && status !== item.status) { item.status = status; changes.status = status; }
+    if (priority !== undefined && priority !== item.priority) { item.priority = priority; changes.priority = priority; }
+    if (assigneeId !== undefined && assigneeId !== item.assigneeId) { item.assigneeId = assigneeId || null; changes.assigneeId = item.assigneeId; }
+    if (Object.keys(changes).length) {
+      item.updatedAt = this.clock().toISOString();
+      item.timeline.push({ id: id("case_event"), type: "CASE_UPDATED", actorId, at: item.updatedAt, metadata: changes });
+      this.#persist();
+    }
+    return clone(item);
+  }
+
+  addCaseEvidenceRequest({ workspaceId, actorId, caseId, prompt, findingId = null }) {
+    const item = this.cases.get(caseId);
+    if (!item || item.workspaceId !== workspaceId) return null;
+    if (!String(prompt || "").trim() || String(prompt).length > 1000) invalid("INVALID_EVIDENCE_REQUEST", "Evidence request must be between 1 and 1000 characters.");
+    const now = this.clock().toISOString();
+    const request = { id: id("evidence_request"), prompt: String(prompt).trim(), findingId, status: "OPEN", requestedBy: actorId, createdAt: now, resolvedAt: null };
+    item.evidenceRequests.push(request);
+    item.updatedAt = now;
+    item.timeline.push({ id: id("case_event"), type: "EVIDENCE_REQUESTED", actorId, at: now, metadata: { requestId: request.id, findingId } });
+    this.#persist();
+    return clone(item);
+  }
+
+  updateCaseEvidenceRequest({ workspaceId, actorId, caseId, requestId, status }) {
+    const item = this.cases.get(caseId);
+    if (!item || item.workspaceId !== workspaceId) return null;
+    if (!["OPEN", "FULFILLED", "CANCELLED"].includes(status)) invalid("INVALID_EVIDENCE_REQUEST_STATUS", "Evidence request status is invalid.");
+    const request = item.evidenceRequests.find((candidate) => candidate.id === requestId);
+    if (!request) return null;
+    const now = this.clock().toISOString();
+    request.status = status;
+    request.resolvedAt = status === "OPEN" ? null : now;
+    item.updatedAt = now;
+    item.timeline.push({ id: id("case_event"), type: "EVIDENCE_REQUEST_UPDATED", actorId, at: now, metadata: { requestId, status } });
+    this.#persist();
+    return clone(item);
+  }
+
+  addCaseComment({ workspaceId, actorId, caseId, body }) {
+    const item = this.cases.get(caseId);
+    if (!item || item.workspaceId !== workspaceId) return null;
+    if (!String(body || "").trim() || String(body).length > 2000) invalid("INVALID_CASE_COMMENT", "Case comment must be between 1 and 2000 characters.");
+    const now = this.clock().toISOString();
+    item.updatedAt = now;
+    item.timeline.push({ id: id("case_event"), type: "COMMENT_ADDED", actorId, at: now, metadata: { body: String(body).trim().slice(0, 2000) } });
+    this.#persist();
+    return clone(item);
+  }
+
+  decideCase({ workspaceId, actorId, caseId, decision, rationale }) {
+    const item = this.cases.get(caseId);
+    if (!item || item.workspaceId !== workspaceId) return null;
+    if (!["APPROVE", "REJECT", "HOLD"].includes(decision) || !String(rationale || "").trim()) invalid("INVALID_CASE_DECISION", "Decision and rationale are required.");
+    const now = this.clock().toISOString();
+    item.decision = { decision, rationale: String(rationale).trim().slice(0, 4000), decidedBy: actorId, decidedAt: now };
+    item.status = "DECIDED";
+    item.updatedAt = now;
+    item.timeline.push({ id: id("case_event"), type: "DECISION_RECORDED", actorId, at: now, metadata: { decision } });
+    this.#persist();
+    return clone(item);
+  }
+
+  generateCaseReports({ workspaceId, actorId, caseId }) {
+    const item = this.cases.get(caseId);
+    if (!item || item.workspaceId !== workspaceId) return null;
+    const reports = item.contracts.map((contract) => this.createReport({
+      workspaceId, actorId, networkId: contract.networkId, address: contract.address, visibility: "private",
+    }));
+    const now = this.clock().toISOString();
+    item.reportIds.push(...reports.map((report) => report.id));
+    item.updatedAt = now;
+    item.timeline.push({ id: id("case_event"), type: "REPORT_GENERATED", actorId, at: now, metadata: { reportIds: reports.map((report) => report.id) } });
+    this.#persist();
+    return { case: clone(item), reports };
   }
 
   listComments(workspaceId, networkId, address) {

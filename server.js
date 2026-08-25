@@ -1140,6 +1140,92 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/cases") {
+    const authenticated = requireAuthenticated(context);
+    sendJson(res, 200, { cases: intelligenceStore.listCases(authenticated.workspaceId, { status: url.searchParams.get("status") || null }) }, { context });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/cases") {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const item = intelligenceStore.createCase({
+      workspaceId: authenticated.workspaceId,
+      actorId: authenticated.actor.id,
+      title: body.title,
+      priority: body.priority,
+      contracts: body.contracts || [{ networkId: body.networkId || body.network, address: body.address }],
+    });
+    sendJson(res, 201, { case: item }, { context });
+    return true;
+  }
+
+  const caseMatch = url.pathname.match(/^\/api\/cases\/([^/]+)$/);
+  if (req.method === "GET" && caseMatch) {
+    const authenticated = requireAuthenticated(context);
+    const item = intelligenceStore.getCase(authenticated.workspaceId, caseMatch[1]);
+    if (!item) { sendJson(res, 404, { error: "CASE_NOT_FOUND", message: "Case not found." }, { context }); return true; }
+    sendJson(res, 200, { case: item }, { context });
+    return true;
+  }
+  if (req.method === "PATCH" && caseMatch) {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const item = intelligenceStore.updateCase({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, caseId: caseMatch[1], ...body });
+    if (!item) { sendJson(res, 404, { error: "CASE_NOT_FOUND", message: "Case not found." }, { context }); return true; }
+    sendJson(res, 200, { case: item }, { context });
+    return true;
+  }
+  const caseRequestMatch = url.pathname.match(/^\/api\/cases\/([^/]+)\/evidence-requests$/);
+  if (req.method === "POST" && caseRequestMatch) {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const item = intelligenceStore.addCaseEvidenceRequest({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, caseId: caseRequestMatch[1], prompt: body.prompt, findingId: body.findingId });
+    if (!item) { sendJson(res, 404, { error: "CASE_NOT_FOUND", message: "Case not found." }, { context }); return true; }
+    sendJson(res, 201, { case: item }, { context });
+    return true;
+  }
+  const caseRequestUpdateMatch = url.pathname.match(/^\/api\/cases\/([^/]+)\/evidence-requests\/([^/]+)$/);
+  if (req.method === "PATCH" && caseRequestUpdateMatch) {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const item = intelligenceStore.updateCaseEvidenceRequest({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id,
+      caseId: caseRequestUpdateMatch[1], requestId: caseRequestUpdateMatch[2], status: body.status,
+    });
+    if (!item) { sendJson(res, 404, { error: "EVIDENCE_REQUEST_NOT_FOUND", message: "Evidence request not found." }, { context }); return true; }
+    sendJson(res, 200, { case: item }, { context });
+    return true;
+  }
+  const caseCommentMatch = url.pathname.match(/^\/api\/cases\/([^/]+)\/comments$/);
+  if (req.method === "POST" && caseCommentMatch) {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const item = intelligenceStore.addCaseComment({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, caseId: caseCommentMatch[1], body: body.body });
+    if (!item) { sendJson(res, 404, { error: "CASE_NOT_FOUND", message: "Case not found." }, { context }); return true; }
+    sendJson(res, 201, { case: item }, { context });
+    return true;
+  }
+  const caseDecisionMatch = url.pathname.match(/^\/api\/cases\/([^/]+)\/decision$/);
+  if (req.method === "POST" && caseDecisionMatch) {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const item = intelligenceStore.decideCase({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, caseId: caseDecisionMatch[1], decision: body.decision, rationale: body.rationale });
+    if (!item) { sendJson(res, 404, { error: "CASE_NOT_FOUND", message: "Case not found." }, { context }); return true; }
+    sendJson(res, 200, { case: item }, { context });
+    return true;
+  }
+  const caseReportMatch = url.pathname.match(/^\/api\/cases\/([^/]+)\/report$/);
+  if (req.method === "POST" && caseReportMatch) {
+    const authenticated = requireAuthenticated(context);
+    const result = intelligenceStore.generateCaseReports({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, caseId: caseReportMatch[1],
+    });
+    if (!result) { sendJson(res, 404, { error: "CASE_NOT_FOUND", message: "Case not found." }, { context }); return true; }
+    sendJson(res, 201, result, { context });
+    return true;
+  }
+
   const publicReportMatch = url.pathname.match(/^\/api\/reports\/public\/([^/]+)$/);
   if (req.method === "GET" && publicReportMatch) {
     const result = intelligenceStore.getReport(publicReportMatch[1]);
