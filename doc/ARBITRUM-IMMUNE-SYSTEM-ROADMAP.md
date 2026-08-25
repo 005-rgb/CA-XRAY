@@ -124,6 +124,194 @@ secrets. Deployment credentials must be managed outside the repository.
 
 ---
 
+## 0.4 Arti deployment di Arbitrum
+
+Deployment aplikasi web dan deployment smart contract adalah dua hal berbeda:
+
+```text
+Web app  -> Node.js server, UI, API, database
+Contract -> bytecode Solidity/Stylus dikirim sebagai transaksi blockchain
+            -> contract address tercatat di Arbitrum
+            -> alur JOBEN membaca atau menulis contract tersebut
+```
+
+Workflow Node.js yang sudah ada hanya memenuhi deployment aplikasi. Memilih
+Arbitrum pada scanner, membaca RPC Arbitrum, atau menampilkan explorer link
+belum memenuhi syarat deployment smart contract.
+
+| Network | Chain ID | Fungsi roadmap | Token gas | Status compliance |
+|---|---:|---|---|---|
+| Arbitrum Sepolia | `421614` | Build, test, dan demo aman | ETH testnet | Development; acceptance submission harus dikonfirmasi |
+| Arbitrum One | `42161` | Mainnet dan fallback eligibility | ETH sungguhan | Target paling aman jika aturan meminta One |
+| Custom Orbit | Spesifik chain | L3 milik project | Spesifik chain | Tidak dipilih untuk MVP |
+
+### 0.5 Runbook faucet dan bridge Arbitrum Sepolia
+
+Arbitrum Sepolia ETH diperoleh melalui alur:
+
+```text
+Ethereum Sepolia faucet
+  -> ETH testnet di Ethereum Sepolia
+  -> official Arbitrum bridge
+  -> ETH testnet di Arbitrum Sepolia
+  -> gas untuk deployment dan testing
+```
+
+Langkah:
+
+1. Buat wallet development terpisah.
+2. Pilih network Ethereum Sepolia.
+3. Ambil ETH testnet dari faucet Ethereum Sepolia.
+4. Buka official Arbitrum bridge.
+5. Pilih Ethereum Sepolia sebagai source dan Arbitrum Sepolia sebagai tujuan.
+6. Bridge sejumlah kecil ETH testnet.
+7. Tunggu transaksi selesai dan ganti wallet ke Arbitrum Sepolia.
+8. Pastikan chain ID terbaca `421614`.
+9. Gunakan saldo tersebut untuk deployment dan transaksi test.
+
+Private key/seed phrase tidak boleh masuk repository, log, screenshot, atau
+chat. Deployment credential harus dikelola melalui secret manager workspace.
+
+### 0.6 Runbook deployment smart contract
+
+Tambahkan toolchain Solidity tanpa mengubah arsitektur Node.js:
+
+```text
+contracts/
+  JobenTrustRegistry.sol
+  JobenAdmissionGate.sol
+
+scripts/
+  deploy-registry.js
+  deploy-gate.js
+  verify-deployment.js
+
+deployments/
+  arbitrum-sepolia.json
+  arbitrum-one.json
+```
+
+Konfigurasi wajib dikelola sebagai environment/secret:
+
+```text
+ARBITRUM_SEPOLIA_RPC_URL
+ARBITRUM_ONE_RPC_URL
+DEPLOYER_PRIVATE_KEY
+JOBEN_ISSUER_PRIVATE_KEY
+```
+
+Deploy script wajib gagal jika secret/RPC tidak ada, chain ID tidak sesuai,
+target bukan Arbitrum yang diizinkan, atau mode demo mencoba menulis ke mainnet.
+
+Urutan deployment:
+
+1. compile dan test contract secara lokal;
+2. deploy `JobenTrustRegistry` ke Arbitrum Sepolia;
+3. tunggu receipt dan simpan deployment transaction;
+4. deploy `JobenAdmissionGate` dengan registry address;
+5. lakukan read-back memakai chain ID `421614`;
+6. lakukan satu `attest()` untuk passport `ALLOW`;
+7. baca passport dari registry melalui admission gate;
+8. lakukan `invalidate()` untuk perubahan dependency;
+9. pastikan gate menolak passport yang invalidated;
+10. verifikasi source melalui explorer jika tersedia.
+
+Perintah target:
+
+```bash
+npx hardhat compile
+npx hardhat test
+npx hardhat run scripts/deploy-registry.js --network arbitrumSepolia
+npx hardhat run scripts/deploy-gate.js --network arbitrumSepolia
+npx hardhat run scripts/verify-deployment.js --network arbitrumSepolia
+```
+
+Jika final rules tidak menerima Sepolia atau menyatakan Arbitrum One wajib,
+jalankan deployment terpisah dengan source dan compiler yang sama:
+
+```bash
+npx hardhat run scripts/deploy-registry.js --network arbitrumOne
+npx hardhat run scripts/deploy-gate.js --network arbitrumOne
+npx hardhat run scripts/verify-deployment.js --network arbitrumOne
+```
+
+Address Sepolia dan One harus dicatat sebagai deployment berbeda. Address
+Sepolia tidak boleh disalin ke konfigurasi One.
+
+### 0.7 Bukti deployment yang wajib dikumpulkan
+
+Untuk setiap network yang digunakan, simpan metadata berikut:
+
+```json
+{
+  "network": "arbitrum-sepolia",
+  "chainId": 421614,
+  "registryAddress": "0x...",
+  "registryDeploymentTx": "0x...",
+  "gateAddress": "0x...",
+  "gateDeploymentTx": "0x...",
+  "deployerAddress": "0x...",
+  "compilerVersion": "...",
+  "sourceVerification": "VERIFIED|UNVERIFIED",
+  "deployedAt": "..."
+}
+```
+
+Bukti eligibility minimum:
+
+- official rule reference dan tanggal pengecekan;
+- participant/team registration;
+- contract source dan compiler settings;
+- contract address dan deployment transaction hash;
+- explorer link dan source verification status;
+- attestation transaction;
+- invalidation transaction;
+- admission-gate result;
+- screenshot/recording dengan network dan chain ID yang sama;
+- limitations testnet/mainnet;
+- participation log feedback dan workshop.
+
+Deployment belum compliant jika contract hanya berhasil dideploy tetapi tidak
+digunakan oleh alur JOBEN. Bukti wajib menunjukkan:
+
+```text
+scan
+  -> evidence hash
+  -> attest transaction
+  -> registry read
+  -> admission decision
+  -> invalidate transaction
+  -> rejected follow-up decision
+```
+
+### 0.8 Deployment acceptance checklist
+
+- [ ] network requirement dikonfirmasi dari sumber resmi;
+- [ ] wallet development terisolasi;
+- [ ] secret tidak berada di repository;
+- [ ] Solidity/Stylus source tersedia;
+- [ ] compiler dan dependencies dipin;
+- [ ] contract tests lulus;
+- [ ] chain ID divalidasi otomatis;
+- [ ] registry deployed pada target yang diterima;
+- [ ] admission gate deployed dan terhubung;
+- [ ] deployment tx dapat diperiksa publik;
+- [ ] source verification status tercatat;
+- [ ] `ALLOW` attestation berhasil;
+- [ ] gate menerima attestation valid;
+- [ ] invalidation berhasil;
+- [ ] gate menolak attestation invalidated/expired;
+- [ ] backend menggunakan deployed address;
+- [ ] UI menampilkan network, chain ID, address, dan transaction link;
+- [ ] Arbitrum One deployment selesai jika diwajibkan;
+- [ ] evidence package lengkap.
+
+Jika satu item wajib belum dicentang, status release tetap:
+
+```text
+NOT COMPLIANT
+```
+
 ## 2. Recommendations before implementation
 
 ### 2.1 Build one complete path, not ten disconnected features
