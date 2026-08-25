@@ -745,6 +745,7 @@ body { background: var(--dashboard-bg); color: #17191c; }
 }
 
 body, body.private-view { background: var(--joben-void); color: var(--joben-text); }
+body.app-booting #app { visibility: hidden; }
 body:before {
   position: fixed; inset: 0; z-index: -1; pointer-events: none; content: "";
   background-image: linear-gradient(rgba(77,225,208,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(77,225,208,.035) 1px, transparent 1px);

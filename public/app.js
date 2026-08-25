@@ -182,7 +182,7 @@ function clearPendingScan() {
 
 function safeReturnPath() {
   const value = new URLSearchParams(window.location.search).get("returnTo");
-  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/";
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
 }
 
 function configureAuthRoute() {
@@ -279,6 +279,8 @@ async function refreshAuth() {
     }
   } catch (error) {
     authMessage(error.message);
+  } finally {
+    document.body.classList.remove("app-booting");
   }
 }
 
