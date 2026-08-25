@@ -1990,6 +1990,31 @@ function renderEvidence(scan) {
   </section>`;
 }
 
+function renderEvidenceIntelligence(scan) {
+  const providers = scan.providerResults || [];
+  const conflicts = scan.conflicts || [];
+  const evidence = scan.evidence || [];
+  const capturedAt = Date.parse(scan.timestamp || "");
+  const stale = evidence.filter((item) => {
+    const retrieved = Date.parse(item.retrievedAt || "");
+    return Number.isFinite(capturedAt) && Number.isFinite(retrieved) && capturedAt - retrieved > 24 * 60 * 60 * 1000;
+  });
+  const coverage = Object.entries(scan.risk?.categories || {});
+  return `<section id="evidence-intelligence" class="report-section full intelligence-section">
+    ${sectionHeading("16", "EVIDENCE INTELLIGENCE", "16 / 16")}
+    <p class="section-intro">Lineage, provider posture, conflicts, freshness, and coverage remain separate from the risk score.</p>
+    <div class="intelligence-grid phase3-grid">
+      <article class="intelligence-card"><div class="card-heading"><div><span class="card-kicker">EVIDENCE GRAPH</span><h3>Snapshot relationships</h3></div><span class="data-label" id="graph-state">LOADING</span></div><div id="evidence-graph" class="graph-summary">Loading graph evidence…</div></article>
+      <article class="intelligence-card"><div class="card-heading"><div><span class="card-kicker">PROVIDER POSTURE</span><h3>Independent sources</h3></div><span class="data-label">${providers.length} SOURCES</span></div><div class="provider-posture-list">${providers.length ? providers.map((item) => `<div class="provider-posture-row"><span>${escapeHtml(item.providerId || "Provider")}</span><strong class="${statusClass(item.status)}">${escapeHtml(item.status || "UNKNOWN")}</strong><small>${escapeHtml(item.confidence || "UNKNOWN")} · ${escapeHtml(formatDate(item.retrievedAt))}</small></div>`).join("") : `<div class="unknown-message">Provider lineage is unavailable for this snapshot.</div>`}</div></article>
+    </div>
+    <div class="intelligence-grid phase3-grid">
+      <article class="intelligence-card"><div class="card-heading"><div><span class="card-kicker">CONFLICT VIEW</span><h3>Provider disagreements</h3></div><span class="data-label">${conflicts.length} FOUND</span></div>${conflicts.length ? `<div class="conflict-list">${conflicts.map((item) => `<div class="conflict-row"><strong>${escapeHtml(item.path)}</strong><span>${escapeHtml((item.values || []).map((value) => JSON.stringify(value)).join(" ↔ "))}</span><small>References: ${escapeHtml((item.evidenceReferences || []).join(", ") || "UNKNOWN")}</small></div>`).join("")}</div>` : `<div class="unknown-message">No unresolved provider conflict was recorded.</div>`}</article>
+      <article class="intelligence-card"><div class="card-heading"><div><span class="card-kicker">FRESHNESS &amp; COVERAGE</span><h3>Evidence health</h3></div><span class="data-label">${stale.length} STALE</span></div><div class="coverage-map">${coverage.length ? coverage.map(([key, item]) => { const value = item?.coverage ?? 0; return `<div class="coverage-map-row"><span>${escapeHtml(key)}</span><div class="coverage-track"><i style="width:${Math.max(0, Math.min(100, Number(value) || 0))}%"></i></div><strong>${escapeHtml(String(Number(value) || 0))}%</strong></div>`; }).join("") : `<div class="unknown-message">Coverage map unavailable.</div>`}</div><p class="intelligence-note">${stale.length ? `${stale.length} evidence item(s) are older than 24 hours.` : "No evidence item exceeded the 24-hour freshness threshold."}</p></article>
+    </div>
+    <div class="lineage-table-wrap"><table class="lineage-table"><thead><tr><th>FINDING</th><th>STATUS</th><th>CONFIDENCE</th><th>RETRIEVED</th><th>PROVENANCE</th></tr></thead><tbody>${(scan.findings || []).length ? scan.findings.map((finding) => `<tr><td>${escapeHtml(finding.title || finding.id)}</td><td>${escapeHtml(finding.status || "UNKNOWN")}</td><td>${escapeHtml(finding.confidence || "UNKNOWN")}</td><td>${escapeHtml(formatDate(finding.retrievedAt))}</td><td>${escapeHtml(finding.provenance?.providerId || finding.source || "UNKNOWN")}</td></tr>`).join("") : `<tr><td colspan="5">No evidence-backed findings were generated.</td></tr>`}</tbody></table></div>
+  </section>`;
+}
+
 function renderFinalAssessment(scan) {
   const risk = scan.risk || {};
   const primaryRisks = (scan.findings || []).filter((finding) => !finding.positive).slice(0, 3);
@@ -2100,6 +2125,23 @@ async function loadRiskTrajectory(scan) {
     target.outerHTML = renderRiskTrajectory(body.timeline || []);
   } catch (error) {
     target.innerHTML = `<div class="trajectory-heading"><div><span class="card-kicker">ADVANCED REPORT INTELLIGENCE</span><h3>Risk Trajectory</h3></div><span class="trajectory-state neutral">UNAVAILABLE</span></div><p class="trajectory-empty">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function loadEvidenceGraph(scan) {
+  const target = document.querySelector("#evidence-graph");
+  const state = document.querySelector("#graph-state");
+  if (!target || !state || scan.mode === "DEMO" || !currentJob?.id) return;
+  try {
+    const body = await apiJson(`/api/scans/${encodeURIComponent(currentJob.id)}/graph`);
+    const graph = body.graph || {};
+    state.textContent = `${graph.nodes?.length || 0} NODES`;
+    target.innerHTML = graph.nodes?.length
+      ? `<div class="graph-node-list">${graph.nodes.map((node) => `<div class="graph-node"><span class="graph-node-type">${escapeHtml(node.type || "evidence")}</span><strong>${escapeHtml(node.label || node.id)}</strong><small>${escapeHtml(node.status || "UNKNOWN")}</small></div>`).join("")}</div><p class="intelligence-note">${escapeHtml(String(graph.edges?.length || 0))} evidence relationship(s) retained from the snapshot.</p>`
+      : `<div class="unknown-message">No graph relationships were available for this snapshot.</div>`;
+  } catch (error) {
+    state.textContent = "UNAVAILABLE";
+    target.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
   }
 }
 
@@ -2261,6 +2303,7 @@ function renderDashboardReport(scan) {
          ${renderFindings(scan)}
          ${renderEvidence(scan)}
          ${renderCoverage(scan)}
+         ${renderEvidenceIntelligence(scan)}
          ${renderFinalAssessment(scan)}
        </div>
     </div>`;
@@ -2381,6 +2424,7 @@ function renderReport(scan) {
   dashboardReport.innerHTML = renderDashboardReport(scan);
   JobenI18n.translate(dashboardReport);
   loadRiskTrajectory(scan);
+  loadEvidenceGraph(scan);
   document.querySelector("#landing-title").textContent = uiText("Private Scan Report");
   document.querySelector("#landing-description").textContent = uiText("Your forensic report is available inside the authenticated workspace.");
   document.querySelector("#scan-mode-card").hidden = true;
