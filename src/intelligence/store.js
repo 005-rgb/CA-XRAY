@@ -20,6 +20,24 @@ const ALERT_TYPES = Object.freeze([
 ]);
 const VISIBILITIES = new Set(["private", "public"]);
 const FINDING_STATUSES = new Set(["open", "reviewing", "resolved"]);
+const PASSPORT_REVIEW_STATUSES = new Set(["OPEN", "ACKNOWLEDGED", "DEFERRED", "RESOLVED"]);
+const EVIDENCE_FRESHNESS_TTL_HOURS = Object.freeze({
+  liquidity: 24,
+  market: 6,
+  trading: 6,
+  holders: 24,
+  control: 168,
+  owner: 168,
+  deployer: 720,
+  contract: 720,
+  default: 24,
+});
+const REVIEW_TRANSITIONS = Object.freeze({
+  OPEN: new Set(["ACKNOWLEDGED", "DEFERRED", "RESOLVED"]),
+  ACKNOWLEDGED: new Set(["DEFERRED", "RESOLVED", "OPEN"]),
+  DEFERRED: new Set(["OPEN", "RESOLVED"]),
+  RESOLVED: new Set(["OPEN"]),
+});
 const NON_COMPARABLE_STATUSES = new Set(["UNKNOWN", "UNAVAILABLE", "ERROR"]);
 const TRAJECTORY_FIELDS = Object.freeze([
   { field: "riskScore", label: "Risk score", kind: "number", unit: "points", direction: "higher-risk" },
@@ -131,6 +149,8 @@ function snapshotFromScan({ scan, jobId, capturedAt }) {
     risk: {
       score: comparable.riskScore,
       level: comparable.riskLevel,
+      coverage: scan.risk?.coverage ?? scan.evidenceSummary?.coverage ?? null,
+      categories: clone(scan.risk?.categories || {}),
     },
     reliabilityScore: comparable.reliabilityScore,
     findings,
@@ -265,6 +285,7 @@ class IntelligenceStore {
     this.cases = new Map();
     this.policies = new Map();
     this.reviews = new Map();
+    this.passportReviews = new Map();
     this.governance = new Map();
     this.deployerObservations = new Map();
     this.researcherProfiles = new Map();
@@ -288,6 +309,7 @@ class IntelligenceStore {
     for (const [key, value] of state.cases || []) this.cases.set(key, value);
     for (const [key, value] of state.policies || []) this.policies.set(key, value);
     for (const [key, value] of state.reviews || []) this.reviews.set(key, value);
+    for (const [key, value] of state.passportReviews || []) this.passportReviews.set(key, value);
     for (const [key, value] of state.governance || []) this.governance.set(key, value);
     for (const [key, value] of state.deployerObservations || []) this.deployerObservations.set(key, value);
     for (const [key, value] of state.researcherProfiles || []) this.researcherProfiles.set(key, value);
@@ -310,6 +332,7 @@ class IntelligenceStore {
       cases: [...this.cases.entries()],
       policies: [...this.policies.entries()],
       reviews: [...this.reviews.entries()],
+      passportReviews: [...this.passportReviews.entries()],
       governance: [...this.governance.entries()],
       deployerObservations: [...this.deployerObservations.entries()],
       researcherProfiles: [...this.researcherProfiles.entries()],
@@ -486,6 +509,156 @@ class IntelligenceStore {
         evidenceHash: snapshot.evidenceHash,
       }) : null,
       snapshotCount: passport.snapshots.length,
+    };
+  }
+
+  #evidenceFamily(item) {
+    const text = `${item?.family || ""} ${item?.category || ""} ${item?.type || ""} ${item?.evidenceType || ""} ${item?.id || ""}`.toLowerCase();
+    if (text.includes("liquid")) return "liquidity";
+    if (text.includes("market") || text.includes("price") || text.includes("volume")) return "market";
+    if (text.includes("tax") || text.includes("trading") || text.includes("sell") || text.includes("buy")) return "trading";
+    if (text.includes("holder") || text.includes("distribution")) return "holders";
+    if (text.includes("owner") || text.includes("control") || text.includes("proxy") || text.includes("privilege")) return "control";
+    if (text.includes("deployer") || text.includes("creator")) return "deployer";
+    if (text.includes("contract") || text.includes("abi") || text.includes("bytecode") || text.includes("source")) return "contract";
+    return "default";
+  }
+
+  getFreshness(workspaceId, networkId, address) {
+    const passport = this.#passport(workspaceId, networkId, address);
+    if (!passport?.snapshots.length) return null;
+    const snapshot = passport.snapshots.at(-1);
+    const now = this.clock().getTime();
+    const items = (snapshot.evidence || []).map((item, index) => {
+      const family = this.#evidenceFamily(item);
+      const ttlHours = EVIDENCE_FRESHNESS_TTL_HOURS[family] || EVIDENCE_FRESHNESS_TTL_HOURS.default;
+      const retrievedAt = item.retrievedAt || snapshot.capturedAt;
+      const ageHours = Math.max(0, (now - Date.parse(retrievedAt)) / 3600000);
+      const validDate = Number.isFinite(Date.parse(retrievedAt));
+      const stale = validDate && ageHours > ttlHours;
+      return {
+        id: item.id || item.evidenceId || `evidence-${index + 1}`,
+        family,
+        status: item.status || item.evidenceStatus || "UNKNOWN",
+        retrievedAt,
+        ttlHours,
+        ageHours: validDate ? Number(ageHours.toFixed(2)) : null,
+        freshness: validDate ? (stale ? "STALE" : "FRESH") : "UNKNOWN",
+        evidenceRef: item.evidenceId || item.id || null,
+      };
+    });
+    const stale = items.filter((item) => item.freshness === "STALE");
+    const known = items.filter((item) => item.freshness !== "UNKNOWN");
+    const healthScore = known.length ? Math.max(0, Math.round(100 - (stale.length / known.length) * 100)) : null;
+    const categories = snapshot.risk?.categories || {};
+    const categoryValues = Object.values(categories);
+    const unknownCategories = categoryValues.filter((category) => ["UNKNOWN", "UNAVAILABLE", "CONFLICT"].includes(String(category?.status || "").toUpperCase()) || Number(category?.coverage) === 0);
+    const coverage = Number(snapshot.risk?.coverage);
+    const uncertaintyBudget = Number.isFinite(coverage) ? Math.max(0, Math.min(100, 100 - coverage)) : (categoryValues.length ? Math.round((unknownCategories.length / categoryValues.length) * 100) : null);
+    return {
+      healthScore,
+      uncertaintyBudget,
+      staleCount: stale.length,
+      evidenceCount: items.length,
+      items,
+      checkedAt: this.clock().toISOString(),
+    };
+  }
+
+  #reviewDefinitions(passport, freshness) {
+    const snapshot = passport.snapshots.at(-1);
+    const items = [];
+    const add = (rule, title, reason, evidenceRef, priority = "MEDIUM") => items.push({ rule, title, reason, evidenceRef: evidenceRef || null, priority });
+    const owner = snapshot.changePoints?.owner;
+    if (owner && ["DETECTED", "VERIFIED", "ACTIVE"].includes(String(owner.status || "").toUpperCase())) {
+      add("owner_privileges", "Review owner privileges", "An active control address is present in the latest snapshot.", owner.evidenceId || owner.evidenceStatus || `snapshot:${snapshot.id}`, "HIGH");
+    }
+    const staleLiquidity = freshness?.items.find((item) => item.family === "liquidity" && item.freshness === "STALE");
+    if (staleLiquidity) add("refresh_liquidity", "Refresh stale liquidity evidence", `Liquidity evidence is older than its ${staleLiquidity.ttlHours}-hour freshness window.`, staleLiquidity.evidenceRef, "HIGH");
+    const holder = snapshot.changePoints?.holderConcentration;
+    if (holder && holder.value !== null && holder.value !== undefined) {
+      add("inspect_top_holder", "Inspect top-holder concentration", "Holder concentration is available and should be reviewed with current ownership context.", holder.evidenceId || holder.evidenceStatus, "MEDIUM");
+    }
+    if (snapshot.dataStatus === "partial" || snapshot.dataStatus === "unknown" || freshness?.uncertaintyBudget > 0) {
+      const uncertaintyEvidence = (snapshot.evidence || []).find((item) =>
+        !["VERIFIED", "VALID", "AVAILABLE"].includes(String(item.status || item.evidenceStatus || "").toUpperCase()),
+      ) || snapshot.evidence?.[0];
+      add("complete_evidence_history", "Complete the evidence review", "The latest snapshot contains incomplete or uncertain evidence; do not treat missing data as a safe result.", uncertaintyEvidence?.id || `snapshot:${snapshot.id}`, "HIGH");
+    }
+    if (snapshot.consensus?.status === "CONFLICT" || snapshot.consensus?.conflict) {
+      add("resolve_provider_disagreement", "Resolve provider disagreement", "Provider evidence disagrees and requires independent verification before a decision.", null, "HIGH");
+    }
+    return items;
+  }
+
+  listPassportReviews(workspaceId, networkId, address) {
+    const passport = this.#passport(workspaceId, networkId, address);
+    if (!passport?.snapshots.length) return [];
+    const freshness = this.getFreshness(workspaceId, networkId, address);
+    const definitions = this.#reviewDefinitions(passport, freshness);
+    return definitions.map((definition) => {
+      const key = `${this.#key(workspaceId, networkId, address)}:${definition.rule}`;
+      const existing = this.passportReviews.get(key);
+      if (existing) return clone(existing);
+      const item = {
+        id: `passport_review_${hash(key).slice(0, 20)}`,
+        workspaceId, ...publicContract(networkId, address),
+        ...definition,
+        status: "OPEN",
+        snapshotId: passport.currentSnapshotId,
+        createdAt: passport.snapshots.at(-1).capturedAt,
+        updatedAt: this.clock().toISOString(),
+        timeline: [{ type: "OPENED", at: this.clock().toISOString(), snapshotId: passport.currentSnapshotId }],
+      };
+      this.passportReviews.set(key, item);
+      this.#persist();
+      return clone(item);
+    }).sort((a, b) => ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[a.priority] ?? 3) - ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[b.priority] ?? 3));
+  }
+
+  updatePassportReview({ workspaceId, networkId, address, reviewId, status, actorId }) {
+    const reviews = this.listPassportReviews(workspaceId, networkId, address);
+    const review = reviews.find((item) => item.id === reviewId);
+    if (!review) return null;
+    if (!PASSPORT_REVIEW_STATUSES.has(status)) invalid("INVALID_PASSPORT_REVIEW_STATUS", "Review status is invalid.");
+    if (!REVIEW_TRANSITIONS[review.status]?.has(status)) invalid("INVALID_PASSPORT_REVIEW_TRANSITION", `Cannot move review from ${review.status} to ${status}.`);
+    const key = `${this.#key(workspaceId, networkId, address)}:${review.rule}`;
+    const stored = this.passportReviews.get(key);
+    const now = this.clock().toISOString();
+    stored.status = status;
+    stored.updatedAt = now;
+    stored.timeline.push({ type: status === "OPEN" ? "REOPENED" : status, actorId, at: now, snapshotId: stored.snapshotId });
+    this.passportReviews.set(key, stored);
+    this.#persist();
+    return clone(stored);
+  }
+
+  createPassportAuditExport(workspaceId, networkId, address) {
+    const passport = this.#passport(workspaceId, networkId, address);
+    if (!passport?.snapshots.length) return null;
+    const timeline = this.listTimeline(workspaceId, networkId, address);
+    const freshness = this.getFreshness(workspaceId, networkId, address);
+    const reviewQueue = this.listPassportReviews(workspaceId, networkId, address);
+    const snapshots = passport.snapshots.map((snapshot) => ({
+      id: snapshot.id, jobId: snapshot.jobId, capturedAt: snapshot.capturedAt,
+      evidenceHash: snapshot.evidenceHash, risk: snapshot.risk, dataStatus: snapshot.dataStatus,
+    }));
+    const manifest = {
+      format: "joben-risk-passport-audit-v1",
+      networkId: passport.networkId,
+      address: passport.address,
+      generatedAt: this.clock().toISOString(),
+      snapshotIds: snapshots.map((snapshot) => snapshot.id),
+      evidenceHashes: snapshots.map((snapshot) => snapshot.evidenceHash),
+    };
+    return {
+      manifest,
+      verificationHash: hash({ manifest, snapshots, timeline, freshness, reviewQueue }),
+      passport: this.publicPassport(passport),
+      snapshots,
+      timeline,
+      freshness,
+      reviewQueue,
     };
   }
 

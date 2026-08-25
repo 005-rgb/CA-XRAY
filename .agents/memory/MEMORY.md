@@ -7,3 +7,4 @@
 - [JOBEN NETWORK UI theme](joben-network-ui-theme.md) — dark forensic intelligence, with motion reserved for scan telemetry and evidence signals.
 - [Imported dependency state](imported-dependency-state.md) — package manifests may be present while runtime modules are absent; install declared dependencies before judging test failures.
 - [Phase 4 case workspace](phase4-case-workspace.md) — case mutations are tenant-scoped and append-only through an auditable timeline.
+- [Passport intelligence contracts](passport-intelligence-contracts.md) — freshness, review actions, and audit exports remain snapshot-anchored and separate from risk.

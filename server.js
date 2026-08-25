@@ -968,7 +968,39 @@ async function handleApiUnsafe(req, res, url, context) {
       .filter((item) => item.networkId === networkId && item.address === address.toLowerCase());
     const alerts = intelligenceStore.listAlerts(authenticated.workspaceId)
       .filter((item) => item.networkId === networkId && item.address === address.toLowerCase());
-    sendJson(res, 200, { passport, timeline, graph, watchlists, alerts }, { context });
+    const freshness = intelligenceStore.getFreshness(authenticated.workspaceId, networkId, address);
+    const reviewQueue = intelligenceStore.listPassportReviews(authenticated.workspaceId, networkId, address);
+    sendJson(res, 200, { passport, timeline, graph, watchlists, alerts, freshness, reviewQueue }, { context });
+    return true;
+  }
+  const passportAuditMatch = url.pathname.match(/^\/api\/risk-passports\/([^/]+)\/(0x[a-fA-F0-9]{40})\/audit-export$/);
+  if (req.method === "GET" && passportAuditMatch) {
+    const authenticated = requireAuthenticated(context);
+    const auditPackage = intelligenceStore.createPassportAuditExport(authenticated.workspaceId, passportAuditMatch[1], passportAuditMatch[2]);
+    if (!auditPackage) {
+      sendJson(res, 404, { error: "PASSPORT_NOT_FOUND", message: "A completed passport is required for audit export." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { auditPackage }, { context });
+    return true;
+  }
+  const passportReviewMatch = url.pathname.match(/^\/api\/risk-passports\/([^/]+)\/(0x[a-fA-F0-9]{40})\/review-queue\/([^/]+)$/);
+  if (req.method === "PATCH" && passportReviewMatch) {
+    const authenticated = requireAuthenticated(context);
+    const body = await readBody(req);
+    const review = intelligenceStore.updatePassportReview({
+      workspaceId: authenticated.workspaceId,
+      actorId: authenticated.actor.id,
+      networkId: passportReviewMatch[1],
+      address: passportReviewMatch[2],
+      reviewId: passportReviewMatch[3],
+      status: body.status,
+    });
+    if (!review) {
+      sendJson(res, 404, { error: "PASSPORT_REVIEW_NOT_FOUND", message: "Review item not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { review }, { context });
     return true;
   }
   if (req.method === "GET" && passportMatch) {
