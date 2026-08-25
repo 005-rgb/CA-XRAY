@@ -498,8 +498,10 @@ function showLanding({ privateView = false } = {}) {
   document.querySelector("#scan-mode-card").hidden = !privateView || !["dashboard", "new-scan"].includes(page);
   const signalSurface = document.querySelector("#signal-board");
   const networkPulse = document.querySelector("#network-pulse");
-  if (signalSurface) signalSurface.hidden = privateView && !["dashboard", "new-scan"].includes(page);
-  if (networkPulse) networkPulse.hidden = privateView && !["dashboard", "new-scan"].includes(page);
+  const evidenceCommand = document.querySelector(".evidence-command");
+  if (signalSurface) signalSurface.hidden = privateView;
+  if (networkPulse) networkPulse.hidden = privateView;
+  if (evidenceCommand) evidenceCommand.hidden = privateView;
   document.querySelector("#dashboard").classList.toggle("private-heading", privateView);
   document.querySelector("#dashboard-overview").hidden = !privateView || page !== "dashboard";
   document.querySelector("#new-scan").hidden = privateView ? page !== "new-scan" : false;

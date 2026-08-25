@@ -1229,6 +1229,13 @@ body, body.private-view { background: var(--joben-void); color: var(--joben-text
 .public-header .brand { border-bottom: 0; }
 .public-header .brand-mark, .sidebar .brand-mark { background: rgba(77,225,208,.08); border-color: rgba(77,225,208,.6); color: var(--joben-cyan); }
 .public-home { background: transparent; }
+.private-view #landing {
+  background:
+    radial-gradient(circle at 88% 8%, rgba(77,225,208,.06), transparent 30%),
+    linear-gradient(135deg, rgba(14,25,36,.96), rgba(7,12,18,.98) 62%, rgba(10,20,27,.98));
+}
+.private-view #landing .forensic-backdrop { display: none; }
+.private-view #landing > :not(.forensic-backdrop) { position: relative; z-index: 1; }
 .public-home .dashboard-heading h1, .dashboard-heading h1, .settings-heading h2 { color: var(--joben-text); }
 .public-home .dashboard-heading p:not(.eyebrow), .dashboard-heading p, .report-subtitle { color: var(--joben-muted); }
 .scan-form-card, .scan-mode-card, .dashboard-report, .side-card, .report-table-card, .trajectory-card, .intelligence-card, .settings-card, .overview-page-card { background: linear-gradient(145deg, rgba(18,28,39,.95), rgba(10,16,24,.96)); border-color: var(--joben-line); }
