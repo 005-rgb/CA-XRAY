@@ -352,34 +352,57 @@ async function collectEvmEvidence({
   pairAddress,
   decimals,
   timeoutMs = 12000,
+  latestBlockTimeoutMs = Math.min(timeoutMs, 5000),
+  historyTimeoutMs = Math.min(timeoutMs, 4000),
+  historyBudgetMs = 8000,
+  historyFallbackBudgetMs = 4000,
   indexerMaxPages = 200,
-  indexerBudgetMs = 25000,
   transferCursor = null,
   ownerCursor = null,
 } = {}) {
+  const startedAtMs = Date.now();
   const startedAt = new Date().toISOString();
   if (!network?.evm || !network.rpcUrl) {
-    return { status: "UNAVAILABLE", retrievedAt: startedAt, limitations: ["On-chain EVM evidence is unavailable for this network."], exitability: { status: "UNKNOWN", reason: "Network has no EVM RPC." }, holderHistory: { status: "UNKNOWN", reason: "Network has no EVM RPC." } };
+    return {
+      status: "UNAVAILABLE",
+      retrievedAt: startedAt,
+      latencyMs: Date.now() - startedAtMs,
+      limitations: ["On-chain EVM evidence is unavailable for this network."],
+      exitability: { status: "UNKNOWN", reason: "Network has no EVM RPC." },
+      holderHistory: { status: "UNKNOWN", reason: "Network has no EVM RPC." },
+    };
   }
   try {
-    const latestHex = await rpc(network.rpcUrl, "eth_blockNumber", [], timeoutMs);
+    const latestHex = await rpc(network.rpcUrl, "eth_blockNumber", [], latestBlockTimeoutMs);
     const latest = blockNumber(latestHex);
     if (latest === null) throw new Error("RPC returned an invalid latest block.");
     const [exitability, indexerTransfers, indexerOwners] = await Promise.all([
-      simulateRouter({ rpcUrl: network.rpcUrl, networkId: network.id, tokenAddress, pairAddress, decimals, timeoutMs }),
-      collectIndexerTransfers({ blockscoutHost: network.blockscoutHost, tokenAddress, timeoutMs: Math.min(timeoutMs, 8000), maxPages: indexerMaxPages, budgetMs: indexerBudgetMs, cursor: transferCursor }),
-      collectIndexerOwnerEvents({ blockscoutHost: network.blockscoutHost, tokenAddress, timeoutMs: Math.min(timeoutMs, 8000), maxPages: indexerMaxPages, budgetMs: indexerBudgetMs, cursor: ownerCursor }),
+      simulateRouter({ rpcUrl: network.rpcUrl, networkId: network.id, tokenAddress, pairAddress, decimals, timeoutMs: Math.min(timeoutMs, 6000) }),
+      collectIndexerTransfers({ blockscoutHost: network.blockscoutHost, tokenAddress, timeoutMs: historyTimeoutMs, maxPages: indexerMaxPages, budgetMs: historyBudgetMs, cursor: transferCursor }),
+      collectIndexerOwnerEvents({ blockscoutHost: network.blockscoutHost, tokenAddress, timeoutMs: historyTimeoutMs, maxPages: indexerMaxPages, budgetMs: historyBudgetMs, cursor: ownerCursor }),
     ]);
+    const fallbackOptions = {
+      rpcUrl: network.rpcUrl,
+      address: tokenAddress,
+      latest,
+      timeoutMs: Math.min(timeoutMs, 4000),
+    };
     const transferScan = indexerTransfers?.status === "COMPLETE" || indexerTransfers?.status === "PARTIAL"
       ? { ...indexerTransfers, fromBlock: null, toBlock: latest }
-      : await boundedLogScan({ rpcUrl: network.rpcUrl, address: tokenAddress, topic0: TRANSFER_TOPIC, latest, timeoutMs }, Math.min(8000, timeoutMs + 1000));
+      : null;
     const ownerScan = indexerOwners?.status === "COMPLETE" || indexerOwners?.status === "PARTIAL"
       ? { ...indexerOwners, fromBlock: null, toBlock: latest }
-      : await boundedLogScan({ rpcUrl: network.rpcUrl, address: tokenAddress, topic0: OWNERSHIP_TRANSFERRED_TOPIC, latest, timeoutMs, maxBlocks: 1000, maxChunks: 1 });
-    const history = transferScan.transfers
-      ? aggregateTransferList(transferScan.transfers, tokenAddress)
-      : aggregateTransfers(transferScan.logs, tokenAddress);
-    const ownerEvents = ownerScan.events || ownerScan.logs.map((log) => ({
+      : null;
+    const [fallbackTransfers, fallbackOwners] = await Promise.all([
+      transferScan || boundedLogScan({ ...fallbackOptions, topic0: TRANSFER_TOPIC }, historyFallbackBudgetMs),
+      ownerScan || boundedLogScan({ ...fallbackOptions, topic0: OWNERSHIP_TRANSFERRED_TOPIC, maxBlocks: 1000, maxChunks: 1 }, historyFallbackBudgetMs),
+    ]);
+    const resolvedTransferScan = transferScan || fallbackTransfers;
+    const resolvedOwnerScan = ownerScan || fallbackOwners;
+    const history = resolvedTransferScan.transfers
+      ? aggregateTransferList(resolvedTransferScan.transfers, tokenAddress)
+      : aggregateTransfers(resolvedTransferScan.logs, tokenAddress);
+    const ownerEvents = resolvedOwnerScan.events || resolvedOwnerScan.logs.map((log) => ({
       blockNumber: blockNumber(log.blockNumber),
       txHash: log.transactionHash || null,
       previousOwner: topicAddress(log.topics?.[1]),
@@ -388,18 +411,19 @@ async function collectEvmEvidence({
     return {
       status: "VALID",
       retrievedAt: startedAt,
+      latencyMs: Date.now() - startedAtMs,
       latestBlock: latest,
       exitability,
-      holderHistory: { status: transferScan.status || (transferScan.complete ? "COMPLETE" : "PARTIAL"), ...history, scannedFromBlock: transferScan.fromBlock, scannedToBlock: transferScan.toBlock, chunks: transferScan.chunks, pages: transferScan.pages, nextCursor: transferScan.nextCursor || null },
-      ownerHistory: { status: ownerScan.status || (ownerScan.complete ? "COMPLETE" : "PARTIAL"), events: ownerEvents, scannedFromBlock: ownerScan.fromBlock, scannedToBlock: ownerScan.toBlock, chunks: ownerScan.chunks, pages: ownerScan.pages, nextCursor: ownerScan.nextCursor || null },
+      holderHistory: { status: resolvedTransferScan.status || (resolvedTransferScan.complete ? "COMPLETE" : "PARTIAL"), ...history, scannedFromBlock: resolvedTransferScan.fromBlock, scannedToBlock: resolvedTransferScan.toBlock, chunks: resolvedTransferScan.chunks, pages: resolvedTransferScan.pages, nextCursor: resolvedTransferScan.nextCursor || null },
+      ownerHistory: { status: resolvedOwnerScan.status || (resolvedOwnerScan.complete ? "COMPLETE" : "PARTIAL"), events: ownerEvents, scannedFromBlock: resolvedOwnerScan.fromBlock, scannedToBlock: resolvedOwnerScan.toBlock, chunks: resolvedOwnerScan.chunks, pages: resolvedOwnerScan.pages, nextCursor: resolvedOwnerScan.nextCursor || null },
       limitations: [
-        ...(transferScan.status === "COMPLETE" ? [] : ["Transfer event history is partial or unavailable; the indexer/RPC did not provide a complete cursor traversal."]),
-        ...(ownerScan.status === "COMPLETE" ? [] : ["Ownership event history is partial or unavailable; the indexer/RPC did not provide a complete cursor traversal."]),
+        ...(resolvedTransferScan.status === "COMPLETE" || resolvedTransferScan.complete ? [] : ["Transfer event history is partial or unavailable; the indexer/RPC did not provide a complete cursor traversal."]),
+        ...(resolvedOwnerScan.status === "COMPLETE" || resolvedOwnerScan.complete ? [] : ["Ownership event history is partial or unavailable; the indexer/RPC did not provide a complete cursor traversal."]),
         "Router output is a read-only quote; it does not prove a wallet allowance, balance, slippage tolerance, or successful mined transaction.",
       ],
     };
   } catch (error) {
-    return { status: "UNAVAILABLE", retrievedAt: startedAt, errorCode: error.code || "RPC_ERROR", limitations: ["On-chain evidence request failed; no synthetic result was substituted."], exitability: { status: "UNKNOWN", reason: error.message }, holderHistory: { status: "UNKNOWN", reason: error.message }, ownerHistory: { status: "UNKNOWN", reason: error.message } };
+    return { status: "UNAVAILABLE", retrievedAt: startedAt, latencyMs: Date.now() - startedAtMs, errorCode: error.code || "RPC_ERROR", limitations: ["On-chain evidence request failed; no synthetic result was substituted."], exitability: { status: "UNKNOWN", reason: error.message }, holderHistory: { status: "UNKNOWN", reason: error.message }, ownerHistory: { status: "UNKNOWN", reason: error.message } };
   }
 }
 

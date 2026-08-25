@@ -1408,6 +1408,7 @@ async function scanLive({
   providerPolicy = null,
   previousScan = null,
 }) {
+  const scanStartedAtMs = Date.now();
   const validation = validateScanTarget(address, networkId);
   if (!validation.valid) {
     const validationError = new Error(validation.code);
@@ -1417,6 +1418,7 @@ async function scanLive({
   }
   const timestamp = new Date().toISOString();
   const scan = createBaseScan({ mode: "LIVE", address: validation.normalized, network: validation.network, timestamp });
+  scan.timings = { validationMs: Date.now() - scanStartedAtMs };
   if (!validation.network.evm) {
     try {
       const nativeVerification = await verifyNativeNetwork({
@@ -1478,6 +1480,7 @@ async function scanLive({
       providerPolicy: policy || {},
     });
   }));
+  scan.timings.providerPhaseMs = Date.now() - scanStartedAtMs - scan.timings.validationMs;
   let successes = 0;
   for (const [index, result] of results.entries()) {
     const provider = providers[index];
@@ -1549,9 +1552,14 @@ async function scanLive({
       pairAddress,
       decimals,
       timeoutMs: 12_000,
+      latestBlockTimeoutMs: 5_000,
+      historyTimeoutMs: 4_000,
+      historyBudgetMs: 8_000,
+      historyFallbackBudgetMs: 4_000,
       transferCursor: previousScan?.evmEvidence?.holderHistory?.nextCursor || null,
       ownerCursor: previousScan?.evmEvidence?.ownerHistory?.nextCursor || null,
     });
+    scan.timings.evmEvidenceMs = scan.evmEvidence.latencyMs ?? null;
     if (previousScan?.evmEvidence) {
       scan.evmEvidence.holderHistory = mergeEvmHistory(
         previousScan.evmEvidence.holderHistory,
@@ -1632,6 +1640,7 @@ async function scanLive({
     : successes
       ? PROVIDER_RESULT_STATUS.VALID
       : PROVIDER_RESULT_STATUS.UNKNOWN;
+  scan.timings.totalMs = Date.now() - scanStartedAtMs;
   return finalizeScan(scan);
 }
 
