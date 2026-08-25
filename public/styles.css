@@ -196,6 +196,35 @@ select { appearance: auto; margin-bottom: 3px; font-size: 13px; }
 .stage.done { background: var(--soft); }
 .loading-note { color: var(--muted); font-size: 11px; margin-top: 26px; }
 
+.scan-loading-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; }
+.scan-loading-backdrop { position: absolute; inset: 0; background: rgba(3, 9, 14, .78); backdrop-filter: blur(8px); }
+.scan-loading-dialog { position: relative; width: min(520px, 100%); padding: 28px; border: 1px solid rgba(77, 225, 208, .3); border-radius: 10px; color: var(--joben-text); background: linear-gradient(145deg, #142431, #09131d 72%); box-shadow: 0 24px 80px rgba(0, 0, 0, .52), 0 0 45px rgba(77, 225, 208, .08); text-align: left; animation: scan-dialog-in .28s ease-out both; }
+.scan-loading-header { display: flex; align-items: center; gap: 13px; padding-bottom: 22px; border-bottom: 1px solid var(--joben-line); }
+.scan-loading-emblem { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid var(--joben-cyan); border-radius: 50%; box-shadow: 0 0 18px rgba(77, 225, 208, .22); }
+.scan-loading-emblem span { width: 12px; height: 12px; border: 2px solid var(--joben-cyan); border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+.scan-loading-kicker { color: var(--joben-dim); font-size: 8px; letter-spacing: .13em; }
+.scan-loading-title-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 24px 0 14px; }
+.scan-loading-title-row h2 { margin: 0 0 6px; color: var(--joben-text); font-size: 21px; letter-spacing: -.04em; }
+.scan-loading-title-row p { margin: 0; color: var(--joben-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.scan-loading-title-row > strong { color: var(--joben-cyan); font-size: 12px; letter-spacing: .08em; white-space: nowrap; }
+.loading-progress-track { height: 3px; overflow: hidden; border-radius: 99px; background: rgba(255, 255, 255, .09); }
+.loading-progress-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--joben-cyan); box-shadow: 0 0 12px rgba(77, 225, 208, .65); transition: width .35s ease; }
+.scan-loading-dialog .loading-stages { display: grid; gap: 7px; max-width: none; margin-top: 20px; }
+.scan-loading-dialog .stage { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; min-height: 39px; padding: 9px 11px; border: 1px solid var(--joben-line); border-radius: 5px; color: var(--joben-dim); background: rgba(255, 255, 255, .018); font-size: 9px; letter-spacing: .1em; }
+.scan-loading-dialog .stage.done { color: var(--joben-text); border-color: rgba(77, 225, 208, .22); background: rgba(77, 225, 208, .055); }
+.scan-loading-dialog .stage.active { color: var(--joben-text); border-color: rgba(77, 225, 208, .7); background: rgba(77, 225, 208, .1); box-shadow: 0 0 18px rgba(77, 225, 208, .08); }
+.stage-indicator { display: grid; place-items: center; width: 19px; height: 19px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; }
+.stage.active .stage-indicator { border-top-color: transparent; animation: spin 1s linear infinite; }
+.stage.done .stage-indicator { color: var(--joben-cyan); border-color: var(--joben-cyan); animation: none; }
+.stage-state { font-size: 8px; letter-spacing: .08em; }
+.stage.done .stage-state { color: var(--joben-cyan); }
+.stage.active .stage-state { color: var(--joben-cyan); }
+.scan-loading-dialog .loading-note { margin: 18px 0 20px; font-size: 10px; line-height: 1.5; }
+.scan-loading-dialog .cancel-scan { width: 100%; justify-content: center; }
+@keyframes scan-dialog-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (max-width: 520px) { .scan-loading-overlay { padding: 14px; } .scan-loading-dialog { padding: 21px; } .scan-loading-title-row h2 { font-size: 18px; } }
+@media (prefers-reduced-motion: reduce) { .scan-loading-dialog, .scan-loading-emblem span, .stage.active .stage-indicator { animation: none; } .loading-progress-track span { transition: none; } }
+
 #report { background: #f6f7f6; min-height: calc(100vh - 72px); padding-bottom: 80px; }
 .report-shell { max-width: 1420px; margin: 0 auto; padding: 34px 4vw 0; }
 .report-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }

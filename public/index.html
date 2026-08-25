@@ -607,13 +607,22 @@
             <div id="dashboard-report" hidden></div>
           </section>
 
-          <section id="scan-loading" class="loading-page" hidden>
-            <div class="loading-orbit" aria-hidden="true"></div>
-            <p class="eyebrow">ANALYSIS IN PROGRESS</p>
-          <h2 id="loading-title">Building a forensic snapshot.</h2>
-            <div id="loading-stages" class="loading-stages"></div>
-            <p class="loading-note">Available evidence is preserved as returned. No fallback values are being substituted.</p>
-            <button type="button" id="cancel-scan" class="secondary-button cancel-scan">Cancel scan</button>
+          <section id="scan-loading" class="scan-loading-overlay" role="dialog" aria-modal="true" aria-labelledby="loading-title" hidden>
+            <div class="scan-loading-backdrop" aria-hidden="true"></div>
+            <div class="scan-loading-dialog">
+              <div class="scan-loading-header">
+                <div class="scan-loading-emblem" aria-hidden="true"><span></span></div>
+                <div><p class="eyebrow">ANALYSIS IN PROGRESS</p><span class="scan-loading-kicker">FORENSIC ENGINE / READ-ONLY</span></div>
+              </div>
+              <div class="scan-loading-title-row">
+                <div><h2 id="loading-title">Building a forensic snapshot.</h2><p id="loading-progress-label">Preparing evidence checks…</p></div>
+                <strong id="loading-progress-count">0 / 0</strong>
+              </div>
+              <div class="loading-progress-track" aria-hidden="true"><span id="loading-progress-bar"></span></div>
+              <div id="loading-stages" class="loading-stages" aria-live="polite"></div>
+              <p class="loading-note">Available evidence is preserved as returned. No fallback values are being substituted.</p>
+              <button type="button" id="cancel-scan" class="secondary-button cancel-scan">Cancel scan</button>
+            </div>
           </section>
 
           <section id="report" hidden></section>

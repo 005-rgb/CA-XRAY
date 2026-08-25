@@ -9,6 +9,9 @@ const networkError = document.querySelector("#network-error");
 const networkCapabilityHint = document.querySelector("#network-capability-hint");
 const clearAddress = document.querySelector("#clear-address");
 const loadingStages = document.querySelector("#loading-stages");
+const loadingProgressLabel = document.querySelector("#loading-progress-label");
+const loadingProgressCount = document.querySelector("#loading-progress-count");
+const loadingProgressBar = document.querySelector("#loading-progress-bar");
 const authPanel = document.querySelector("#auth-panel");
 const authForm = document.querySelector("#auth-form");
 const authMode = document.querySelector("#auth-mode");
@@ -1275,16 +1278,29 @@ function showLoading(stages = []) {
   landing.hidden = true;
   report.hidden = true;
   loading.hidden = false;
-  loadingStages.innerHTML = (stages.length ? stages : ["VALIDATING", "FETCHING DATA"]).map((stage, index) => `<span class="stage ${index === 0 ? "active" : ""}">${escapeHtml(stage)}</span>`).join("");
-  pushSignal("Scan initialized", "The evidence pipeline is validating your selected network and address.", "cyan");
+  renderLoadingStages(stages.length ? stages : ["VALIDATING", "FETCHING DATA"], 0);
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderLoadingStages(stages, activeIndex = 0) {
+  const normalizedStages = stages.length ? stages : ["VALIDATING", "FETCHING DATA"];
+  const safeActiveIndex = Math.min(Math.max(0, activeIndex), normalizedStages.length - 1);
+  const completed = safeActiveIndex;
+  loadingStages.innerHTML = normalizedStages.map((stage, index) => {
+    const done = index < safeActiveIndex;
+    const active = index === safeActiveIndex;
+    return `<div class="stage ${active ? "active" : ""} ${done ? "done" : ""}" aria-label="${escapeHtml(stage)} ${done ? "completed" : active ? "in progress" : "pending"}"><span class="stage-indicator">${done ? "✓" : active ? "" : "·"}</span><span>${escapeHtml(stage.replaceAll("_", " "))}</span><span class="stage-state">${done ? "DONE" : active ? "SCANNING" : "PENDING"}</span></div>`;
+  }).join("");
+  if (loadingProgressCount) loadingProgressCount.textContent = `${completed} / ${normalizedStages.length}`;
+  if (loadingProgressBar) loadingProgressBar.style.width = `${Math.round((completed / normalizedStages.length) * 100)}%`;
+  if (loadingProgressLabel) loadingProgressLabel.textContent = `${normalizedStages[safeActiveIndex].replaceAll("_", " ")} in progress…`;
 }
 
 function updateLoading(scan) {
   if (!scan?.stages) return;
-  loadingStages.innerHTML = scan.stages.map((stage, index) => `<span class="stage ${index === scan.stages.length - 1 ? "active" : "done"}">${escapeHtml(stage)}</span>`).join("");
+  renderLoadingStages(scan.stages, scan.stages.length - 1);
   const currentStage = scan.stages[scan.stages.length - 1];
-  if (currentStage) pushSignal(currentStage.replaceAll("_", " "), "Evidence collection is progressing through the forensic pipeline.", "cyan", true);
+  if (loadingProgressLabel && currentStage) loadingProgressLabel.textContent = `${currentStage.replaceAll("_", " ")} in progress…`;
 }
 
 function validateForm() {
