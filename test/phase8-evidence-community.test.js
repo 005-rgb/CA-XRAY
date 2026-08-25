@@ -23,6 +23,7 @@ test("Phase 8 supports evidence-backed annotations, independent peer review, dis
   assert.equal(listed[0].moderation, "APPROVED");
   assert.equal(store.getResearcherProfile("w", "alice").reputation.qualityScore, 60);
   assert.equal(dispute.status, "OPEN");
+  assert.equal(store.listDisputes("w")[0].annotation.id, annotation.id);
   assert.equal(store.listAnnotations("other").length, 0);
 });
 

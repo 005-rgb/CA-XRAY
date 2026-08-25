@@ -1111,7 +1111,10 @@ async function handleApiUnsafe(req, res, url, context) {
     const authenticated = requireAuthenticated(context);
     authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_CONTRIBUTE });
     const body = await readBody(req);
-    sendJson(res, 200, { profile: intelligenceStore.upsertResearcherProfile({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, ...body }) }, { context });
+    sendJson(res, 200, { profile: intelligenceStore.upsertResearcherProfile({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id,
+      displayName: body.displayName, bio: body.bio, specialties: body.specialties,
+    }) }, { context });
     return true;
   }
   if (req.method === "GET" && url.pathname === "/api/community/profiles") {
@@ -1126,24 +1129,43 @@ async function handleApiUnsafe(req, res, url, context) {
     sendJson(res, 200, { annotations: intelligenceStore.listAnnotations(authenticated.workspaceId, { networkId: url.searchParams.get("network"), address: url.searchParams.get("address"), status: url.searchParams.get("status") || "PUBLISHED" }) }, { context });
     return true;
   }
+  if (req.method === "GET" && url.pathname === "/api/community/disputes") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_READ });
+    sendJson(res, 200, { disputes: intelligenceStore.listDisputes(authenticated.workspaceId, { status: url.searchParams.get("status") || null }) }, { context });
+    return true;
+  }
   if (req.method === "POST" && url.pathname === "/api/community/annotations") {
     const authenticated = requireAuthenticated(context);
     authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_CONTRIBUTE });
-    sendJson(res, 201, { annotation: intelligenceStore.createAnnotation({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, ...(await readBody(req)) }) }, { context });
+    const body = await readBody(req);
+    sendJson(res, 201, { annotation: intelligenceStore.createAnnotation({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id,
+      networkId: body.networkId, address: body.address, title: body.title, body: body.body,
+      evidenceRefs: body.evidenceRefs, tags: body.tags,
+    }) }, { context });
     return true;
   }
   const communityReviewMatch = url.pathname.match(/^\/api\/community\/annotations\/([^/]+)\/review$/);
   if (req.method === "POST" && communityReviewMatch) {
     const authenticated = requireAuthenticated(context);
     authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_CONTRIBUTE });
-    sendJson(res, 201, { review: intelligenceStore.reviewAnnotation({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, annotationId: communityReviewMatch[1], ...(await readBody(req)) }) }, { context });
+    const body = await readBody(req);
+    sendJson(res, 201, { review: intelligenceStore.reviewAnnotation({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, annotationId: communityReviewMatch[1],
+      decision: body.decision, rationale: body.rationale,
+    }) }, { context });
     return true;
   }
   const disputeMatch = url.pathname.match(/^\/api\/community\/annotations\/([^/]+)\/dispute$/);
   if (req.method === "POST" && disputeMatch) {
     const authenticated = requireAuthenticated(context);
     authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_CONTRIBUTE });
-    sendJson(res, 201, { dispute: intelligenceStore.createDispute({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, annotationId: disputeMatch[1], ...(await readBody(req)) }) }, { context });
+    const body = await readBody(req);
+    sendJson(res, 201, { dispute: intelligenceStore.createDispute({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, annotationId: disputeMatch[1],
+      reason: body.reason, evidenceRefs: body.evidenceRefs,
+    }) }, { context });
     return true;
   }
   const moderationMatch = url.pathname.match(/^\/api\/community\/(annotations|disputes)\/([^/]+)\/moderate$/);
@@ -1151,7 +1173,11 @@ async function handleApiUnsafe(req, res, url, context) {
     const authenticated = requireAuthenticated(context);
     authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_MODERATE });
     const body = await readBody(req);
-    sendJson(res, 200, { result: intelligenceStore.moderateCommunity({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, targetType: moderationMatch[1] === "annotations" ? "annotation" : "dispute", targetId: moderationMatch[2], ...body }) }, { context });
+    sendJson(res, 200, { result: intelligenceStore.moderateCommunity({
+      workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id,
+      targetType: moderationMatch[1] === "annotations" ? "annotation" : "dispute",
+      targetId: moderationMatch[2], decision: body.decision, rationale: body.rationale,
+    }) }, { context });
     return true;
   }
 
@@ -1849,6 +1875,15 @@ async function handleApi(req, res, url, context) {
       APPROVAL_INVALID: 409,
       APPROVAL_NOT_FOUND: 404,
       APPROVAL_NOT_PENDING: 409,
+      PROFILE_INVALID: 400,
+      ANNOTATION_INVALID: 400,
+      EVIDENCE_REQUIRED: 400,
+      SELF_REVIEW_FORBIDDEN: 409,
+      PEER_DECISION_INVALID: 400,
+      PEER_REVIEW_DUPLICATE: 409,
+      SELF_DISPUTE_FORBIDDEN: 409,
+      DISPUTE_EVIDENCE_REQUIRED: 400,
+      MODERATION_INVALID: 400,
       APPROVAL_NOT_APPROVED: 409,
       FOUR_EYES_REQUIRED: 409,
       CAPABILITY_INVALID: 400,

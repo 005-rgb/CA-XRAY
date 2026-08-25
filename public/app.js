@@ -58,6 +58,11 @@ const comparisonStatus = document.querySelector("#comparison-status");
 const reportsPanel = document.querySelector("#reports");
 const reportsList = document.querySelector("#reports-list");
 const reportStatus = document.querySelector("#report-status");
+const communityPanel = document.querySelector("#community");
+const communityProfileForm = document.querySelector("#community-profile-form");
+const communityAnnotationForm = document.querySelector("#community-annotation-form");
+const communityAnnotationList = document.querySelector("#community-annotation-list");
+const communityReputation = document.querySelector("#community-reputation");
 const adminPanel = document.querySelector("#admin-panel");
 const adminNav = document.querySelector("#admin-nav");
 const adminStepupForm = document.querySelector("#admin-stepup-form");
@@ -123,7 +128,7 @@ const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
 const isAdminRoute = () => pathName() === "/admin";
 const reportRouteMatch = () => pathName().match(/^\/dashboard\/scans\/([^/]+)$/);
-const isPrivateRoute = () => pathName() === "/dashboard" || /^\/dashboard\/(?:new-scan|history|passport|watchtower|compare|reports|api-access|settings)$/.test(pathName()) || pathName().startsWith("/dashboard/scans/");
+const isPrivateRoute = () => pathName() === "/dashboard" || /^\/dashboard\/(?:new-scan|history|passport|watchtower|compare|reports|api-access|community|settings)$/.test(pathName()) || pathName().startsWith("/dashboard/scans/");
 const privatePage = () => {
   if (pathName() === "/dashboard/new-scan") return "new-scan";
   if (pathName() === "/dashboard/history") return "history";
@@ -132,6 +137,7 @@ const privatePage = () => {
   if (pathName() === "/dashboard/compare") return "compare";
   if (pathName() === "/dashboard/reports") return "reports";
   if (pathName() === "/dashboard/api-access") return "api-access";
+  if (pathName() === "/dashboard/community") return "community";
   if (pathName() === "/dashboard/settings") return "settings";
   return "dashboard";
 };
@@ -535,6 +541,7 @@ function showLanding({ privateView = false } = {}) {
     compare: ["Compare Contracts", "Compare saved contract evidence side by side without hiding unknowns."],
     reports: ["Shared Reports", "Create and manage safe, expiring public report links."],
     "api-access": ["API Access", "Programmatic access to evidence-backed contract analysis."],
+    community: ["Evidence Community", "Share and review contract claims with traceable evidence."],
     settings: ["Settings", "Manage your identity, security, preferences, and active workspace."],
     public: ["Know what a contract can do before it touches your wallet.", "Read contract risk through real evidence before a decision reaches your wallet."],
   };
@@ -558,6 +565,7 @@ function showLanding({ privateView = false } = {}) {
   scanHistory.hidden = !privateView || page !== "history";
   intelligenceDashboard.hidden = !privateView || !["passport", "watchtower"].includes(page);
   document.querySelector("#api-access").hidden = !privateView || page !== "api-access";
+  if (communityPanel) communityPanel.hidden = !privateView || page !== "community";
   if (comparisonPanel) comparisonPanel.hidden = !privateView || page !== "compare";
   if (reportsPanel) reportsPanel.hidden = !privateView || page !== "reports";
   settingsPanel.hidden = !privateView || page !== "settings";
@@ -570,6 +578,7 @@ function showLanding({ privateView = false } = {}) {
     if (page === "compare") loadComparisonInputs();
     if (page === "reports") loadReports();
     if (page === "settings") loadSettings();
+    if (page === "community") loadCommunity();
   }
   JobenI18n.translate(landing);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1450,6 +1459,94 @@ async function loadIntelligenceDashboard() {
     passportList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
   }
 }
+
+async function loadCommunity() {
+  if (!communityPanel) return;
+  try {
+    const [profileBody, annotationsBody] = await Promise.all([
+      apiJson("/api/community/profile"),
+      apiJson("/api/community/annotations"),
+    ]);
+    const profile = profileBody.profile;
+    if (profile) {
+      document.querySelector("#community-display-name").value = profile.displayName || "";
+      document.querySelector("#community-bio").value = profile.bio || "";
+      document.querySelector("#community-specialties").value = (profile.specialties || []).join(", ");
+      communityReputation.textContent = `QUALITY ${profile.reputation?.qualityScore ?? "—"}`;
+    }
+    const annotations = annotationsBody.annotations || [];
+    communityAnnotationList.innerHTML = annotations.length ? annotations.map((annotation) => `
+      <article class="intelligence-item">
+        <div><strong>${escapeHtml(annotation.title)}</strong><small>${escapeHtml(annotation.networkId)} · ${escapeHtml(truncateAddress(annotation.address))} · ${escapeHtml(annotation.moderation || "PENDING")}</small></div>
+        <p>${escapeHtml(annotation.body)}</p>
+        <small>Evidence: ${escapeHtml(annotation.evidenceRefs.join(", "))} · Reviews: ${annotation.peerReviews.length}</small>
+        <div class="community-actions"><button type="button" class="text-button" data-community-review="${escapeHtml(annotation.id)}" data-decision="ACCEPT">Accept</button><button type="button" class="text-button" data-community-review="${escapeHtml(annotation.id)}" data-decision="REJECT">Reject</button><button type="button" class="text-button" data-community-dispute="${escapeHtml(annotation.id)}">Dispute</button></div>
+      </article>`).join("") : `<div class="unknown-message">No evidence-backed annotations yet.</div>`;
+  } catch (error) {
+    communityAnnotationList.innerHTML = `<div class="unknown-message">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+communityProfileForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = document.querySelector("#community-profile-status");
+  try {
+    await apiJson("/api/community/profile", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        displayName: document.querySelector("#community-display-name").value.trim(),
+        bio: document.querySelector("#community-bio").value.trim(),
+        specialties: document.querySelector("#community-specialties").value.split(",").map((item) => item.trim()).filter(Boolean),
+      }),
+    });
+    status.textContent = "Profile saved.";
+    await loadCommunity();
+  } catch (error) { status.textContent = error.message; }
+});
+
+communityAnnotationForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = document.querySelector("#community-annotation-status");
+  try {
+    await apiJson("/api/community/annotations", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        networkId: document.querySelector("#community-network").value,
+        address: document.querySelector("#community-address").value.trim(),
+        title: document.querySelector("#community-title").value.trim(),
+        body: document.querySelector("#community-body").value.trim(),
+        evidenceRefs: document.querySelector("#community-evidence").value.split(",").map((item) => item.trim()).filter(Boolean),
+      }),
+    });
+    communityAnnotationForm.reset();
+    status.textContent = "Annotation published for review.";
+    await loadCommunity();
+  } catch (error) { status.textContent = error.message; }
+});
+document.querySelector("#community-refresh")?.addEventListener("click", loadCommunity);
+communityAnnotationList?.addEventListener("click", async (event) => {
+  const reviewButton = event.target.closest("[data-community-review]");
+  const disputeButton = event.target.closest("[data-community-dispute]");
+  if (!reviewButton && !disputeButton) return;
+  const rationale = window.prompt(disputeButton ? "Why is this annotation disputed?" : "Add a review rationale (optional):", "");
+  if (rationale === null) return;
+  try {
+    if (reviewButton) {
+      await apiJson(`/api/community/annotations/${encodeURIComponent(reviewButton.dataset.communityReview)}/review`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: reviewButton.dataset.decision, rationale }),
+      });
+    } else {
+      const evidence = window.prompt("Evidence reference supporting this dispute:", "");
+      if (!evidence) return;
+      await apiJson(`/api/community/annotations/${encodeURIComponent(disputeButton.dataset.communityDispute)}/dispute`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: rationale, evidenceRefs: [evidence] }),
+      });
+    }
+    await loadCommunity();
+  } catch (error) { window.alert(error.message); }
+});
 
 caseForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

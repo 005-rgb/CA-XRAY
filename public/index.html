@@ -31,7 +31,8 @@
           <a class="nav-item" data-route="/dashboard/watchtower" href="/dashboard/watchtower"><span class="nav-icon">◉</span><span>Watchtower</span></a>
           <a class="nav-item" data-route="/dashboard/compare" href="/dashboard/compare"><span class="nav-icon">⇄</span><span>Compare</span></a>
           <a class="nav-item" data-route="/dashboard/reports" href="/dashboard/reports"><span class="nav-icon">▤</span><span>Shared Reports</span></a>
-          <a class="nav-item" data-route="/dashboard/api-access" href="/dashboard/api-access"><span class="nav-icon">⌘</span><span>API Access</span><span class="soon">Soon</span></a>
+          <a class="nav-item" data-route="/dashboard/api-access" href="/dashboard/api-access"><span class="nav-icon">⌘</span><span>API Access</span></a>
+          <a class="nav-item" data-route="/dashboard/community" href="/dashboard/community"><span class="nav-icon">◌</span><span>Evidence Community</span></a>
           <a class="nav-item" data-route="/dashboard/settings" href="/dashboard/settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
            <a class="nav-item admin-nav" id="admin-nav" href="/admin" hidden><span class="nav-icon">▣</span><span>Platform Ops</span></a>
         </nav>
@@ -478,6 +479,35 @@
                 </div>
                 <p class="settings-help">SDK: <code>&lt;script src="/sdk.js"&gt;&lt;/script&gt;</code> · endpoints: <code>/api/v1/scans</code>, <code>/evidence-bundle</code>, <code>/signed-report</code>.</p>
               </div>
+            </section>
+            <section id="community" class="settings-page" hidden>
+              <div class="settings-heading"><div><span class="card-kicker">EVIDENCE COMMUNITY</span><h2>Researcher workspace</h2><p>Share claims only with citations. Peer review and moderation keep reputation grounded in contribution quality, not popularity.</p></div></div>
+              <div class="settings-layout">
+                <section class="settings-card">
+                  <div class="settings-card-heading"><div><span class="card-kicker">RESEARCHER PROFILE</span><h3>Your profile</h3></div><span id="community-reputation" class="data-label">QUALITY —</span></div>
+                  <form id="community-profile-form" class="settings-form">
+                    <label>Display name<input id="community-display-name" maxlength="120" required /></label>
+                    <label>Bio<textarea id="community-bio" maxlength="500"></textarea></label>
+                    <label>Specialties<input id="community-specialties" placeholder="solidity, governance, liquidity" /></label>
+                    <button class="secondary-button" type="submit">Save profile</button><p id="community-profile-status" class="settings-status" role="status"></p>
+                  </form>
+                </section>
+                <section class="settings-card">
+                  <div class="settings-card-heading"><div><span class="card-kicker">ANNOTATE EVIDENCE</span><h3>Publish a finding</h3></div></div>
+                  <form id="community-annotation-form" class="settings-form">
+                    <label>Network<select id="community-network"><option value="ethereum">Ethereum</option><option value="base">Base</option><option value="bsc">BNB Chain</option></select></label>
+                    <label>Contract address<input id="community-address" placeholder="0x..." required /></label>
+                    <label>Title<input id="community-title" maxlength="160" required /></label>
+                    <label>Evidence-backed note<textarea id="community-body" maxlength="4000" required></textarea></label>
+                    <label>Evidence references<input id="community-evidence" placeholder="evidence-id-1, evidence-id-2" required /></label>
+                    <button class="primary-button" type="submit"><span>Publish annotation</span><span>→</span></button><p id="community-annotation-status" class="settings-status" role="status"></p>
+                  </form>
+                </section>
+              </div>
+              <section class="settings-card">
+                <div class="settings-card-heading"><div><span class="card-kicker">SHARED EVIDENCE</span><h3>Workspace annotations</h3></div><button type="button" class="text-button" id="community-refresh">Refresh</button></div>
+                <div id="community-annotation-list" class="intelligence-list"><div class="unknown-message">Loading annotations…</div></div>
+              </section>
             </section>
             <section id="settings" class="settings-page" hidden>
               <div class="settings-layout">

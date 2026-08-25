@@ -806,6 +806,12 @@ class IntelligenceStore {
     this.disputes.set(dispute.id, dispute); this.#persist(); return clone(dispute);
   }
 
+  listDisputes(workspaceId, { status = null } = {}) {
+    return [...this.disputes.values()]
+      .filter((item) => item.workspaceId === workspaceId && (!status || item.status === status))
+      .map((item) => ({ ...clone(item), annotation: clone(this.communityAnnotations.get(item.annotationId) || null) }));
+  }
+
   moderateCommunity({ workspaceId, actorId, targetType, targetId, decision, rationale }) {
     if (!["annotation", "dispute"].includes(targetType) || !["APPROVE", "HIDE", "RESOLVE", "DISMISS"].includes(decision)) invalid("MODERATION_INVALID", "Moderation decision is invalid.");
     const collection = targetType === "annotation" ? this.communityAnnotations : this.disputes;
