@@ -6,6 +6,7 @@ const {
 const {
   buildCluster, buildNetworkHypotheses, extractDeployerObservation, fingerprintKey, publicFingerprint,
 } = require("./deployer-cluster");
+const { compareSnapshots } = require("../watchtower/materiality");
 
 const WATCH_INTERVALS = Object.freeze([1, 6, 12, 24, 168]);
 const ALERT_TYPES = Object.freeze([
@@ -387,6 +388,7 @@ class IntelligenceStore {
     }
     const changes = changedFields(previous, snapshot);
     snapshot.changeSummary = changes;
+    snapshot.pulse = compareSnapshots(previous, snapshot);
     snapshot.trajectory = previous ? {
       status: "CHANGED",
       ...elapsedBetween(previous, snapshot),
@@ -442,8 +444,10 @@ class IntelligenceStore {
       && rule.address === passport.address
       && rule.enabled);
     const events = [];
+    const pulseChanges = snapshot.pulse?.changes || [];
     for (const rule of rules) {
-      const riskDelta = Number(snapshot.risk.score) - Number(previous.risk.score);
+      const riskDelta = snapshot.risk.score !== null && previous.risk.score !== null
+        ? Number(snapshot.risk.score) - Number(previous.risk.score) : null;
       const changeField = {
         owner_change: "owner",
         privilege_change: "privilegedWallets",
@@ -452,12 +456,15 @@ class IntelligenceStore {
         liquidity_change: "liquidityUsd",
         holder_concentration_change: "holderConcentration",
       }[rule.type];
+      const matchingChanges = pulseChanges.filter((change) =>
+        (rule.type === "risk_increase" && change.field === "riskScore")
+        || change.field === changeField
+        || (rule.type === "provider_disagreement" && change.field === "providerDisagreement"));
       const triggered = rule.type === "risk_increase"
-        ? Number.isFinite(riskDelta) && riskDelta >= rule.threshold
-        : timeline.changes.some((change) => change.field === changeField
-          || (rule.type === "provider_disagreement" && change.field === "providerConsensus"));
+        ? Number.isFinite(riskDelta) && riskDelta >= rule.threshold && matchingChanges.some((change) => change.comparability === "COMPARABLE")
+        : matchingChanges.some((change) => change.materiality !== "NONE" && change.comparability === "COMPARABLE");
       if (!triggered) continue;
-      const dedupeKey = `${rule.id}:${snapshot.evidenceHash}`;
+      const dedupeKey = `${workspaceId}:${passport.networkId}:${passport.address}:${snapshot.evidenceHash}`;
       if (this.alertEvents.has(dedupeKey)) continue;
       const event = {
         id: id("alert"),
@@ -471,8 +478,17 @@ class IntelligenceStore {
         deliveryStatus: "QUEUED",
         timeline: [{ type: "OPENED", at: snapshot.capturedAt, snapshotId: snapshot.id }],
         delivery: rule.delivery,
+        correlationId: `pulse:${snapshot.id}`,
+        pulse: clone(snapshot.pulse),
+        materiality: snapshot.pulse?.overallMateriality || "NONE",
+        confidence: snapshot.reliabilityScore ?? null,
+        reliability: snapshot.reliabilityScore ?? null,
+        evidence: clone(snapshot.evidence || []),
+        beforeSnapshotId: previous.id,
+        afterSnapshotId: snapshot.id,
         createdAt: snapshot.capturedAt,
         dedupeKey,
+        whyTriggered: matchingChanges.map((change) => change.explanationKey),
         message: rule.type === "risk_increase"
           ? `Risk increased by ${riskDelta.toFixed(1)} points.`
           : `${rule.type.replaceAll("_", " ")} detected.`,
@@ -882,6 +898,33 @@ class IntelligenceStore {
       .filter((event) => event.workspaceId === workspaceId && (!status || event.status === status))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map(clone);
+  }
+
+  getAlertDetail(workspaceId, alertId) {
+    const event = [...this.alertEvents.values()].find((candidate) => candidate.id === alertId && candidate.workspaceId === workspaceId);
+    if (!event) return null;
+    const passport = this.#passport(workspaceId, event.networkId, event.address);
+    const snapshots = passport?.snapshots || [];
+    return {
+      ...clone(event),
+      before: snapshots.find((snapshot) => snapshot.id === event.beforeSnapshotId) || null,
+      after: snapshots.find((snapshot) => snapshot.id === event.afterSnapshotId || event.snapshotId) || null,
+      evidenceRegister: clone(event.evidence || []),
+    };
+  }
+
+  createAlertExport(workspaceId, alertId) {
+    const alert = this.getAlertDetail(workspaceId, alertId);
+    if (!alert) return null;
+    const manifest = {
+      format: "joben-watchtower-pulse-v1",
+      alertId: alert.id,
+      correlationId: alert.correlationId,
+      snapshotIds: [alert.beforeSnapshotId, alert.afterSnapshotId].filter(Boolean),
+      evidenceHash: alert.after?.evidenceHash || null,
+      generatedAt: this.clock().toISOString(),
+    };
+    return { manifest, alert, verificationHash: hash({ manifest, alert }) };
   }
 
   acknowledgeAlert(workspaceId, alertId, actorId) {

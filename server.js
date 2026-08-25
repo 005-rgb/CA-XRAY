@@ -1077,6 +1077,30 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  const alertDetailMatch = url.pathname.match(/^\/api\/alerts\/([^/]+)$/);
+  if (req.method === "GET" && alertDetailMatch) {
+    const authenticated = requireAuthenticated(context);
+    const alert = intelligenceStore.getAlertDetail(authenticated.workspaceId, alertDetailMatch[1]);
+    if (!alert) {
+      sendJson(res, 404, { error: "ALERT_NOT_FOUND", message: "Alert not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { alert }, { context });
+    return true;
+  }
+
+  const alertExportMatch = url.pathname.match(/^\/api\/alerts\/([^/]+)\/export$/);
+  if (req.method === "GET" && alertExportMatch) {
+    const authenticated = requireAuthenticated(context);
+    const exportPackage = intelligenceStore.createAlertExport(authenticated.workspaceId, alertExportMatch[1]);
+    if (!exportPackage) {
+      sendJson(res, 404, { error: "ALERT_NOT_FOUND", message: "Alert not found." }, { context });
+      return true;
+    }
+    sendJson(res, 200, { exportPackage }, { context });
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/alerts") {
     const authenticated = requireAuthenticated(context);
     const body = await readBody(req);

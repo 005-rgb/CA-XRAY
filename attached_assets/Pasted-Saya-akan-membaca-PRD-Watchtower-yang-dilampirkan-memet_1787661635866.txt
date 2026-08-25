@@ -1,0 +1,846 @@
+Saya akan membaca PRD Watchtower yang dilampirkan, memetakan sub-menu yang benar-benar disebutkan, lalu menyusunnya menjadi daftar pekerjaan implementasi yang bisa selesai end-to-end—bukan sekadar menu visual. Saya juga akan cocokkan dengan modul Watchtower yang sudah ada agar pekerjaan tidak duplikatif.
+
+
+
+4 actions
+Hasil identifikasi Watchtower
+Ada 10 submodul inti di PRD, bukan 6:
+
+Layer A — Observe
+W1 — Watch Target & Scope
+Mengelola kontrak yang dipantau, network, address, capability, label, owner, status, dan timezone.
+
+W2 — Schedule & Durable Orchestrator
+Menentukan jadwal, due time, claim/lease, retry, pause/resume, missed run, dan recovery.
+
+W3 — Evidence Snapshot Intake
+Menerima hasil Core Scan yang selesai, memvalidasi schema, provenance, freshness, dan evidence hash.
+
+W4 — Change & Materiality Engine
+Membandingkan snapshot lama dan baru, menentukan perubahan, comparability, materiality, confidence, dan severity.
+
+Layer B — Decide
+W5 — Signal Correlation & Alert Grouping
+Menggabungkan banyak perubahan dalam satu monitoring run menjadi satu alert/pulse yang bermakna.
+
+W6 — Rule & Policy Controls
+Mengelola rule per target/workspace, threshold, enabled state, quiet hours, cooldown, dan escalation.
+
+W7 — Alert Lifecycle & Review Queue
+Mengelola status alert: open, acknowledged, snoozed, investigating, resolved, reopened, dan linked case.
+
+W8 — Reliability & Freshness Health
+Menampilkan kondisi monitoring terpisah dari risk: current, stale, degraded, blocked, error, coverage regression, dan provider health.
+
+Layer C — Act
+W9 — Delivery Orchestrator
+Mengirim alert melalui in-app, webhook, dan email dengan outbox, retry, signing, endpoint health, dan delivery log.
+
+W10 — Forensic Review UX & Export
+Menyediakan pulse detail, before/after, evidence register, timeline, compare, case handoff, acknowledge, dan export.
+
+Catatan penting tentang “sub-menu”
+Kalau yang dimaksud submodul engineering, jumlahnya 10.
+
+Kalau yang dimaksud layar/menu UX yang disebut PRD, ada 3 layar utama:
+
+Watchtower Overview
+Target Detail
+Pulse Detail
+Ketiganya harus tersedia dalam versi desktop dan mobile.
+
+Daftar job untuk membangun Watchtower yang benar-benar selesai
+Urutan berikut mengikuti dependency PRD. Tidak boleh membangun UI besar terlebih dahulu lalu menganggap Watchtower selesai.
+
+JOB 0 — Kunci kontrak kebenaran Watchtower
+Tujuan: memastikan semua module memakai definisi evidence yang sama.
+
+Scope
+Finalisasi domain contract:
+monitoring target;
+monitoring run;
+ChangeSet;
+alert;
+delivery attempt.
+Kunci status machine.
+Kunci delapan tipe rule yang sudah ada.
+Definisikan:
+UNKNOWN;
+UNAVAILABLE;
+UNVERIFIED;
+CONFLICT;
+VERIFIED;
+NOT_COMPARABLE.
+Definisikan materiality:
+NONE;
+LOW;
+MEDIUM;
+HIGH;
+CRITICAL.
+Tetapkan idempotency key:
+target;
+run;
+snapshot;
+alert;
+delivery.
+Kunci audit event dan actor/system cause.
+Buat threat model untuk:
+webhook SSRF;
+replay;
+secret exposure;
+tenant escape;
+scheduler abuse.
+Done jika
+Setiap alert dapat ditelusuri ke snapshot sebelum/sesudah.
+Tidak ada UNKNOWN yang berubah menjadi angka nol.
+Provider error tidak dianggap sebagai “tidak ada perubahan”.
+Semua transisi status memiliki timestamp dan penyebab.
+Contract test tersedia untuk English dan Bahasa Indonesia.
+Dependency: Core Scan, Risk Passport
+Blocker: semua pekerjaan berikutnya
+
+JOB 1 — Selesaikan W1: Watch Target & Scope
+Tujuan: membuat target monitoring yang benar-benar tenant-scoped.
+
+Scope
+Create target.
+Edit label dan schedule.
+Pause target.
+Resume target.
+Archive target.
+Delete target sesuai policy tanpa menghapus histori.
+Validasi network dan address.
+Validasi deployed bytecode untuk EVM.
+Validasi native address untuk network non-EVM.
+Ambil capability dari registry, bukan daftar network hardcoded.
+Simpan:
+targetId;
+workspaceId;
+networkId;
+normalized address;
+status;
+schedule;
+timezone;
+capability profile;
+rule set version.
+Tolak workspaceId dari request sebagai sumber otoritas.
+Done jika
+User workspace A tidak dapat membaca target workspace B.
+Address invalid tidak pernah masuk scheduler.
+Network tanpa capability tidak bisa diaktifkan.
+Archive tidak menghapus snapshot atau alert.
+Semua mutation masuk audit trail.
+Dependency: JOB 0
+Output: target yang siap dijadwalkan
+
+JOB 2 — Selesaikan W2: Durable Schedule & Orchestrator
+Tujuan: mengganti timer lokal/manual menjadi scheduler yang tahan restart.
+
+Scope
+Durable schedule.
+Due calculation berbasis timezone.
+runId dan windowKey.
+Claim/lease target.
+Lease expiry.
+Reclaim setelah worker mati.
+Retry dengan backoff.
+Dead-letter queue.
+Explicit replay.
+Bounded concurrency per:
+workspace;
+provider;
+network.
+Pause/resume tanpa menghidupkan pekerjaan lama secara keliru.
+Missed-run policy:
+catch-up terbatas;
+skip;
+latest-only;
+mark stale.
+Worker crash recovery.
+Clock skew handling.
+Duplikat manual tick dan timer harus aman.
+Done jika
+Dua worker tidak bisa meng-claim window yang sama.
+Lease expired dapat direclaim.
+Restart worker tidak membuat duplicate snapshot atau alert.
+Retry tidak menggandakan alert.
+Run gagal berulang masuk DEAD_LETTERED.
+P95 due lag dan run latency tercatat.
+Dependency: JOB 1, persistence transaction, queue contract
+Output: monitoring run yang restart-safe
+
+JOB 3 — Selesaikan W3: Evidence Snapshot Intake
+Tujuan: memastikan hasil monitoring selalu berasal dari Core Scan dan Risk Passport.
+
+Scope
+Terima hanya scan completed/valid.
+Validasi:
+schema version;
+engine version;
+provenance;
+captured time;
+provider status;
+evidence hash.
+Tolak snapshot incomplete yang tidak memenuhi contract.
+Simpan snapshot immutable.
+Deduplikasi berdasarkan evidence hash.
+Tandai hasil:
+new snapshot;
+duplicate/no-change;
+partial;
+unavailable;
+failed.
+Pertahankan evidence reference, bukan membuat salinan bebas.
+Hubungkan monitoring run dengan snapshot.
+Done jika
+Setiap successful run menghasilkan snapshot baru atau hasil duplicate/no-change eksplisit.
+Evidence tidak dapat diubah melalui Watchtower.
+Snapshot lama tetap bisa direplay.
+Snapshot memiliki runId, jobId, schema, engine, timestamp, dan hash.
+Snapshot baru merefresh action Passport ke snapshot terbaru.
+Dependency: JOB 1, Risk Passport, Core Scan
+Output: immutable evidence intake
+
+JOB 4 — Selesaikan W4: Evidence Pulse & Materiality Engine
+Tujuan: mengubah dua snapshot menjadi perubahan yang dapat dijelaskan.
+
+Scope
+Field registry dengan:
+unit;
+direction;
+tolerance;
+comparability.
+Komparasi:
+risk score;
+owner;
+privilege;
+proxy;
+buy tax;
+sell tax;
+transfer tax;
+liquidity;
+holder concentration;
+provider disagreement.
+Threshold absolut dan relatif.
+Minimum data-quality requirement.
+Delta dan direction.
+Confidence dan reliability terpisah.
+Freshness dan uncertainty tetap terpisah.
+NOT_COMPARABLE untuk data yang tidak cukup.
+Explanation berbasis locale key.
+Deterministic replay.
+Done jika
+Numeric change memiliki before, after, delta, unit, direction.
+Address/boolean change tidak mengarang dampak.
+Provider disagreement tidak dianggap risk increase.
+Unknown tidak dianggap 0.
+Change hash dan keputusan replay tetap sama untuk input yang sama.
+Perubahan tidak material tidak menghasilkan alert material.
+Dependency: JOB 0, JOB 3
+Output: ChangeSet dan materiality decision
+
+JOB 5 — Selesaikan W5: Correlation, Grouping, Suppression
+Tujuan: mengurangi alert noise.
+
+Scope
+Gabungkan banyak perubahan dari satu monitoring run.
+Buat correlationId.
+Buat stable dedupe key.
+Pisahkan:
+perubahan material;
+perubahan non-material;
+no-change;
+provider unavailable.
+Cooldown.
+Suppression.
+Duplicate event protection.
+Grouping lintas field dalam satu pulse.
+Jelaskan kenapa perubahan digabung.
+Hindari satu snapshot menghasilkan alert duplikat.
+Done jika
+Lima field berubah dalam satu run menghasilkan satu pulse yang lengkap.
+Retry run tidak membuat alert kedua.
+Evidence hash sama tidak membuat incident baru.
+Suppression tetap tercatat dalam audit.
+Pengguna dapat melihat field apa saja yang digabung.
+Dependency: JOB 4
+Output: satu signal/pulse bermakna per incident
+
+JOB 6 — Selesaikan W6: Rule & Policy Controls
+Tujuan: membuat rule dapat dikonfigurasi tanpa mengubah engine secara sembarangan.
+
+Scope
+Rule workspace-level.
+Rule target-level.
+Enable/disable.
+Threshold.
+Severity.
+Minimum confidence.
+Minimum freshness.
+Quiet hours.
+Cooldown.
+Escalation.
+Rule version.
+Draft/publish/rollback.
+Permission siapa yang boleh mengubah rule.
+Audit mutation.
+Preview dampak perubahan rule sebelum publish.
+Done jika
+Rule lama tetap dapat direplay dengan versinya.
+Rule disable tidak menghapus histori alert.
+Rule baru tidak mengubah keputusan historis.
+Threshold invalid ditolak.
+Perubahan rule punya actor dan reason.
+Policy target tidak dapat melewati capability network.
+Dependency: JOB 0, JOB 4
+Output: configurable and auditable rule set
+
+JOB 7 — Selesaikan W7: Alert Lifecycle & Review Queue
+Tujuan: menjadikan alert sebagai pekerjaan investigasi, bukan hanya badge.
+
+Scope
+Implement lifecycle:
+
+OPEN
+  -> ACKNOWLEDGED
+  -> SNOOZED
+  -> INVESTIGATING
+  -> RESOLVED
+  -> REOPENED
+
+Tambahkan:
+
+Assign reviewer.
+Note/rationale.
+Acknowledge.
+Snooze dengan waktu.
+Resolve.
+Reopen saat snapshot baru memenuhi rule.
+Link ke Case Workspace.
+Create case dari alert.
+Escalation jika tidak direview.
+Alert detail:
+before/after;
+evidence;
+provenance;
+confidence;
+reliability;
+freshness;
+materiality;
+why triggered.
+Append-only timeline.
+Done jika
+Resolve medium/high/critical tanpa rationale ditolak.
+Alert resolved dapat reopened dengan snapshot baru.
+Case mempertahankan:
+alertId;
+timelineId;
+snapshot references.
+Status invalid ditolak.
+Tenant lain tidak dapat membaca atau memutasi alert.
+Dependency: JOB 5, Case Workspace
+Output: review flow yang auditable
+
+JOB 8 — Selesaikan W8: Health, Freshness & Capability
+Tujuan: membedakan “tidak ada perubahan” dari “monitoring tidak sehat”.
+
+Scope
+Health target:
+
+CURRENT;
+STALE;
+DEGRADED;
+BLOCKED;
+ERROR.
+Pantau:
+
+provider outage;
+stale evidence;
+missed run;
+failed run;
+confidence drift;
+coverage regression;
+capability changes;
+queue backlog;
+due lag.
+Tambahkan detection-gap report.
+
+Done jika
+Provider unavailable tidak tampil sebagai no-change.
+Stale target terlihat jelas.
+Risk score tidak dicampur diam-diam dengan health score.
+Network unsupported tidak bisa dibuat target.
+Operator dapat mengetahui provider/network yang bermasalah.
+Health history dapat ditelusuri.
+Dependency: JOB 2, JOB 3, provider registry
+Output: monitoring health yang jujur
+
+JOB 9 — Selesaikan W9: Delivery Orchestrator
+Tujuan: memastikan alert benar-benar dapat dikirim dan status pengiriman dapat dilacak.
+
+Scope
+In-app
+Inbox.
+Unread count.
+Open count.
+Alert delivery status.
+Webhook
+HTTPS only.
+Host allowlist.
+DNS/IP validation.
+Redirect policy.
+Timeout.
+Payload size limit.
+HMAC signing.
+Retry/backoff.
+Replay manual.
+Endpoint health.
+Dead-letter.
+Email
+Provider abstraction.
+User consent.
+Template English/Indonesia.
+Unsubscribe.
+Retry.
+Failure state.
+Secret-safe logging.
+Per-channel state
+QUEUED;
+SENT;
+ACKNOWLEDGED;
+FAILED;
+DEAD_LETTERED.
+Done jika
+Satu alert dengan tiga channel tetap memiliki satu alertId.
+Setiap channel memiliki delivery attempt sendiri.
+Timeout/5xx retry sesuai policy.
+Permanent 4xx tidak retry otomatis tanpa perubahan endpoint.
+Signing secret tidak masuk log, URL, UI, atau payload debug.
+Delivery failure tidak menghapus alert in-app.
+User dapat membedakan:
+alert dibuat;
+alert sedang dikirim;
+alert terkirim;
+delivery gagal.
+Dependency: JOB 2, JOB 5, secret management, notification policy
+Output: alert delivery yang reliable
+
+JOB 10 — Selesaikan W10: Forensic Review UX & Export
+Tujuan: mengubah Watchtower dari daftar kontrak menjadi ruang investigasi nyata.
+
+Scope
+Watchtower Overview
+Active targets.
+Due now.
+Stale.
+Open alerts.
+Delivery failures.
+Filter:
+status;
+severity;
+materiality;
+network;
+freshness;
+confidence.
+Target list.
+Last successful run.
+Next due.
+Grouped pulse feed.
+Target Detail
+Health state.
+Risk state terpisah.
+Schedule.
+Capability coverage.
+Rule set.
+Recent runs.
+Snapshot timeline.
+Compare snapshots.
+Pulse Detail
+Headline perubahan.
+Before/after.
+Delta.
+Evidence register.
+Provider/source.
+Confidence.
+Reliability.
+Freshness.
+Materiality.
+Why triggered.
+Acknowledge.
+Snooze.
+Assign.
+Open case.
+Export.
+Responsive
+Mobile stacked target cards.
+Tidak memakai horizontal table untuk tindakan inti.
+Progressive disclosure.
+Minimum touch target 44px.
+Copy address.
+Locale timezone.
+Loading state.
+Empty state.
+Error state.
+Stale state.
+Permission state.
+Keyboard navigation.
+Screen-reader labels.
+Done jika
+User dapat bergerak dari overview → target → pulse → evidence → case.
+Semua data berasal dari API nyata.
+Tidak ada card dekoratif tanpa action atau data.
+Desktop dan mobile lulus browser acceptance.
+Export membawa snapshot reference, evidence hash, freshness, review history, dan manifest.
+Permission export diperiksa server-side.
+Dependency: JOB 3–9
+Output: Watchtower UX yang benar-benar operasional
+
+JOB 11 — Security, Localization & Release Gate
+Tujuan: memastikan Watchtower valid untuk dirilis.
+
+Scope
+Tenant isolation tests.
+Role authorization.
+Rate limiting:
+create target;
+tick;
+replay;
+rule mutation;
+export;
+delivery.
+Idempotency tests.
+Race tests.
+SSRF tests.
+Secret exposure scan.
+English/Indonesia completeness.
+Status language-neutral.
+Evidence wording review.
+Export permission test.
+Audit immutability test.
+Done jika
+Tidak ada critical/high defect pada:
+correctness;
+security;
+data integrity;
+delivery reliability.
+Semua status unknown/conflict/unavailable tetap terlihat.
+Semua private endpoint tenant-scoped.
+Semua privileged action authorized.
+Tidak ada secret dalam source, log, payload, atau export.
+Dependency: JOB 0–10
+
+JOB 12 — Operations Drill & Production Readiness
+Tujuan: membuktikan sistem tetap benar saat kondisi buruk.
+
+Drill wajib
+Worker crash.
+Provider timeout.
+Provider outage.
+Queue backlog.
+Duplicate scheduler tick.
+Clock skew.
+Expired lease.
+Retry exhaustion.
+Dead-letter replay.
+Database restart.
+Backup/restore.
+Email failure.
+Webhook 4xx.
+Webhook 5xx.
+Endpoint DNS/IP berubah.
+High concurrency.
+Workspace isolation under load.
+Done jika
+Recovery runbook tersedia.
+Queue dapat direstart tanpa duplicate alert.
+Dead-letter dapat direplay secara eksplisit.
+Metrics tersedia:
+due-to-run latency;
+run latency;
+stale rate;
+retry rate;
+DLQ rate;
+delivery success rate;
+recovery time.
+False-confidence review disetujui.
+Dependency: JOB 2, JOB 8, JOB 9, JOB 11
+
+Urutan pengerjaan yang valid
+Core Scan
+  ↓
+Risk Passport Snapshot
+  ↓
+JOB 0 — Contract & Trust Gate
+  ↓
+JOB 1 — Watch Target & Scope
+  ↓
+JOB 2 — Durable Scheduler
+  ↓
+JOB 3 — Snapshot Intake
+  ↓
+JOB 4 — Change & Materiality
+  ↓
+JOB 5 — Correlation & Grouping
+  ↓
+JOB 6 — Rule & Policy
+  ↓
+JOB 7 — Alert Lifecycle & Case
+  ↓
+JOB 8 — Health & Capability
+  ↓
+JOB 9 — Delivery
+  ↓
+JOB 10 — Forensic UX & Export
+  ↓
+JOB 11 — Security, Localization & Release Gate
+  ↓
+JOB 12 — Operations Drill
+
+Definition of “completed” yang valid
+Watchtower belum boleh disebut completed hanya karena:
+
+menu sudah tampil;
+target dapat ditambahkan;
+tombol Run due checks merespons;
+alert muncul di layar;
+UI terlihat bagus.
+Watchtower baru completed apabila:
+
+Target dapat dibuat, diedit, dipause, diresume, diarsipkan, dan dihapus sesuai policy.
+Scheduler durable, idempotent, lease-aware, retry-safe, dan restart-safe.
+Setiap run menghasilkan snapshot baru atau duplicate/no-change yang eksplisit.
+Setiap perubahan material memiliki before/after, provenance, confidence, freshness, materiality, dan explanation.
+Alert memiliki grouping, dedupe, suppression, escalation, lifecycle, dan audit.
+In-app, webhook, dan email memiliki status delivery, retry, failure, dan replay.
+Stale, unavailable, conflict, unverified, dan provider outage tidak disamarkan sebagai “aman” atau “tidak berubah”.
+Semua data private tenant-scoped.
+Desktop dan mobile lulus acceptance.
+English dan Bahasa Indonesia lengkap.
+Automated test, browser test, load test, recovery drill, dan runbook lulus.
+Tidak ada critical/high defect terbuka.
+Kesimpulan
+Fondasi Watchtower saat ini sudah mencakup sebagian W1, W2, W3, W4, W7, dan sebagian UX dasar. Namun berdasarkan PRD, bagian yang paling menentukan agar menjadi real working module adalah:
+
+Durable scheduler dan lease
+Evidence Pulse materiality
+Alert grouping dan lifecycle
+Delivery pipeline
+Forensic review UX
+Health/capability monitoring
+Browser acceptance dan recovery drill
+Jadi pekerjaan berikutnya bukan menambah dekorasi menu, melainkan menyelesaikan job secara berurutan sampai setiap output memiliki evidence, state, audit trail, dan test yang membuktikan perilakunya.
+
+
+
+Worked for 57 seconds
+
+Checkpoint made
+11 minutes ago
+oke lanjutkan build
+
+Free
+10 minutes ago
+Planning card implementation
+
+Planning card implementation
+Saya lanjutkan build dengan target user-facing yang sudah disepakati: enam card Watchtower yang benar-benar mengarahkan ke area kerja, bukan enam placeholder. Saya akan mempertahankan API dan data yang sudah ada, lalu menyusun ulang UI Watchtower agar Overview, Targets, Schedule & Runs, Evidence Pulse, Alerts & Review, serta Health/Delivery/Audit dapat dipilih dan menampilkan data nyata yang tersedia.
+
+
+
+6 actions
+Saya akan menambahkan enam card Watchtower ke halaman user dan mengikat tiap card ke data runtime yang sudah tersedia: jumlah target, due run, pulse, open review, serta health. Card akan menjadi navigasi ke panel kerja nyata—bukan kartu statis—dengan state aktif dan scroll ke area terkait.
+
+
+
+3 actions
+Saya menemukan satu UX bug dari integrasi pertama: card Watchtower ikut tampil di halaman Risk Passport karena keduanya memakai dashboard intelligence yang sama. Saya akan membatasi card tersebut hanya pada route Watchtower, lalu menjalankan test dan preview ulang supaya struktur navigasinya tidak bocor antar-modul.
+
+
+
+3 actions
+Card Watchtower sekarang terisolasi hanya untuk route Watchtower. Saya lanjutkan verifikasi runtime setelah perubahan ini dan memastikan seluruh suite tetap valid.
+
+
+
+3 actions
+Suite tetap hijau setelah penambahan enam card. Saya akan mengaktifkan perubahan di workflow dan menjalankan pemeriksaan visual yang tersedia untuk memastikan card benar-benar masuk ke route Watchtower tanpa merusak route Risk Passport.
+
+
+
+5 actions
+Pemeriksaan visual otomatis terhalang karena executable Chromium Playwright belum tersedia di environment, bukan karena assertion UI. Workflow aplikasi tetap berjalan. Saya akan tetap melakukan validasi visual melalui preview dan memperbaiki konsistensi tema/responsive card secara langsung sebelum melanjutkan fitur berikutnya.
+
+
+
+11 actions
+Fondasi card sudah aktif. Saya lanjutkan ke gap utama berikutnya dari PRD: lifecycle alert yang saat ini hanya mendukung acknowledgement. Saya akan menambahkan transisi auditable untuk ACKNOWLEDGED, SNOOZED, INVESTIGATING, RESOLVED, dan REOPENED, dengan endpoint dan action UI nyata—tanpa mengubah evidence atau histori snapshot.
+
+
+
+4 actions
+Implementasi lifecycle menemukan satu kontrak penting: status alert harus dipisahkan dari status delivery. Alert yang baru dibuat tidak boleh berstatus QUEUED karena itu status pengiriman, bukan lifecycle review. Saya koreksi menjadi OPEN, lalu verifikasi transisi dan seluruh suite agar acknowledgement lama tetap kompatibel.
+
+
+
+6 actions
+Lifecycle backend dan action UI sudah lolos seluruh 88 test. Saya rapikan satu detail correctness sebelum lanjut: counter “open” harus mengecualikan alert RESOLVED, dan action lifecycle harus menampilkan error di UI bila transisi ditolak—agar status tidak tampak berhasil padahal gagal.
+
+
+
+Edited app.js
+Counter dan error handling sudah diperbaiki. Saya lakukan smoke check terakhir setelah restart workflow agar perubahan ini aktif, lalu saya rangkum milestone build yang sudah nyata dan bagian berikutnya yang masih berada di backlog prioritas.
+
+
+
+2 actions
+Build milestone ini sudah lulus 88 test, tetapi perubahan lifecycle alert terakhir belum direstart ke workflow. Saya akan mengaktifkan versi terbaru sekarang dan memastikan server tetap bersih sebelum menyatakan milestone ini siap dipakai.
+
+
+
+3 actions
+Build milestone Watchtower sudah dilanjutkan dan aktif di preview.
+
+Yang sudah dibangun
+6 card user-facing Watchtower
+
+Watchtower Overview
+Monitored Targets
+Schedule & Runs
+Evidence Pulse
+Alerts & Review
+Health, Delivery & Audit
+Card menampilkan data runtime nyata:
+
+active targets;
+jumlah target;
+due checks;
+signal/pulse;
+open alerts;
+health dan item yang perlu direview.
+Card dapat diklik dan mengarahkan user ke panel kerja terkait.
+
+Card Watchtower hanya muncul di route Watchtower, tidak bocor ke Risk Passport.
+
+Responsive layout:
+
+desktop: 3 kolom;
+mobile: 2 kolom.
+Perbaikan backend Passport
+Review Passport otomatis di-anchor ke snapshot terbaru.
+Review lama tidak menunjuk lagi ke evidence snapshot yang kedaluwarsa.
+Status review sebelumnya tetap tercatat dalam timeline.
+Refresh snapshot menghasilkan event REFRESHED.
+Histori snapshot tetap immutable.
+Alert lifecycle yang sudah aktif
+Alert sekarang mendukung:
+
+OPEN
+ACKNOWLEDGED
+SNOOZED
+INVESTIGATING
+RESOLVED
+REOPENED
+
+Termasuk:
+
+transisi status yang divalidasi;
+actor dan timestamp;
+alasan perubahan;
+timeline audit;
+endpoint status;
+action UI untuk acknowledge, investigate, resolve, dan reopen;
+pemisahan status alert dengan status delivery.
+Perbaikan runtime
+Dependency pg dan dependency project yang dideklarasikan sudah terpasang.
+Sebelumnya workflow gagal karena Cannot find module 'pg'.
+Workflow sekarang aktif di port 5000.
+Log terakhir:
+CA X-RAY listening on http://0.0.0.0:5000
+
+Verifikasi
+88 test lulus
+JavaScript syntax check lulus
+git diff --check lulus
+Workflow berjalan tanpa error
+Preview aplikasi aktif
+Automated Playwright visual test belum dapat dijalankan karena executable Chromium belum tersedia di environment, bukan karena kegagalan assertion aplikasi. Milestone lanjutan yang sudah tersedia adalah pengujian browser nyata untuk alur login → scan → Watchtower → Run due checks.
+
+
+
+Worked for 3 minutes
+
+Checkpoint made
+6 minutes ago
+lanjutkan
+
+Free
+5 minutes ago
+Enhancing the user interface
+
+Enhancing the user interface
+Saya lanjutkan ke W1 yang masih kurang untuk target monitoring nyata: edit target, archive non-destruktif, dan tampilan status target yang konsisten. Ini penting agar Watchtower bukan hanya bisa “add/pause/remove”, tetapi punya lifecycle target sesuai PRD tanpa menghapus histori.
+
+
+
+3 actions
+Target lifecycle sudah diperluas tanpa menghapus histori: target kini dapat diedit dan di-archive, sementara scheduler hanya memproses target active. Saya akan menjalankan regression test, syntax check, lalu restart workflow agar perubahan ini langsung terlihat.
+
+
+
+2 actions
+Regression test tetap lulus. Saya akan restart workflow setelah perubahan target lifecycle ini agar status archive/edit aktif di preview, lalu cek log startup terakhir.
+
+
+
+4 actions
+Build lanjutan selesai untuk milestone ini.
+
+Fitur yang sudah aktif
+Enam card Watchtower:
+
+Watchtower Overview
+Monitored Targets
+Schedule & Runs
+Evidence Pulse
+Alerts & Review
+Health, Delivery & Audit
+Card menampilkan data runtime nyata dan bisa diklik.
+
+Card hanya muncul di halaman Watchtower.
+
+Target monitoring sekarang mendukung:
+
+Add;
+Edit label;
+Edit interval;
+Pause;
+Resume;
+Archive non-destruktif.
+Target archived tidak lagi diproses scheduler dan histori tetap dipertahankan.
+
+Alert lifecycle sekarang mendukung:
+
+Open;
+Acknowledge;
+Investigating;
+Snoozed melalui API;
+Resolved;
+Reopened.
+Status alert dipisahkan dari status delivery.
+
+Setiap perubahan status alert memiliki actor, timestamp, alasan, dan timeline.
+
+Counter open alert sudah mengecualikan alert resolved.
+
+Error transisi alert ditampilkan kembali di UI.
+
+Verifikasi
+Workflow aktif di port 5000.
+Server berjalan tanpa error:
+CA X-RAY listening on http://0.0.0.0:5000
+
+Seluruh 88 test lulus.
+Syntax check lulus.
+git diff --check lulus.
+Automated Playwright visual test masih terblokir karena Chromium executable belum tersedia di environment, bukan karena error aplikasi.
+Bagian besar berikutnya dari PRD yang masih perlu dibangun adalah durable scheduler dengan lease/retry/dead-letter, Evidence Pulse materiality yang lebih lengkap, delivery webhook/email end-to-end, forensic pulse detail, dan operations recovery drill.
