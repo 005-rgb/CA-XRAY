@@ -1,0 +1,1208 @@
+# JOBEN NETWORK — Three-Module Workflow Roadmap
+
+**Nama dokumen:** Roadmap Workflow 3 Modul  
+**Versi:** 1.0  
+**Tanggal:** 25 Agustus 2026  
+**Status:** Blueprint pembangunan terpadu  
+**Scope:** Core Scan, Risk Passport, Watchtower, serta handoff ke Review,
+Case, Decision Packet, Report, dan Enterprise Integration  
+**Asumsi:** Roadmap individual tiap modul telah dibangun dalam mode production,
+namun integrasi workflow dan operating model lintas modul tetap harus memenuhi
+gate dokumen ini.
+
+---
+
+## 1. Tujuan dan hasil akhir
+
+Dokumen ini mendefinisikan bagaimana tiga modul bekerja sebagai satu sistem
+enterprise, bukan sebagai tiga halaman terpisah.
+
+### 1.1 North-star workflow
+
+```text
+Target registration
+  → capability preflight
+  → Core Scan
+  → immutable Evidence Snapshot
+  → Risk Passport baseline/history
+  → Watchtower schedule
+  → Evidence Pulse
+  → alert grouping and delivery
+  → human review
+  → case and evidence request
+  → policy decision and approval
+  → Decision Packet
+  → signed report / API / downstream system
+  → continued monitoring and reopen
+```
+
+### 1.2 Positioning
+
+JOBEN NETWORK adalah **evidence operating system untuk keputusan risiko kontrak
+crypto yang dapat dijelaskan, dipantau, disetujui, dan diaudit**.
+
+Nilai utama bukan score tunggal. Nilai utamanya adalah hubungan yang tetap utuh
+antara:
+
+```text
+evidence → uncertainty → history → change → alert
+         → review → decision → report → audit
+```
+
+### 1.3 Peran modul
+
+| Modul | Peran | Pertanyaan utama | Output otoritatif |
+|---|---|---|---|
+| Core Scan | Microscope | Apa yang terbukti pada target sekarang? | Evidence Snapshot |
+| Risk Passport | Memory | Bagaimana identitas dan kondisi target berubah sepanjang waktu? | Passport Timeline |
+| Watchtower | Radar | Apa yang berubah, apakah material, dan siapa harus bertindak? | Evidence Pulse |
+| Review/Case | Decision control | Apa keputusan manusia dan policy yang berlaku? | Decision Packet |
+
+Watchtower adalah submodul operasional Risk Passport, bukan scanner kedua.
+Review dan Case bukan sumber fakta baru; keduanya mengikat evidence dengan
+keputusan manusia.
+
+---
+
+## 2. Prinsip yang tidak boleh dilanggar
+
+### 2.1 Evidence-first
+
+1. Evidence lebih penting daripada score.
+2. `UNKNOWN`, `UNAVAILABLE`, `UNVERIFIED`, `CONFLICT`, `PARTIAL`, dan
+   `VERIFIED` selalu dipertahankan sampai UI, report, API, dan delivery.
+3. Data provider yang kosong, timeout, stale, malformed, atau unavailable tidak
+   boleh berubah menjadi nilai aman, nol, atau `NO_CHANGE`.
+4. AI hanya boleh merangkum dan mengorganisasi evidence; AI tidak boleh mengubah
+   evidence, severity, policy, atau keputusan.
+
+### 2.2 Temporal integrity
+
+1. Snapshot bersifat immutable.
+2. Passport menyimpan histori, bukan menimpa masa lalu.
+3. Watchtower selalu membandingkan snapshot `before` dan `after`.
+4. Report lama tetap merepresentasikan kondisi saat diterbitkan.
+5. Perubahan membutuhkan revision baru dan lineage yang eksplisit.
+
+### 2.3 Human accountability
+
+1. Sistem boleh mendeteksi dan mengeskalasi, tetapi keputusan enterprise tetap
+   membutuhkan actor yang berwenang.
+2. Reviewer tidak otomatis menjadi approver.
+3. Resolve untuk alert berisiko tinggi membutuhkan rationale.
+4. Setiap perubahan state, policy, rule, assignment, delivery, dan export masuk
+   audit trail append-only.
+
+### 2.4 Honest coverage
+
+`Supported network` berarti capability tertentu tersedia, bukan semua evidence
+tersedia. Setiap target harus memiliki capability profile yang digunakan oleh
+Core Scan, Passport, Watchtower, Report, dan API secara konsisten.
+
+### 2.5 Tenant and security boundary
+
+Workspace scope ditentukan server-side. Client tidak pernah menjadi sumber
+otoritas untuk `workspaceId`, role, approval authority, atau export permission.
+
+---
+
+## 3. Kontrak sistem lintas modul
+
+### 3.1 Target Identity
+
+Target identity adalah canonical reference yang dipakai semua modul.
+
+Minimal:
+
+- `targetId`
+- `workspaceId` internal
+- `networkId`
+- normalized address/public key
+- address validation result
+- deployment/account existence result
+- protocol identity
+- classification
+- owner/assignee
+- created/updated timestamps
+
+Identity tidak boleh berubah ketika snapshot baru dibuat. Perubahan network atau
+address membuat target baru, bukan memutasi histori target lama.
+
+### 3.2 Capability Profile
+
+Capability profile harus memiliki versi dan digunakan oleh seluruh workflow.
+
+```text
+capabilityProfile:
+  network
+  addressValidation
+  deploymentVerification
+  abiOrSource
+  ownership
+  privilege
+  market
+  liquidity
+  holders
+  transferHistory
+  deployer
+  freshnessPolicy
+  limitations
+  profileVersion
+```
+
+Setiap capability memiliki status:
+
+```text
+NOT_SUPPORTED
+NOT_CHECKED
+AVAILABLE
+PARTIAL
+UNAVAILABLE
+PROVIDER_ERROR
+```
+
+### 3.3 Evidence Snapshot
+
+Evidence Snapshot adalah output Core Scan yang dapat direplay dan menjadi
+referensi semua modul downstream.
+
+Minimal:
+
+- `snapshotId`
+- `targetId`
+- `capturedAt`
+- `completedAt`
+- `evidenceHash`
+- evidence schema version
+- engine version
+- provider/source status
+- evidence register
+- finding set
+- risk range
+- reliability
+- coverage
+- freshness
+- conflict list
+- limitation list
+- history status
+- scan job reference
+
+Snapshot tidak boleh dihapus atau diedit secara in-place. Koreksi dibuat sebagai
+snapshot atau revision baru dengan reason dan lineage.
+
+### 3.4 Passport Timeline
+
+Passport memelihara:
+
+- target identity;
+- current snapshot pointer;
+- semua snapshot yang valid;
+- compare references;
+- risk trajectory;
+- evidence change timeline;
+- previous decisions;
+- open/reopened alerts;
+- related cases;
+- report revisions;
+- monitoring state.
+
+Passport current state boleh berubah, tetapi snapshot dan decision history tidak.
+
+### 3.5 ChangeSet dan Evidence Pulse
+
+Watchtower menghasilkan `ChangeSet` deterministik terlebih dahulu, kemudian
+membungkus perubahan bermakna sebagai `Evidence Pulse`.
+
+Minimal `ChangeSet`:
+
+- `beforeSnapshotId`
+- `afterSnapshotId`
+- field
+- before value
+- after value
+- delta
+- unit
+- direction
+- comparability
+- evidence references
+- observed/captured time
+- materiality
+- confidence
+- reliability
+- reason code
+
+Minimal `Evidence Pulse`:
+
+- `pulseId`
+- `correlationId`
+- `targetId`
+- `changeSetIds`
+- materiality
+- severity
+- trigger rule version
+- summary/message key
+- freshness
+- health state
+- alert reference
+- replay reference
+
+Jika dua snapshot tidak comparable, output harus `NOT_COMPARABLE`, bukan
+perubahan nol.
+
+### 3.6 Decision Packet
+
+Decision Packet adalah unit keputusan enterprise yang mengikat fakta, policy,
+dan keputusan manusia.
+
+```text
+Decision Packet
+  target identity
+  source snapshot(s)
+  before/after or pulse reference
+  evidence register
+  risk and reliability
+  coverage and limitations
+  policy version
+  case reference
+  reviewer
+  approver
+  decision
+  rationale
+  conditions
+  expiry
+  report revision
+  audit manifest
+  integrity metadata
+```
+
+Decision Packet harus dapat menjawab:
+
+> “Berdasarkan evidence apa, pada waktu kapan, menggunakan policy versi berapa,
+> dan siapa yang mengambil keputusan ini?”
+
+---
+
+## 4. Workflow utama pengguna
+
+### WF-01 — Register target dan preflight
+
+**Trigger:** pengguna mendaftarkan address untuk scan atau monitoring.
+
+**Alur:**
+
+1. Validasi format dan checksum protocol.
+2. Validasi network identity.
+3. Verifikasi deployment/account pada chain target.
+4. Evaluasi capability profile.
+5. Evaluasi provider availability dan freshness policy.
+6. Tampilkan coverage dan limitation sebelum scan dimulai.
+7. Simpan target version dan audit event.
+
+**Acceptance criteria:**
+
+- Invalid target berhenti sebelum provider call.
+- Address valid di chain A tetapi tidak deployed di chain B tidak mengambil data
+  dari chain A.
+- User melihat capability aktual, bukan klaim full coverage.
+- Target tenant lain tidak dapat dibaca atau diubah.
+
+### WF-02 — Core Scan menjadi Evidence Snapshot
+
+**Trigger:** manual scan, Watchtower run, API request, atau scheduled review.
+
+**Alur:**
+
+1. Buat idempotent scan job.
+2. Jalankan provider adapter sesuai capability.
+3. Simpan status tiap evidence family.
+4. Normalisasi ke canonical schema.
+5. Deteksi conflict dan comparability.
+6. Hitung risk range dan reliability secara terpisah.
+7. Simpan snapshot immutable.
+8. Publikasikan completion event.
+
+**Acceptance criteria:**
+
+- Request HTTP tidak menunggu lifetime history.
+- Retry tidak menggandakan evidence atau snapshot.
+- Provider error tidak menjadi demo fallback.
+- Risk tidak dipaksakan jika evidence inti tidak cukup.
+- Snapshot memiliki hash, provenance, freshness, dan limitation.
+
+### WF-03 — Attach ke Risk Passport
+
+**Trigger:** Core Scan menghasilkan snapshot valid atau partial yang dapat
+diterima policy.
+
+**Alur:**
+
+1. Cari Passport berdasarkan target identity.
+2. Jika belum ada, buat Passport baru.
+3. Tambahkan snapshot sebagai immutable timeline item.
+4. Tandai current snapshot sesuai policy.
+5. Hitung trajectory memakai snapshot comparable.
+6. Simpan lineage dan update monitoring context.
+7. Tawarkan compare, watchlist, report, atau review.
+
+**Acceptance criteria:**
+
+- Snapshot baru tidak menimpa snapshot lama.
+- Partial snapshot tidak tampil sebagai complete history.
+- Trajectory mengabaikan evidence yang tidak comparable.
+- Current state dan historical state terlihat terpisah.
+
+### WF-04 — Activate Watchtower
+
+**Trigger:** user memilih `Start monitoring`.
+
+**Alur:**
+
+1. Pilih target Passport.
+2. Tampilkan capability dan monitoring limitations.
+3. Pilih interval, timezone, rule set, severity, dan recipients.
+4. Tampilkan estimated checks dan delivery policy.
+5. Validasi permission dan plan entitlement.
+6. Simpan target version, schedule, dan rule version.
+7. Jadwalkan next due secara durable.
+
+**Acceptance criteria:**
+
+- Schedule memiliki timezone eksplisit.
+- Pause/resume tidak menghidupkan pekerjaan lama secara tidak sengaja.
+- Rule change tidak mengubah histori pulse sebelumnya.
+- Target aktif hanya jika capability minimum terpenuhi atau user menerima
+  limitation secara eksplisit.
+
+### WF-05 — Watchtower run menjadi Evidence Pulse
+
+**Trigger:** target due.
+
+**Alur:**
+
+1. Scheduler membuat satu idempotent monitoring run per target/window.
+2. Worker memperoleh lease.
+3. Core Scan menjalankan scan terjadwal.
+4. Snapshot baru masuk ke Passport.
+5. Watchtower mengambil before/after snapshot.
+6. ChangeSet menghitung perubahan comparable.
+7. Materiality engine menerapkan threshold dan policy.
+8. Signal correlation menggabungkan perubahan dalam satu pulse.
+9. Buat alert jika ada trigger.
+10. Perbarui monitoring health dan run telemetry.
+
+**Acceptance criteria:**
+
+- Dua worker tidak dapat memproses window yang sama secara bersamaan.
+- Restart worker tidak membuat duplicate pulse.
+- Provider outage menghasilkan `DEGRADED`, `STALE`, atau `ERROR`, bukan
+  `NO_CHANGE`.
+- Perubahan non-material dapat dicatat tanpa mengganggu inbox.
+- Pulse dapat direplay dengan hasil identik.
+
+### WF-06 — Alert delivery dan review
+
+**Trigger:** Evidence Pulse material.
+
+**Alur:**
+
+1. Group alert berdasarkan correlation key.
+2. Terapkan cooldown, quiet hours, suppression, dan escalation.
+3. Buat in-app alert.
+4. Kirim channel yang diizinkan.
+5. Simpan delivery attempts terpisah per channel.
+6. Assign reviewer sesuai role dan policy.
+7. Reviewer melihat before/after, evidence, confidence, freshness, dan reason.
+8. Reviewer acknowledge, snooze, investigate, request evidence, atau escalate.
+
+**Acceptance criteria:**
+
+- Satu pulse memiliki satu audit identity meskipun dikirim lewat banyak channel.
+- Delivery failure tidak menghapus alert in-app.
+- Permanent failure tidak di-retry tanpa perubahan endpoint atau replay.
+- Reviewer dapat membedakan alert dibuat dari notifikasi berhasil terkirim.
+- Alert high/critical tidak dapat resolve tanpa rationale.
+
+### WF-07 — Alert menjadi Case dan Decision Packet
+
+**Trigger:** reviewer memilih `Open Case` atau policy mewajibkan case.
+
+**Alur:**
+
+1. Buat case dengan `alertId`, `pulseId`, snapshot, dan evidence references.
+2. Assign owner dan reviewer.
+3. Buat evidence request untuk gap yang dapat ditindaklanjuti.
+4. Kumpulkan komentar dan decision log.
+5. Terapkan policy version.
+6. Minta independent approval bila diwajibkan.
+7. Record approve, reject, hold, atau conditional decision.
+8. Buat Decision Packet immutable.
+9. Generate report revision.
+10. Set expiry dan next review date.
+
+**Acceptance criteria:**
+
+- Case tidak kehilangan konteks alert atau snapshot.
+- Evidence request tidak memutasi evidence sumber.
+- Creator tidak dapat menjadi sole approver jika separation of duties aktif.
+- Decision tanpa rationale ditolak.
+- Reopen terjadi jika snapshot baru memenuhi trigger atau decision expired.
+
+### WF-08 — Report, API, dan downstream sync
+
+**Trigger:** Decision Packet atau report diminta.
+
+**Alur:**
+
+1. Pilih output: executive, forensic, machine bundle, atau public capsule.
+2. Terapkan audience dan redaction policy.
+3. Preview data yang akan terlihat recipient.
+4. Lock snapshot, version, locale, dan integrity metadata.
+5. Publish immutable report revision.
+6. Kirim event ke API/webhook/ticketing/SIEM sesuai consent.
+7. Simpan delivery dan access audit.
+8. Tawarkan current revision secara eksplisit tanpa mengganti revision lama.
+
+**Acceptance criteria:**
+
+- Report lama tidak berubah saat snapshot baru tersedia.
+- Public report tidak membocorkan workspace, secret, private note, atau actor ID.
+- Export mempertahankan evidence status dan limitation.
+- API consumer dapat membedakan `UNKNOWN`, `UNAVAILABLE`, dan `VERIFIED`.
+- Recipient memahami captured-at, issued-at, expiry, dan outdated status.
+
+---
+
+## 5. Roadmap pembangunan terpadu
+
+Roadmap ini menggunakan gate, bukan hanya daftar fitur. Fase berikutnya tidak
+boleh dianggap selesai hanya karena screen atau endpoint telah tersedia.
+
+### Fase 0 — Shared trust contract
+
+**Outcome:** tiga modul memiliki satu bahasa evidence dan satu lineage model.
+
+**Pekerjaan:**
+
+- finalisasi Target Identity;
+- capability registry yang menjadi sumber semua UI dan engine;
+- canonical Evidence Snapshot;
+- status taxonomy;
+- freshness dan comparability policy;
+- stable IDs dan schema versions;
+- ChangeSet/Evidence Pulse contract;
+- Decision Packet contract;
+- event taxonomy dan correlation IDs;
+- threat model untuk tenant escape, replay, SSRF, secret exposure, dan abuse;
+- localization key contract.
+
+**Gate F0:**
+
+- snapshot dapat direplay;
+- semua status uncertainty dipertahankan;
+- tidak ada parallel evidence schema antar-modul;
+- semua derived object memiliki lineage;
+- security, product, core intelligence, dan localization sign-off.
+
+### Fase 1 — Core Scan evidence foundation
+
+**Outcome:** Core Scan menghasilkan snapshot yang dapat dipercaya dan dikonsumsi
+Passport maupun Watchtower.
+
+**Pekerjaan:**
+
+- chain-aware validation;
+- capability-aware preflight;
+- provider adapter contract;
+- schema validation;
+- provenance dan evidence hash;
+- risk/reliability separation;
+- partial history dan cursor continuation;
+- asynchronous job lifecycle;
+- provider health dan cost telemetry;
+- desktop/mobile evidence presentation.
+
+**Gate F1:**
+
+- semua network yang dipasarkan memiliki capability declaration;
+- full history hanya disebut complete jika cursor habis;
+- provider failure tidak menjadi demo atau no-change;
+- scan report dapat direplay secara deterministik;
+- coverage dan limitation visible pada UI/API/report.
+
+### Fase 2 — Passport identity and temporal layer
+
+**Outcome:** setiap target memiliki memori longitudinal yang stabil.
+
+**Pekerjaan:**
+
+- create/attach Passport;
+- immutable snapshot timeline;
+- current snapshot pointer;
+- compare contract bersama Watchtower;
+- risk trajectory;
+- freshness and coverage history;
+- previous decision lineage;
+- target merge/split policy jika identity correction dibutuhkan;
+- retention dan export manifest.
+
+**Gate F2:**
+
+- historical snapshot tidak dapat diedit in-place;
+- Passport dapat menunjukkan mengapa current state berbeda;
+- trajectory tidak menghitung evidence non-comparable;
+- snapshot lama tetap dapat diakses sesuai retention;
+- tenant isolation diuji setelah restart dan restore.
+
+### Fase 3 — Durable Watchtower orchestration
+
+**Outcome:** monitoring dapat berjalan lama, restart-safe, dan tidak noisy.
+
+**Pekerjaan:**
+
+- durable scheduler;
+- target/window idempotency;
+- claim/lease;
+- bounded concurrency;
+- retry/backoff;
+- dead-letter dan explicit replay;
+- pause/resume;
+- missed-run policy;
+- health state per target;
+- due lag, queue depth, stale rate, dan recovery metrics.
+
+**Gate F3:**
+
+- duplicate worker tidak membuat duplicate run/pulse;
+- expired lease dapat direclaim;
+- worker crash dapat dipulihkan;
+- stale/degraded tidak ditampilkan sebagai no-change;
+- provider outage drill dan queue recovery drill lulus.
+
+### Fase 4 — Evidence Pulse and alert operations
+
+**Outcome:** perubahan material menjadi alert yang dapat dijelaskan.
+
+**Pekerjaan:**
+
+- field registry;
+- threshold absolut/relatif;
+- comparability;
+- materiality;
+- grouping;
+- correlation;
+- suppression;
+- cooldown;
+- escalation;
+- alert lifecycle;
+- review queue;
+- pulse replay;
+- alert evidence register.
+
+**Gate F4:**
+
+- setiap alert memiliki before/after dan evidence references;
+- rule replay menghasilkan keputusan sama;
+- conflict tidak menjadi risk increase tanpa policy;
+- alert medium/high/critical memiliki rationale workflow;
+- false-confidence review disetujui.
+
+### Fase 5 — Enterprise review and decision control
+
+**Outcome:** organisasi dapat mengubah signal menjadi keputusan yang
+accountable.
+
+**Pekerjaan:**
+
+- Case handoff;
+- evidence request;
+- assignment;
+- fine-grained RBAC;
+- separation of duties;
+- policy-as-code;
+- independent approval;
+- conditional decision;
+- expiry;
+- reopen;
+- Decision Packet;
+- signed report revision;
+- legal hold dan retention controls.
+
+**Gate F5:**
+
+- alert-to-case context tidak putus;
+- decision tidak dapat dibuat tanpa evidence/rationale sesuai policy;
+- approver authority diverifikasi server-side;
+- Decision Packet dapat diaudit dan direplay;
+- access/export audit lengkap.
+
+### Fase 6 — Delivery and full integration fabric
+
+**Outcome:** hasil dapat mengalir aman ke sistem enterprise tanpa kehilangan
+semantics.
+
+**Pekerjaan:**
+
+- in-app inbox;
+- email;
+- Slack/Teams;
+- signed webhook;
+- Jira/Linear/ServiceNow;
+- SIEM/SOAR;
+- versioned API dan SDK;
+- warehouse/data lake export;
+- schema registry;
+- event replay;
+- delivery health;
+- integration consent dan budget;
+- per-channel redaction.
+
+**Gate F6:**
+
+- delivery status dapat diamati end-to-end;
+- retry, replay, dan dead-letter aman;
+- signature verification terdokumentasi;
+- tidak ada secret di log/payload/URL;
+- downstream system menerima status uncertainty tanpa semantic loss.
+
+### Fase 7 — Intelligence and optimization
+
+**Outcome:** JOBEN memberi insight strategis setelah fondasi trust stabil.
+
+**Pekerjaan:**
+
+- cross-target correlation;
+- deployer/funding/ownership graph;
+- repeated behavior;
+- anomaly clusters;
+- adaptive baseline dengan guardrail;
+- what-if policy simulation;
+- alert fatigue analytics;
+- Evidence Copilot;
+- customer-specific methodology;
+- historical accuracy feedback.
+
+**Gate F7:**
+
+- semua inference dilabeli `INFERRED`;
+- tidak ada claim ownership/malicious intent tanpa independent evidence;
+- AI memiliki citation dan limitation;
+- policy simulation tidak memutasi production rule;
+- false-positive dan false-confidence metrics tidak memburuk.
+
+---
+
+## 6. Workstream per modul
+
+### 6.1 Core Scan
+
+**Prioritas P0:**
+
+- target validation;
+- capability matrix;
+- evidence schema;
+- provenance;
+- provider health;
+- risk/reliability;
+- partial history;
+- asynchronous lifecycle.
+
+**Prioritas P1:**
+
+- cursor continuation;
+- provider quorum;
+- replay;
+- cost-aware scheduling;
+- evidence coverage UX;
+- error-state UX.
+
+**Prioritas P2:**
+
+- additional indexers;
+- native adapter expansion;
+- customer methodology profiles;
+- evidence quality scoring.
+
+Core Scan tidak boleh:
+
+- membuat keputusan compliance;
+- mengirim alert langsung tanpa Watchtower;
+- menyimpan human decision sebagai bagian dari evidence;
+- menggunakan AI sebagai sumber fakta.
+
+### 6.2 Risk Passport
+
+**Prioritas P0:**
+
+- stable target identity;
+- immutable snapshots;
+- current state;
+- timeline;
+- compare;
+- trajectory;
+- monitoring context.
+
+**Prioritas P1:**
+
+- decision history;
+- report revision lineage;
+- freshness timeline;
+- evidence coverage trend;
+- target classification;
+- ownership/role handoff.
+
+**Prioritas P2:**
+
+- cross-target portfolio;
+- exposure rollup;
+- historical behavior profile;
+- portfolio-level risk review.
+
+Risk Passport tidak boleh:
+
+- menimpa snapshot lama;
+- menyamakan current state dengan current truth jika stale;
+- mengubah provider evidence;
+- menyembunyikan coverage regression.
+
+### 6.3 Watchtower
+
+**Prioritas P0:**
+
+- durable scheduler;
+- target/window idempotency;
+- before/after comparison;
+- materiality;
+- health state;
+- alert lifecycle;
+- evidence pulse.
+
+**Prioritas P1:**
+
+- grouping;
+- suppression;
+- escalation;
+- delivery pipeline;
+- review queue;
+- case handoff;
+- operator health view.
+
+**Prioritas P2:**
+
+- cross-target correlation;
+- adaptive baseline;
+- policy simulation;
+- stakeholder routing;
+- alert fatigue optimization.
+
+Watchtower tidak boleh:
+
+- menghitung ulang provider fact secara terpisah;
+- mengubah evidence sumber;
+- menganggap provider outage sebagai no-change;
+- membuat klaim aman karena tidak ada alert.
+
+---
+
+## 7. Enterprise control plane
+
+### 7.1 Role model
+
+Permission harus dipisahkan berdasarkan tindakan:
+
+```text
+target.create
+target.update
+scan.execute
+evidence.view
+passport.view
+watchtower.manage
+alert.acknowledge
+alert.resolve
+case.create
+case.assign
+evidence.request
+decision.propose
+decision.approve
+policy.edit
+policy.publish
+report.publish
+report.export
+integration.manage
+retention.manage
+audit.view
+```
+
+### 7.2 Separation of duties
+
+Minimal policy:
+
+- pembuat policy tidak menjadi sole approver;
+- reviewer alert high/critical tidak otomatis menjadi approver;
+- creator Decision Packet tidak dapat menyetujui sendiri;
+- integration administrator tidak otomatis dapat membaca evidence sensitif;
+- export sensitive pack membutuhkan permission tersendiri.
+
+### 7.3 Policy-as-code
+
+Policy harus mendukung:
+
+- version;
+- draft;
+- review;
+- approval;
+- publish;
+- effective date;
+- rollback;
+- expiry;
+- simulation;
+- audit reason.
+
+Policy tidak boleh diterapkan retroaktif secara diam-diam kepada keputusan lama.
+
+### 7.4 Retention and legal hold
+
+Enterprise harus dapat mengatur:
+
+- snapshot retention;
+- alert retention;
+- case retention;
+- report retention;
+- legal hold;
+- deletion request;
+- approval deletion;
+- export manifest;
+- redaction log;
+- access log.
+
+Penghapusan tidak boleh memutus audit chain tanpa meninggalkan tombstone dan
+alasan retention policy.
+
+---
+
+## 8. UX workflow dan information hierarchy
+
+### 8.1 Urutan informasi
+
+Pada setiap surface, gunakan urutan:
+
+```text
+Health
+→ current assessment
+→ material change
+→ evidence
+→ uncertainty
+→ policy impact
+→ next action
+```
+
+### 8.2 Tiga tingkat informasi
+
+**Executive layer**
+
+- kondisi saat ini;
+- apa yang berubah;
+- dampak;
+- tindakan yang diminta.
+
+**Analyst layer**
+
+- before/after;
+- finding;
+- evidence coverage;
+- confidence;
+- freshness;
+- policy;
+- related alerts.
+
+**Forensic layer**
+
+- raw evidence reference;
+- provenance;
+- provider status;
+- hashes;
+- timestamps;
+- schema/version;
+- replay context.
+
+### 8.3 Responsive behavior
+
+Desktop dapat memakai table dan multi-column comparison. Mobile harus memakai:
+
+```text
+health card
+→ pulse summary
+→ progressive evidence disclosure
+→ fixed/reachable primary action
+→ full forensic detail
+```
+
+Minimum:
+
+- tidak ada horizontal overflow untuk tindakan utama;
+- touch target minimal 44px;
+- status tidak hanya dibedakan dengan warna;
+- address memiliki copy action;
+- loading, empty, stale, error, permission, dan partial state memiliki desain;
+- semua status tersedia dalam English dan Bahasa Indonesia.
+
+---
+
+## 9. Integration architecture
+
+### 9.1 Event backbone
+
+Semua event lintas modul memiliki:
+
+- `eventId`;
+- `eventType`;
+- `schemaVersion`;
+- `occurredAt`;
+- `actorType`;
+- `workspaceScope`;
+- `targetId`;
+- `correlationId`;
+- `causationId`;
+- source object reference;
+- idempotency key.
+
+Event minimum:
+
+```text
+TARGET_REGISTERED
+SCAN_REQUESTED
+SNAPSHOT_COMPLETED
+SNAPSHOT_PARTIAL
+SNAPSHOT_FAILED
+PASSPORT_UPDATED
+MONITORING_RUN_COMPLETED
+EVIDENCE_PULSE_CREATED
+ALERT_CREATED
+ALERT_ACKNOWLEDGED
+CASE_CREATED
+DECISION_RECORDED
+DECISION_PACKET_PUBLISHED
+REPORT_REVISION_PUBLISHED
+DELIVERY_FAILED
+DELIVERY_REPLAYED
+```
+
+### 9.2 Integrasi eksternal berdasarkan urutan nilai
+
+**Identity:** SSO SAML/OIDC, SCIM, group mapping, MFA enforcement.  
+**Communication:** email, Slack, Microsoft Teams, signed webhook.  
+**Work management:** Jira, Linear, ServiceNow.  
+**Security operations:** SIEM, SOAR, incident platform.  
+**Data platform:** warehouse, data lake, scheduled export.  
+**Developer:** versioned API, SDK, schema registry, sandbox, usage metering.
+
+Tidak ada integrasi yang boleh mengirim data tanpa:
+
+- consent;
+- audience policy;
+- redaction policy;
+- event version;
+- delivery audit;
+- retry/replay policy;
+- secret management.
+
+---
+
+## 10. Observability dan success metrics
+
+### 10.1 Correctness
+
+- duplicate snapshot rate;
+- duplicate pulse rate;
+- false-confidence incident rate;
+- alert dengan evidence register lengkap;
+- pulse dengan valid before/after;
+- replay determinism rate;
+- unknown/unavailable preservation rate;
+- decision packet dengan policy dan approval lengkap.
+
+### 10.2 Reliability
+
+- p50/p95 scan latency;
+- p50/p95 monitoring due lag;
+- provider timeout/error rate;
+- stale target rate;
+- queue retry/DLQ rate;
+- worker recovery time;
+- delivery success rate;
+- report/API availability;
+- RPO/RTO drill result.
+
+### 10.3 Product
+
+- scan-to-Passport conversion;
+- Passport-to-Watchtower activation;
+- alert acknowledgement time;
+- alert-to-case conversion;
+- review completion time;
+- decision expiry/reopen rate;
+- alert suppression rate;
+- mobile review completion;
+- report share/verification rate;
+- integration adoption;
+- cost per completed review.
+
+Semua metric harus dapat dipotong berdasarkan workspace, network, provider,
+capability, severity, dan plan tanpa membocorkan tenant lain.
+
+---
+
+## 11. Release gates terpadu
+
+### Gate A — Trustable Evidence
+
+- Core Scan contract lulus;
+- address dan chain validation lulus;
+- evidence provenance lengkap;
+- status uncertainty dipertahankan;
+- score tidak dipaksakan ketika evidence inti kurang;
+- snapshot immutable dan replayable.
+
+### Gate B — Temporal Passport
+
+- target identity stabil;
+- timeline immutable;
+- compare memakai semantics bersama;
+- trajectory tidak menggabungkan non-comparable evidence;
+- current versus historical state jelas.
+
+### Gate C — Durable Monitoring
+
+- scheduler restart-safe;
+- lease/retry/DLQ;
+- no duplicate run/pulse;
+- stale dan provider degradation terpisah dari no-change;
+- health dashboard dan recovery drill tersedia.
+
+### Gate D — Actionable Review
+
+- alert memiliki before/after/evidence;
+- grouping dan suppression auditable;
+- reviewer assignment dan SLA;
+- case handoff utuh;
+- high-risk resolve membutuhkan rationale;
+- tenant/RBAC isolation lulus.
+
+### Gate E — Enterprise Decision
+
+- policy versioning;
+- separation of duties;
+- independent approval;
+- Decision Packet;
+- signed report revision;
+- retention/legal hold;
+- audit export.
+
+### Gate F — Integration Ready
+
+- API/webhook schema versioned;
+- delivery status end-to-end;
+- retry/replay aman;
+- signature verification;
+- no-secret logging;
+- downstream uncertainty semantics preserved.
+
+### Gate G — Production Outcome
+
+- load test sesuai target kapasitas;
+- provider outage drill;
+- worker crash drill;
+- database restore drill;
+- false-confidence review;
+- accessibility and localization sign-off;
+- product, security, operations, dan customer success sign-off.
+
+---
+
+## 12. Definition of Done sistem
+
+Workflow tiga modul hanya boleh disebut **completed** jika:
+
+1. Target tervalidasi pada network yang benar.
+2. Capability dan limitation terlihat sebelum dan sesudah scan.
+3. Core Scan menghasilkan snapshot immutable dengan provenance.
+4. Risk, reliability, coverage, freshness, dan health terpisah.
+5. Snapshot masuk ke Passport tanpa merusak histori.
+6. Watchtower membandingkan snapshot yang comparable.
+7. Provider failure tidak menjadi no-change.
+8. Evidence Pulse dapat ditelusuri ke before/after snapshot.
+9. Alert dapat dikirim dan status delivery dapat diamati.
+10. Reviewer dapat bergerak dari alert ke case tanpa kehilangan evidence.
+11. Decision membutuhkan policy, actor, rationale, dan approval sesuai role.
+12. Decision Packet dapat direplay dan diaudit.
+13. Report lama immutable dan revision baru memiliki lineage.
+14. API dan integrasi eksternal mempertahankan status uncertainty.
+15. Retry, replay, pause, resume, expiry, dan recovery tidak membuat duplicate.
+16. Semua mutation tenant-scoped server-side.
+17. Semua user-facing copy tersedia dalam English dan Bahasa Indonesia.
+18. Desktop, mobile, keyboard, dan permission states telah diuji.
+19. Observability dapat membedakan correctness, reliability, dan usage.
+20. Restore, outage, queue recovery, delivery failure, dan security drill lulus.
+
+---
+
+## 13. Risiko strategis dan guardrail
+
+| Risiko | Dampak | Guardrail |
+|---|---|---|
+| Score dianggap jaminan aman | liability dan keputusan buruk | risk range, coverage, disclaimer, evidence-first UI |
+| Provider outage terlihat no-change | false confidence | health state terpisah dan stale detection |
+| Alert terlalu berisik | reviewer mengabaikan signal | grouping, suppression, cooldown, fatigue metrics |
+| Histori ditimpa | audit tidak dapat dipertanggungjawabkan | immutable snapshots dan revision lineage |
+| AI terlalu berkuasa | evidence semantics berubah | citation-only copilot dan human approval |
+| Tenant data bocor | security/compliance incident | server-side scope, RBAC, redaction, access audit |
+| Integrasi gagal diam-diam | keputusan terlambat | outbox, delivery state, retry, DLQ, replay |
+| Network breadth mengalahkan depth | capability tidak jujur | capability registry dan onboarding gate |
+| Policy berubah tanpa kontrol | keputusan lama menjadi ambigu | policy version, effective date, approval, simulation |
+| Cost provider tidak terkendali | margin dan availability turun | budget, quota, concurrency, cost telemetry |
+
+---
+
+## 14. Prioritas eksekusi akhir
+
+Jika seluruh roadmap individual dianggap telah tersedia, urutan integrasi yang
+paling aman adalah:
+
+1. **Decision Packet dan shared lineage**
+2. **Capability-aware cross-module contract**
+3. **Passport-to-Watchtower durable workflow**
+4. **Evidence Pulse, grouping, dan alert health**
+5. **Alert-to-Case review dengan separation of duties**
+6. **Policy-as-code dan approval**
+7. **Report revision serta verification**
+8. **Enterprise identity dan delivery integrations**
+9. **Replay, simulation, dan operational drills**
+10. **Evidence Copilot dan advanced intelligence**
+
+Jangan memulai advanced intelligence sebelum:
+
+- Evidence Snapshot stabil;
+- Passport timeline immutable;
+- Watchtower tidak noisy;
+- alert dapat direplay;
+- Decision Packet dapat diaudit;
+- provider outage tidak menghasilkan false confidence.
+
+---
+
+## 15. Target pengalaman pengguna
+
+Pada setiap titik workflow, pengguna harus selalu tahu:
+
+```text
+Saya sedang melihat apa?
+Data ini diambil kapan?
+Seberapa lengkap dan reliable?
+Apa yang berubah?
+Mengapa sistem menandainya?
+Apa tindakan saya berikutnya?
+Siapa yang bertanggung jawab?
+Apakah keputusan ini masih berlaku?
+```
+
+Jika satu layar tidak dapat menjawab pertanyaan yang relevan untuk tahapnya,
+workflow belum dianggap enterprise-complete.
