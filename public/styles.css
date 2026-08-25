@@ -2214,6 +2214,50 @@ html:not([data-theme="light"]) .private-view #landing .scan-history {
   max-width: 1220px;
 }
 
+html:not([data-theme="light"]) .scan-history {
+  background: #111c27;
+  border-color: var(--joben-line);
+  box-shadow: 0 16px 34px rgba(0,0,0,.18);
+}
+
+html:not([data-theme="light"]) .history-controls label {
+  color: #b8c6cc;
+}
+
+html:not([data-theme="light"]) .history-controls select,
+html:not([data-theme="light"]) .settings-form textarea {
+  color: var(--joben-text);
+  background: #0b151f;
+  border-color: var(--joben-line-bright);
+  border-radius: 7px;
+  color-scheme: dark;
+}
+
+html:not([data-theme="light"]) .history-controls select option {
+  color: var(--joben-text);
+  background: #0b151f;
+}
+
+html:not([data-theme="light"]) .history-controls select:focus,
+html:not([data-theme="light"]) .settings-form textarea:focus {
+  border-color: var(--joben-cyan);
+  box-shadow: 0 0 0 3px rgba(77,225,208,.12);
+}
+
+html:not([data-theme="light"]) .scan-history-list,
+html:not([data-theme="light"]) .history-row {
+  border-color: var(--joben-line);
+}
+
+html:not([data-theme="light"]) .history-row strong {
+  color: var(--joben-text);
+}
+
+html:not([data-theme="light"]) .history-row div span,
+html:not([data-theme="light"]) .history-state {
+  color: var(--joben-muted);
+}
+
 html:not([data-theme="light"]) .dashboard-page,
 html:not([data-theme="light"]) .settings-page {
   padding: 38px 46px 72px;
