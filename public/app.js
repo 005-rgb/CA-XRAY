@@ -1440,7 +1440,20 @@ function passportMetric(label, value, tone = "") {
 }
 function renderPassportArea() {
   const data = passportWorkspaceData;
-  if (!data || !passportAreaContent) return;
+  if (!passportAreaContent) return;
+  if (!data) {
+    const emptyAreas = {
+      overview: ["Overview", "Risk posture, reliability, coverage, health, and the primary review action will appear here."],
+      evidence: ["Risk & Evidence", "Risk fingerprint, evidence provenance, uncertainty budget, and freshness details will appear here."],
+      changes: ["Changes & Trajectory", "Before/after snapshots, material changes, and risk momentum require at least two completed snapshots."],
+      control: ["Control & Market", "Observed control paths, ownership relationships, holder distribution, liquidity, and exitability context will appear here."],
+      review: ["Review & Monitoring", "Evidence-backed next checks, watch rules, alert history, and investigator actions will appear here."],
+      audit: ["Compare & Audit", "Replay-safe snapshots, comparison context, evidence hashes, notes, and audit export will appear here."],
+    };
+    const [title, description] = emptyAreas[passportArea] || emptyAreas.overview;
+    passportAreaContent.innerHTML = `<div class="passport-area-heading"><div><span class="card-kicker">WORKSPACE AREA</span><h4>${escapeHtml(title)}</h4></div><span class="data-label">AWAITING SNAPSHOT</span></div><div class="passport-empty-state"><strong>${escapeHtml(title)} is ready.</strong><p>${escapeHtml(description)}</p><a class="secondary-button" href="/dashboard/new-scan">Start a live scan <span>→</span></a></div>`;
+    return;
+  }
   const current = data.passport.current || {};
   const risk = current.risk || {};
   const evidence = current.evidence || [];
