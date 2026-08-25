@@ -415,22 +415,22 @@ function valueOf(dataPoint, fallback = "UNKNOWN") {
 function formatValue(value) {
   if (value === null || value === undefined || value === "") return "UNKNOWN";
   if (typeof value === "boolean") return value ? "DETECTED" : "NOT DETECTED";
-  if (typeof value === "number") return value.toLocaleString("en-US", { maximumFractionDigits: 4 });
+  if (typeof value === "number") return value.toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 4 });
   return String(value);
 }
 
 function formatCurrency(value) {
   if (!Number.isFinite(Number(value))) return "UNKNOWN";
-  return Number(value).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  return Number(value).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
 function formatPercent(value) {
-  return Number.isFinite(Number(value)) ? `${Number(value).toLocaleString("en-US", { maximumFractionDigits: 2 })}%` : "UNKNOWN";
+  return Number.isFinite(Number(value)) ? `${Number(value).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 2 })}%` : "UNKNOWN";
 }
 
 function formatDate(value) {
   if (!value || !Number.isFinite(Date.parse(value))) return "UNKNOWN";
-  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC";
+  return new Intl.DateTimeFormat(JobenI18n.locale === "id" ? "id-ID" : "en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC";
 }
 
 function truncateAddress(value) {
@@ -945,17 +945,17 @@ function renderAdminOverview(data) {
   const audit = data.audit || [];
   const terminal = Number(scans.succeeded || 0) + Number(scans.failed || 0) + Number(scans.cancelled || 0);
   const failureRate = terminal ? `${((Number(scans.failed || 0) / terminal) * 100).toFixed(1)}%` : "—";
-  adminScanThroughput.textContent = Number(scans.completed24h || 0).toLocaleString("en-US");
+  adminScanThroughput.textContent = Number(scans.completed24h || 0).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US");
   adminScanThroughputNote.textContent = scans.averageDurationMs === null || scans.averageDurationMs === undefined
     ? "No completed-job latency"
-    : `avg ${Number(scans.averageDurationMs).toLocaleString("en-US")} ms`;
+    : `avg ${Number(scans.averageDurationMs).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US")} ms`;
   adminFailureRate.textContent = failureRate;
-  adminFailureRateNote.textContent = `${Number(scans.failed || 0).toLocaleString("en-US")} failed · ${terminal.toLocaleString("en-US")} terminal`;
-  adminQueueDepth.textContent = Number(queue.depth || 0).toLocaleString("en-US");
+  adminFailureRateNote.textContent = `${Number(scans.failed || 0).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US")} failed · ${terminal.toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US")} terminal`;
+  adminQueueDepth.textContent = Number(queue.depth || 0).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US");
   adminQueueNote.textContent = `${Number(queue.running || 0)} running · ${Number(queue.pending || 0)} pending`;
-  adminWorkspaceCount.textContent = Number(stats.workspaces || 0).toLocaleString("en-US");
+  adminWorkspaceCount.textContent = Number(stats.workspaces || 0).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US");
   adminWorkspaceSummary.textContent = `${Number(stats.teamWorkspaces || 0)} team · ${Number(stats.personalWorkspaces || 0)} personal`;
-  adminUserCount.textContent = Number(stats.users || 0).toLocaleString("en-US");
+  adminUserCount.textContent = Number(stats.users || 0).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US");
   adminUserSummary.textContent = `${Number(stats.verifiedUsers || 0)} verified · ${Number(stats.activeSessions || 0)} active sessions`;
   adminSnapshotTime.textContent = `Snapshot ${formatDate(data.generatedAt)}`;
   const storageReady = data.platform?.storage?.configured;
@@ -1775,7 +1775,7 @@ function renderHolderLiquidity(scan) {
         ${metric("24h volume", l.volume24h, formatCurrency)}
         ${metric("Pair", l.pair, truncateAddress)}
         ${metric("DEX", l.dex)}
-        ${metric("Price", l.price, (value) => `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 8 })}`)}
+        ${metric("Price", l.price, (value) => `$${Number(value).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 8 })}`)}
         ${metric("24h change", l.change24h, formatPercent)}
       </div><p class="pair-note">Primary pair rule: ${escapeHtml(l.primaryPairRule || "Highest-evidence pair selection rule.")} Liquidity lock status is not claimed because no reliable lock source is configured.</p>`}</div>
     </div>
@@ -1792,7 +1792,7 @@ function renderMarketDeployer(scan) {
   return `<section id="report-market" class="report-section full">${sectionHeading("05", "MARKET & DEPLOYER SIGNALS", "05 / 08")}
     <div class="forensic-grid">
        <div id="report-market-data"><h3 class="subheading">MARKET & PROJECT</h3><div class="metric-grid">
-        ${metric("Price", m.price, (value) => `$${Number(value).toLocaleString("en-US", { maximumFractionDigits: 8 })}`)}
+        ${metric("Price", m.price, (value) => `$${Number(value).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 8 })}`)}
         ${metric("24h volume", m.volume24h, formatCurrency)}
         ${metric("Liquidity", m.liquidityUsd, formatCurrency)}
         ${metric("FDV", m.fdv, formatCurrency)}
@@ -1893,10 +1893,10 @@ function trajectoryValue(change, value) {
   if (value === null || value === undefined) return "UNKNOWN";
   if (change.kind === "currency") return formatCurrency(value);
   if (change.kind === "percent") return formatPercent(value);
-  if (change.kind === "count") return Number(value).toLocaleString("en-US");
+  if (change.kind === "count") return Number(value).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US");
   if (change.kind === "address") return truncateAddress(String(value));
   if (change.kind === "boolean") return value ? "Upgradeable" : "Not upgradeable";
-  if (change.kind === "number") return Number(value).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (change.kind === "number") return Number(value).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 2 });
   return formatValue(value);
 }
 
@@ -1911,8 +1911,8 @@ function trajectoryDelta(change) {
       : ` (${sign}${change.relativeDelta}% )`;
     return `${change.delta < 0 ? "-" : sign}${absolute}${relative}`;
   }
-  if (change.kind === "count") return `${sign}${Number(change.delta).toLocaleString("en-US")} holders`;
-  if (change.kind === "points") return `${sign}${Number(change.delta).toLocaleString("en-US", { maximumFractionDigits: 2 })} pts`;
+  if (change.kind === "count") return `${sign}${Number(change.delta).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US")} holders`;
+  if (change.kind === "points") return `${sign}${Number(change.delta).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 2 })} pts`;
   return change.direction === "increase" ? "Increased" : "Decreased";
 }
 
@@ -1921,8 +1921,8 @@ function trajectoryElapsed(entry) {
   if (!Number.isFinite(Number(hours))) return "time unavailable";
   const value = Number(hours);
   if (value < 1) return `${Math.max(1, Math.round(value * 60))} min`;
-  if (value < 24) return `${value.toLocaleString("en-US", { maximumFractionDigits: 1 })} hr`;
-  return `${(value / 24).toLocaleString("en-US", { maximumFractionDigits: 1 })} days`;
+  if (value < 24) return `${value.toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 1 })} hr`;
+  return `${(value / 24).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 1 })} days`;
 }
 
 function renderRiskTrajectory(timeline = []) {
@@ -1990,7 +1990,7 @@ function renderDashboardReport(scan) {
     const numeric = Number(value);
     const decimals = Number(scan.token?.decimals?.value);
     return Number.isFinite(numeric) && Number.isFinite(decimals)
-      ? (numeric / 10 ** decimals).toLocaleString("en-US", { maximumFractionDigits: 0 })
+      ? (numeric / 10 ** decimals).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 0 })
       : "Tidak dapat dihitung dari sumber data saat ini";
   });
   let displaySupply = totalSupply;
@@ -1998,7 +1998,7 @@ function renderDashboardReport(scan) {
     const fdv = Number(scan.market?.fdv?.value);
     const price = Number(scan.market?.price?.value);
     if (Number.isFinite(fdv) && fdv > 0 && Number.isFinite(price) && price > 0) {
-      displaySupply = (fdv / price).toLocaleString("en-US", { maximumFractionDigits: 0 });
+    displaySupply = (fdv / price).toLocaleString(JobenI18n.locale === "id" ? "id-ID" : "en-US", { maximumFractionDigits: 0 });
       totalSupplyLabel = "Estimated (FDV ÷ price)";
     } else {
       displaySupply = "Tidak dapat dihitung dari sumber data saat ini";

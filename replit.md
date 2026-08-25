@@ -50,3 +50,17 @@ npm test
 
 - Precision and evidence take priority over feature count.
 - Keep the experience minimal, professional, forensic, and readable.
+
+## Localization contract
+
+- The supported product locales are English (`en`) and Bahasa Indonesia (`id`).
+- Every new user-facing module must ship with both locales; do not add
+  user-facing copy directly in a feature module without a locale key.
+- Keep evidence IDs, status values, severity, confidence, API fields, and
+  scoring language-neutral. Translate presentation copy at the UI/report layer.
+- Preserve the exact distinction between unknown, unavailable, unverified,
+  conflict, and verified states in every translation.
+- Use standard technical terms consistently, adding the English term in
+  parentheses when the Indonesian equivalent could be ambiguous.
+- New locale support must extend the locale pack and shared formatters rather
+  than branching product logic.

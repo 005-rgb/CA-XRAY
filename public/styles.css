@@ -1269,6 +1269,17 @@ body, body.private-view { background: var(--joben-void); color: var(--joben-text
 .public-nav a { color: var(--joben-muted); font-size: 10px; letter-spacing: .08em; text-decoration: none; transition: color .2s ease; }
 .public-nav a:hover { color: var(--joben-cyan); }
 .public-header-actions { display: flex; align-items: center; gap: 12px; }
+.language-toggle {
+  border: 1px solid var(--joben-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--joben-muted);
+  cursor: pointer;
+  font: 700 10px/1 var(--joben-mono);
+  letter-spacing: .08em;
+  padding: 9px 10px;
+}
+.language-toggle:hover { color: var(--joben-text); border-color: var(--joben-cyan); background: rgba(77,225,208,.08); }
 .theme-toggle {
   display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--joben-line);
   border-radius: 999px; padding: 8px 11px; color: var(--joben-muted); background: rgba(255,255,255,.035);

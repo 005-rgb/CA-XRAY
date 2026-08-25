@@ -12,6 +12,33 @@ JOBEN NETWORK follows a dual-track strategy:
 Both tracks share one core: evidence, provenance, snapshots, change detection,
 reports, policy states, and audit events. They are not separate products.
 
+## Language and regionalization contract
+
+JOBEN NETWORK is a multilingual product by default. English (`en`) and Bahasa
+Indonesia (`id`) are the initial supported locales; every new user-facing
+module must ship with both locales at the same time.
+
+- Internal evidence identifiers, finding IDs, severity, confidence, status
+  values, API fields, and scoring remain language-neutral and stable.
+- Locale files own interface copy, report explanations, status text, error
+  messages, metadata, email copy, and glossary terms. New languages add a
+  locale pack rather than branching product logic.
+- Risk semantics are never weakened by translation: `unknown`, `unavailable`,
+  `unverified`, `conflict`, and confidence levels retain distinct definitions.
+- Standard technical terms remain recognizable. Where a local term could be
+  ambiguous, the first use is bilingual (for example, “Otoritas pencetakan
+  (mint authority)”).
+- Numbers, dates, currency, pluralization, directionality, and timezone follow
+  the active locale through a shared formatting layer.
+- Translation quality requires native-language review for security findings,
+  disclaimers, legal/compliance copy, and severity wording; machine translation
+  alone is not an acceptance criterion.
+
+Regionalization sequence: English + Bahasa Indonesia first, Malay next, then
+Vietnamese or Thai based on validated customer demand, followed by Filipino /
+Tagalog and other markets. The product language is a growth capability, not a
+separate fork of the application.
+
 ## Product principles
 
 1. Evidence over score.
