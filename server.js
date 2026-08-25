@@ -1101,6 +1101,60 @@ async function handleApiUnsafe(req, res, url, context) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/community/profile") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_READ });
+    sendJson(res, 200, { profile: intelligenceStore.getResearcherProfile(authenticated.workspaceId, authenticated.actor.id) }, { context });
+    return true;
+  }
+  if (req.method === "PUT" && url.pathname === "/api/community/profile") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_CONTRIBUTE });
+    const body = await readBody(req);
+    sendJson(res, 200, { profile: intelligenceStore.upsertResearcherProfile({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, ...body }) }, { context });
+    return true;
+  }
+  if (req.method === "GET" && url.pathname === "/api/community/profiles") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_READ });
+    sendJson(res, 200, { profiles: intelligenceStore.listResearcherProfiles(authenticated.workspaceId) }, { context });
+    return true;
+  }
+  if (req.method === "GET" && url.pathname === "/api/community/annotations") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_READ });
+    sendJson(res, 200, { annotations: intelligenceStore.listAnnotations(authenticated.workspaceId, { networkId: url.searchParams.get("network"), address: url.searchParams.get("address"), status: url.searchParams.get("status") || "PUBLISHED" }) }, { context });
+    return true;
+  }
+  if (req.method === "POST" && url.pathname === "/api/community/annotations") {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_CONTRIBUTE });
+    sendJson(res, 201, { annotation: intelligenceStore.createAnnotation({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, ...(await readBody(req)) }) }, { context });
+    return true;
+  }
+  const communityReviewMatch = url.pathname.match(/^\/api\/community\/annotations\/([^/]+)\/review$/);
+  if (req.method === "POST" && communityReviewMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_CONTRIBUTE });
+    sendJson(res, 201, { review: intelligenceStore.reviewAnnotation({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, annotationId: communityReviewMatch[1], ...(await readBody(req)) }) }, { context });
+    return true;
+  }
+  const disputeMatch = url.pathname.match(/^\/api\/community\/annotations\/([^/]+)\/dispute$/);
+  if (req.method === "POST" && disputeMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_CONTRIBUTE });
+    sendJson(res, 201, { dispute: intelligenceStore.createDispute({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, annotationId: disputeMatch[1], ...(await readBody(req)) }) }, { context });
+    return true;
+  }
+  const moderationMatch = url.pathname.match(/^\/api\/community\/(annotations|disputes)\/([^/]+)\/moderate$/);
+  if (req.method === "POST" && moderationMatch) {
+    const authenticated = requireAuthenticated(context);
+    authorize({ actor: authenticated.actor, workspaceId: authenticated.workspaceId, action: ACTIONS.COMMUNITY_MODERATE });
+    const body = await readBody(req);
+    sendJson(res, 200, { result: intelligenceStore.moderateCommunity({ workspaceId: authenticated.workspaceId, actorId: authenticated.actor.id, targetType: moderationMatch[1] === "annotations" ? "annotation" : "dispute", targetId: moderationMatch[2], ...body }) }, { context });
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/compare") {
     const authenticated = requireAuthenticated(context);
     const body = await readBody(req);

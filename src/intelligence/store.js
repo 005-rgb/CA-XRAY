@@ -267,6 +267,10 @@ class IntelligenceStore {
     this.reviews = new Map();
     this.governance = new Map();
     this.deployerObservations = new Map();
+    this.researcherProfiles = new Map();
+    this.communityAnnotations = new Map();
+    this.peerReviews = new Map();
+    this.disputes = new Map();
     this.policies.set(DEFAULT_POLICY.id, complianceClone(DEFAULT_POLICY));
   }
 
@@ -286,6 +290,10 @@ class IntelligenceStore {
     for (const [key, value] of state.reviews || []) this.reviews.set(key, value);
     for (const [key, value] of state.governance || []) this.governance.set(key, value);
     for (const [key, value] of state.deployerObservations || []) this.deployerObservations.set(key, value);
+    for (const [key, value] of state.researcherProfiles || []) this.researcherProfiles.set(key, value);
+    for (const [key, value] of state.communityAnnotations || []) this.communityAnnotations.set(key, value);
+    for (const [key, value] of state.peerReviews || []) this.peerReviews.set(key, value);
+    for (const [key, value] of state.disputes || []) this.disputes.set(key, value);
     if (!this.policies.size) this.policies.set(DEFAULT_POLICY.id, complianceClone(DEFAULT_POLICY));
   }
 
@@ -304,6 +312,10 @@ class IntelligenceStore {
       reviews: [...this.reviews.entries()],
       governance: [...this.governance.entries()],
       deployerObservations: [...this.deployerObservations.entries()],
+      researcherProfiles: [...this.researcherProfiles.entries()],
+      communityAnnotations: [...this.communityAnnotations.entries()],
+      peerReviews: [...this.peerReviews.entries()],
+      disputes: [...this.disputes.entries()],
     };
     this.persistChain = this.persistChain
       .then(() => this.persistence.saveIntelligenceState(state))
@@ -718,6 +730,101 @@ class IntelligenceStore {
         } : {}),
       };
     });
+  }
+
+  upsertResearcherProfile({ workspaceId, actorId, displayName, bio = "", specialties = [] }) {
+    if (!workspaceId || !actorId || !String(displayName || "").trim()) invalid("PROFILE_INVALID", "A researcher display name is required.");
+    const key = `${workspaceId}:${actorId}`;
+    const existing = this.researcherProfiles.get(key);
+    const profile = existing || { id: id("researcher"), workspaceId, actorId, createdAt: this.clock().toISOString() };
+    profile.displayName = String(displayName).trim().slice(0, 120);
+    profile.bio = String(bio || "").trim().slice(0, 500);
+    profile.specialties = [...new Set((Array.isArray(specialties) ? specialties : []).map((item) => String(item).trim().toLowerCase()).filter(Boolean))].slice(0, 12);
+    profile.updatedAt = this.clock().toISOString();
+    this.researcherProfiles.set(key, profile); this.#persist();
+    return this.getResearcherProfile(workspaceId, actorId);
+  }
+
+  getResearcherProfile(workspaceId, actorId) {
+    const profile = this.researcherProfiles.get(`${workspaceId}:${actorId}`);
+    if (!profile) return null;
+    const reputation = this.researcherReputation(workspaceId, actorId);
+    return { ...clone(profile), reputation };
+  }
+
+  listResearcherProfiles(workspaceId) {
+    return [...this.researcherProfiles.values()].filter((item) => item.workspaceId === workspaceId)
+      .map((item) => this.getResearcherProfile(workspaceId, item.actorId));
+  }
+
+  createAnnotation({ workspaceId, actorId, networkId, address, title, body, evidenceRefs = [], tags = [] }) {
+    if (!workspaceId || !actorId || !networkId || !validateAddress(address) || !String(title || "").trim() || !String(body || "").trim()) {
+      invalid("ANNOTATION_INVALID", "Annotation requires a contract, title, and body.");
+    }
+    if (!Array.isArray(evidenceRefs) || evidenceRefs.length < 1 || evidenceRefs.length > 20 || evidenceRefs.some((ref) => typeof ref !== "string" || !ref.trim())) {
+      invalid("EVIDENCE_REQUIRED", "An annotation must cite one to twenty evidence references.");
+    }
+    const annotation = {
+      id: id("annotation"), workspaceId, actorId, ...publicContract(networkId, address),
+      title: String(title).trim().slice(0, 160), body: String(body).trim().slice(0, 4000),
+      evidenceRefs: [...new Set(evidenceRefs.map((ref) => ref.trim()))],
+      tags: [...new Set((Array.isArray(tags) ? tags : []).map((tag) => String(tag).trim().toLowerCase()).filter(Boolean))].slice(0, 12),
+      status: "PUBLISHED", moderation: "PENDING", createdAt: this.clock().toISOString(), history: [],
+    };
+    this.communityAnnotations.set(annotation.id, annotation); this.#persist();
+    return clone(annotation);
+  }
+
+  listAnnotations(workspaceId, { networkId = null, address = null, status = "PUBLISHED" } = {}) {
+    return [...this.communityAnnotations.values()].filter((item) =>
+      item.workspaceId === workspaceId && (!networkId || item.networkId === networkId)
+      && (!address || item.address === String(address).toLowerCase()) && (!status || item.status === status))
+      .map((item) => ({ ...clone(item), peerReviews: this.listPeerReviews(workspaceId, item.id), reputation: this.researcherReputation(workspaceId, item.actorId) }));
+  }
+
+  reviewAnnotation({ workspaceId, actorId, annotationId, decision, rationale = "" }) {
+    const annotation = this.communityAnnotations.get(annotationId);
+    if (!annotation || annotation.workspaceId !== workspaceId) return null;
+    if (annotation.actorId === actorId) invalid("SELF_REVIEW_FORBIDDEN", "Researchers cannot review their own annotation.");
+    if (!["ACCEPT", "REJECT"].includes(decision)) invalid("PEER_DECISION_INVALID", "Peer decision must be ACCEPT or REJECT.");
+    const duplicate = [...this.peerReviews.values()].find((item) => item.workspaceId === workspaceId && item.annotationId === annotationId && item.actorId === actorId);
+    if (duplicate) invalid("PEER_REVIEW_DUPLICATE", "A researcher may review an annotation once.");
+    const review = { id: id("peer_review"), workspaceId, annotationId, actorId, decision, rationale: String(rationale).trim().slice(0, 1000), createdAt: this.clock().toISOString() };
+    this.peerReviews.set(review.id, review); this.#persist(); return clone(review);
+  }
+
+  listPeerReviews(workspaceId, annotationId) {
+    return [...this.peerReviews.values()].filter((item) => item.workspaceId === workspaceId && item.annotationId === annotationId).map(clone);
+  }
+
+  createDispute({ workspaceId, actorId, annotationId, reason, evidenceRefs = [] }) {
+    const annotation = this.communityAnnotations.get(annotationId);
+    if (!annotation || annotation.workspaceId !== workspaceId) return null;
+    if (annotation.actorId === actorId) invalid("SELF_DISPUTE_FORBIDDEN", "Researchers cannot dispute their own annotation.");
+    if (!String(reason || "").trim() || !Array.isArray(evidenceRefs) || evidenceRefs.length < 1) invalid("DISPUTE_EVIDENCE_REQUIRED", "A dispute requires a reason and evidence reference.");
+    const dispute = { id: id("dispute"), workspaceId, annotationId, actorId, reason: String(reason).trim().slice(0, 2000), evidenceRefs: [...new Set(evidenceRefs.map(String))], status: "OPEN", createdAt: this.clock().toISOString(), resolution: null };
+    this.disputes.set(dispute.id, dispute); this.#persist(); return clone(dispute);
+  }
+
+  moderateCommunity({ workspaceId, actorId, targetType, targetId, decision, rationale }) {
+    if (!["annotation", "dispute"].includes(targetType) || !["APPROVE", "HIDE", "RESOLVE", "DISMISS"].includes(decision)) invalid("MODERATION_INVALID", "Moderation decision is invalid.");
+    const collection = targetType === "annotation" ? this.communityAnnotations : this.disputes;
+    const target = collection.get(targetId);
+    if (!target || target.workspaceId !== workspaceId) return null;
+    target.history.push({ actorId, decision, rationale: String(rationale || "").trim().slice(0, 1000), createdAt: this.clock().toISOString() });
+    if (targetType === "annotation") { target.moderation = decision === "HIDE" ? "HIDDEN" : decision === "APPROVE" ? "APPROVED" : target.moderation; }
+    else if (["RESOLVE", "DISMISS"].includes(decision)) { target.status = decision === "RESOLVE" ? "RESOLVED" : "DISMISSED"; target.resolution = target.history.at(-1); }
+    this.#persist(); return clone(target);
+  }
+
+  researcherReputation(workspaceId, actorId) {
+    const authored = [...this.communityAnnotations.values()].filter((item) => item.workspaceId === workspaceId && item.actorId === actorId);
+    const reviews = [...this.peerReviews.values()].filter((item) => item.workspaceId === workspaceId && item.actorId === actorId);
+    const disputes = [...this.disputes.values()].filter((item) => item.workspaceId === workspaceId && item.actorId === actorId);
+    const accepted = authored.reduce((sum, item) => sum + this.listPeerReviews(workspaceId, item.id).filter((review) => review.decision === "ACCEPT").length, 0);
+    const rejected = authored.reduce((sum, item) => sum + this.listPeerReviews(workspaceId, item.id).filter((review) => review.decision === "REJECT").length, 0);
+    const qualityScore = Math.round(Math.max(0, Math.min(100, 50 + accepted * 10 - rejected * 12 + reviews.length * 2 - disputes.length * 3)));
+    return { qualityScore, label: qualityScore >= 75 ? "HIGH_QUALITY" : qualityScore >= 50 ? "DEVELOPING" : "REVIEW_NEEDED", authoredAnnotations: authored.length, peerReviews: reviews.length, disputesRaised: disputes.length, basis: "Evidence citations, peer-review outcomes, and dispute activity; popularity is excluded." };
   }
 
   networkIntelligence(workspaceId, { networkId = null } = {}) {
