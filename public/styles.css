@@ -2478,6 +2478,24 @@ html:not([data-theme="light"]) .dashboard-deep .evidence-detail summary {
   color: var(--joben-text);
 }
 
+html:not([data-theme="light"]) .workspace-bar select {
+  color: var(--joben-text);
+  background: #111c27;
+  border-color: var(--joben-line-bright);
+  border-radius: 7px;
+  color-scheme: dark;
+}
+
+html:not([data-theme="light"]) .workspace-bar select option {
+  color: var(--joben-text);
+  background: #111c27;
+}
+
+html:not([data-theme="light"]) .workspace-bar select:focus {
+  border-color: var(--joben-cyan);
+  box-shadow: 0 0 0 3px rgba(77,225,208,.12);
+}
+
 html:not([data-theme="light"]) .dashboard-deep .section-number,
 html:not([data-theme="light"]) .dashboard-deep .section-intro,
 html:not([data-theme="light"]) .dashboard-deep .summary-copy,
