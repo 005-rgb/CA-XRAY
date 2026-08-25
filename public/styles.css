@@ -425,6 +425,32 @@ details.evidence-detail summary { cursor: pointer; color: var(--ink); font-size:
   .score-number { font-size: 54px; }
 }
 
+/* Passport is a focused full-width workspace; monitoring has its own route. */
+.passport-page { max-width: 1600px; min-height: calc(100vh - 74px); }
+.passport-page .dashboard-heading { max-width: 1120px; }
+.passport-page .intelligence-dashboard { margin-top: 30px; }
+.passport-page .intelligence-heading { display: flex; justify-content: flex-end; }
+.passport-page .intelligence-grid { display: block; }
+.passport-page #risk-passport { width: 100%; min-height: 560px; padding: 28px 30px 34px; }
+.passport-page #watchtower, .passport-page #watchtower-alerts, .passport-page #case-workspace { display: none; }
+.passport-page #passport-list { display: none; }
+.passport-page .passport-workspace { margin-top: 0; padding-top: 0; border-top: 0; }
+.passport-page .passport-workspace-head { padding-bottom: 22px; border-bottom: 1px solid var(--joben-line); }
+.passport-page .passport-area-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.passport-page .passport-area-card { min-height: 132px; padding: 19px; }
+.passport-page .passport-area-icon { margin: 14px 0 13px; font-size: 21px; }
+.passport-page .passport-area-card strong { font-size: 12px; }
+.passport-page .passport-area-card small { font-size: 9px; }
+.passport-page .passport-area-content { margin-top: 24px; }
+@media (max-width: 760px) {
+  .passport-page #risk-passport { padding: 20px 16px 26px; }
+  .passport-page .passport-area-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .passport-page .passport-area-card { min-height: 112px; }
+}
+@media (max-width: 430px) {
+  .passport-page .passport-area-grid { grid-template-columns: 1fr; }
+}
+
 /* CA X-RAY dashboard experience — the same layout adapts from desktop to mobile. */
 :root {
   --dashboard-bg: #f7f8f9;
