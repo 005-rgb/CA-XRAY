@@ -62,6 +62,7 @@
       "Compliant approval reviewed. Inspect every evidence boundary below.": "Approval sesuai telah ditinjau. Periksa setiap batas bukti di bawah.",
       "Local Passport issued:": "Paspor lokal diterbitkan:",
       "It is not a blockchain attestation.": "Ini bukan attestation blockchain.",
+      "On-chain Passport issued:": "Paspor on-chain diterbitkan:",
       "Permission": "Izin",
       "Exposure": "Paparan",
       "Requested amount": "Jumlah yang diminta",

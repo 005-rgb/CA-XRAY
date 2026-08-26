@@ -98,11 +98,13 @@ class ImmuneSystemService {
     deploymentReader = null,
     fetchImpl = fetch,
     issuerIds = ["server"],
+    onChain = null,
   } = {}) {
     this.persistence = persistence;
     this.clock = clock;
     this.deploymentReader = deploymentReader;
     this.fetchImpl = fetchImpl;
+    this.onChain = onChain;
     this.decisions = new Map();
     this.idempotency = new Map();
     this.provenance = new Map();
@@ -199,7 +201,7 @@ class ImmuneSystemService {
         bytecodeLength: 4200,
         provider: "DEMO FIXTURE",
         evidenceHash: evidenceHash({ label: DEMO_SCENARIO.label, target: transaction.to, chainId: intent.chainId }),
-        limitations: input.fixtureEvidence?.limitations || [],
+      limitations: requestPayload.fixtureEvidence?.limitations || [],
       };
       provenance = {
         status: "VERIFIED",
@@ -207,14 +209,14 @@ class ImmuneSystemService {
         source: "DEMO FIXTURE",
         edges: [],
         evidenceHash: evidenceHash({ label: DEMO_SCENARIO.label, target: transaction.to }),
-        limitation: input.fixtureEvidence?.limitations?.[0] || null,
+        limitation: requestPayload.fixtureEvidence?.limitations?.[0] || null,
       };
       if (useFixture === "dangerous") {
         compared.reasonCodes = [...new Set([...compared.reasonCodes, "UNKNOWN_SPENDER", "UPGRADEABLE_SPENDER"])];
         compared.exposure.reasonCodes = [...new Set([...compared.exposure.reasonCodes, "UNKNOWN_SPENDER", "UNLIMITED_APPROVAL"])];
       }
       evidenceSnapshot = {
-        id: `snapshot_fixture_${hash({ fixtureId: input.fixtureId, transaction: transaction.transactionId }).slice(0, 24)}`,
+        id: `snapshot_fixture_${hash({ fixtureId: normalizedInput.fixtureId, transaction: transaction.transactionId }).slice(0, 24)}`,
         label: DEMO_SCENARIO.label,
         mode: "FIXTURE",
         capturedAt: this.clock().toISOString(),
@@ -288,7 +290,7 @@ class ImmuneSystemService {
       deployment: clone(deployment),
       provenance: clone(provenance),
       limitations: policyResult.limitations,
-      fixture: useFixture ? { id: normalizedInput.fixtureId, label: DEMO_SCENARIO.label, liveEvidence: false } : null,
+      fixture: useFixture ? { id: normalizedInput.fixtureId, kind: useFixture, label: DEMO_SCENARIO.label, liveEvidence: false } : null,
       dependencyChange: clone(dependencyChange),
       attestation: null,
       idempotencyKey: key,
@@ -351,7 +353,8 @@ class ImmuneSystemService {
       workspaceId,
       actorId,
       idempotencyKey: replayKey,
-      payload: {
+        useFixture: original.fixture?.kind || null,
+        payload: {
         intent: clone(original.intent),
         unsignedTransaction: clone(original.unsignedTransaction),
         dependencyChange,
@@ -422,11 +425,21 @@ class ImmuneSystemService {
       workspaceId,
       decisionId,
     });
-    record.attestation = { passportId: passport.passportId, attestationHash: passport.attestationHash };
+    const attestedPassport = this.onChain
+      ? await this.onChain.issue(passport)
+      : { ...passport, mode: "LOCAL_SIMULATION" };
+    record.attestation = {
+      passportId: attestedPassport.passportId,
+      attestationHash: attestedPassport.attestationHash || null,
+      mode: attestedPassport.mode,
+      attestationTransaction: attestedPassport.attestationTransaction || null,
+      registryAddress: attestedPassport.registryAddress || null,
+      gateAddress: attestedPassport.gateAddress || null,
+    };
     if (this.persistence?.updateImmuneDecision) await this.persistence.updateImmuneDecision(workspaceId, decisionId, record);
-    if (this.persistence?.saveImmunePassport) await this.persistence.saveImmunePassport({ ...passport, mode: "LOCAL_SIMULATION", workspaceId, decisionId });
+    if (this.persistence?.saveImmunePassport) await this.persistence.saveImmunePassport({ ...attestedPassport, workspaceId, decisionId });
     this.decisions.set(decisionId, record);
-    return { duplicate: false, passport: clone(passport), actorId };
+    return { duplicate: false, passport: clone(attestedPassport), actorId };
   }
 
   async getPassport(passportId, workspaceId = null) {
@@ -438,6 +451,9 @@ class ImmuneSystemService {
   async verifyPassport({ workspaceId = null, passportId, subjectChainId = null, subject = null } = {}) {
     const passport = await this.getPassport(passportId, workspaceId);
     if (!passport) return null;
+    if (passport.mode === "ONCHAIN" && this.onChain) {
+      return this.onChain.admit({ passportId, subjectChainId, subject });
+    }
     if (this.registry.get(passportId)) return this.gate.admit({ passportId, subjectChainId, subject });
     const reasonCodes = [];
     if (subjectChainId !== null && Number(subjectChainId) !== passport.subjectChainId) reasonCodes.push("TARGET_CHAIN_MISMATCH");
@@ -464,7 +480,9 @@ class ImmuneSystemService {
   async invalidatePassport({ workspaceId, passportId, reasonCode = "DEPENDENCY_CHANGED" } = {}) {
     const passport = await this.getPassport(passportId, workspaceId);
     if (!passport || passport.workspaceId !== workspaceId) throw Object.assign(new Error("PASSPORT_NOT_FOUND"), { code: "PASSPORT_NOT_FOUND" });
-    const result = this.registry.get(passportId)
+    const result = passport.mode === "ONCHAIN" && this.onChain
+      ? { duplicate: false, passport: { ...passport, ...(await this.onChain.invalidate(passportId, reasonCode)), invalidated: true, invalidationReason: reasonCode, invalidatedAt: this.clock().toISOString() } }
+      : this.registry.get(passportId)
       ? this.registry.invalidate({ issuerId: "server", passportId, reasonCode })
       : { duplicate: Boolean(passport.invalidated), passport };
     if (this.persistence?.saveImmunePassport) {

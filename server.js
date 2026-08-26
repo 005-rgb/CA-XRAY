@@ -44,6 +44,7 @@ const { IntelligenceStore } = require("./src/intelligence/store");
 const { DeveloperApi } = require("./src/api/developer");
 const { ImmuneSystemService } = require("./src/immune-system/service");
 const { POLICY_CATALOG, NETWORK_PROFILES } = require("./src/immune-system/phase0");
+const { createOnChainClientFromEnv } = require("./src/immune-system/onchain");
 
 const PORT = Number(process.env.PORT || 5000);
 const HOST = "0.0.0.0";
@@ -64,7 +65,8 @@ const controlPlane = new PlatformControlPlane({
 const providerRegistry = createDefaultProviderRegistry();
 const intelligenceStore = new IntelligenceStore({ persistence });
 const developerApi = new DeveloperApi({ secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex") });
-const immuneSystem = new ImmuneSystemService({ persistence });
+const onChainImmuneClient = createOnChainClientFromEnv();
+const immuneSystem = new ImmuneSystemService({ persistence, onChain: onChainImmuneClient });
 const intelligenceReady = persistenceReady.then(() => intelligenceStore.init());
 const scanQueue = createScanJobQueue({
   processor: (payload, jobContext) => scanLive({
@@ -1703,7 +1705,7 @@ async function handleApiUnsafe(req, res, url, context) {
       await authService.audit("INTENT_DECISION_ATTESTED", authenticated.actor.id, authenticated.workspaceId, {
         decisionId: intentAttestMatch[1],
         passportId: result.passport.passportId,
-        mode: "LOCAL_SIMULATION",
+         mode: result.passport.mode,
       });
       sendJson(res, 200, { apiVersion: "v1", ...result, attestation: result.passport }, { context });
       return true;

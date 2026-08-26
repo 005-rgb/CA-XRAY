@@ -5,7 +5,7 @@ const path = require("node:path");
 const solc = require("solc");
 const { ethers } = require("ethers");
 const { NETWORK_PROFILES } = require("../src/immune-system/phase0");
-const { deploymentMetadata } = require("../src/immune-system/deployment");
+const { deploymentMetadata, validateDeploymentConfig } = require("../src/immune-system/deployment");
 
 const NETWORK_ID = "arbitrum-sepolia";
 const PROFILE = NETWORK_PROFILES[NETWORK_ID];
@@ -155,6 +155,16 @@ async function main() {
       },
     },
   };
+  validateDeploymentConfig({
+    networkId: NETWORK_ID,
+    chainId: PROFILE.chainId,
+    environment: PROFILE.environment,
+    registryAddress: metadata.registryAddress,
+    gateAddress: metadata.gateAddress,
+    rpcUrl: "configured",
+    deployerAddress: metadata.deployerAddress,
+    deploymentMetadata: document,
+  });
   await fs.mkdir(DEPLOYMENTS_DIR, { recursive: true });
   await fs.writeFile(METADATA_PATH, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 });
   console.log(JSON.stringify({

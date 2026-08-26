@@ -321,7 +321,9 @@ reviewAttest?.addEventListener("click", async () => {
     const result = await apiJson(`/api/v1/intent-checks/${encodeURIComponent(simulatorDecision.decisionId)}/attest`, { method: "POST" });
     simulatorDecision.attestation = result.passport;
     reviewAdmit.hidden = false;
-    reviewPassportResult.textContent = uiText(`Local Passport issued: ${result.passport.passportId}. It is not a blockchain attestation.`);
+    reviewPassportResult.textContent = result.passport.mode === "ONCHAIN"
+      ? uiText(`On-chain Passport issued: ${result.passport.passportId}.`)
+      : uiText(`Local Passport issued: ${result.passport.passportId}. It is not a blockchain attestation.`);
   } catch (error) {
     reviewPassportResult.textContent = error.message;
   } finally {
@@ -339,7 +341,8 @@ reviewAdmit?.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chainId: passport.subjectChainId, subject: passport.subject }),
     });
-    reviewPassportResult.textContent = uiText(`Admission ${result.admission?.decision || "CHECKED"}: ${result.admission?.reason || "See the response for the bounded result."}`);
+    const admission = result.admission || {};
+    reviewPassportResult.textContent = uiText(`Admission ${admission.status || (admission.usable ? "ACCEPTED" : "REJECTED")}: ${(admission.reasonCodes || []).join(", ") || "See the response for the bounded result."}`);
   } catch (error) {
     reviewPassportResult.textContent = error.message;
   } finally {
