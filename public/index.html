@@ -26,6 +26,7 @@
         <nav class="primary-nav" aria-label="Primary navigation">
           <a class="nav-item" data-route="/dashboard" href="/dashboard"><span class="nav-icon">⌂</span><span>Dashboard</span></a>
           <a class="nav-item" data-route="/dashboard/new-scan" href="/dashboard/new-scan"><span class="nav-icon">⌁</span><span>Core Scan</span></a>
+          <a class="nav-item" data-route="/dashboard/agent-simulator" href="/dashboard/agent-simulator"><span class="nav-icon">◈</span><span>Agent Simulator</span></a>
           <a class="nav-item" data-route="/dashboard/history" href="/dashboard/history"><span class="nav-icon">◷</span><span>Scan History</span></a>
           <a class="nav-item" data-route="/dashboard/passport" href="/dashboard/passport"><span class="nav-icon">♢</span><span>Risk Passport</span></a>
           <a class="nav-item" data-route="/dashboard/watchtower" href="/dashboard/watchtower"><span class="nav-icon">◉</span><span>Watchtower</span></a>
@@ -411,6 +412,47 @@
               </div>
               <div id="scan-history-list" class="scan-history-list"></div>
               <button type="button" id="history-load-more" class="view-all history-load-more" hidden>LOAD MORE SCANS</button>
+            </section>
+            <section id="agent-simulator" class="settings-page agent-simulator-page" hidden>
+              <div class="simulator-intro">
+                <div><span class="card-kicker">AGENT SIMULATOR / DECISION REVIEW</span><h2>Replay an agent action before it reaches the chain.</h2><p>Compare a compliant approval with a dangerous unlimited approval. The review keeps calldata, permissions, evidence, policy, and unknowns together.</p></div>
+                <div class="simulator-contract-stamp"><span>PHASE P1–P3</span><strong>FAIL-CLOSED</strong><small>Fixtures are labeled and never treated as live evidence.</small></div>
+              </div>
+              <div class="simulator-layout">
+                <section class="settings-card simulator-controls">
+                  <div class="settings-card-heading"><div><span class="card-kicker">01 / SCENARIO</span><h3>Choose an agent action</h3></div><span class="data-label">READ-ONLY</span></div>
+                  <form id="agent-simulator-form">
+                    <label class="scenario-choice"><input type="radio" name="agent-scenario" value="dangerous" checked /><span><strong>Dangerous approval</strong><small>Unlimited ERC-20 approval to an unknown spender.</small></span><b>BLOCK</b></label>
+                    <label class="scenario-choice"><input type="radio" name="agent-scenario" value="compliant" /><span><strong>Compliant approval</strong><small>Capped approval to the expected spender within declared intent.</small></span><b>ALLOW</b></label>
+                    <button type="submit" class="primary-button"><span>Run decision review</span><span>→</span></button>
+                  </form>
+                  <p id="agent-simulator-status" class="settings-status" role="status" aria-live="polite">Select a fixture to begin. No wallet or private key is required.</p>
+                  <div class="simulator-boundary"><span>BOUNDARY</span><p>Simulation uses a locked local fixture. It demonstrates the decision contract, not a live transaction or a guarantee of safety.</p></div>
+                </section>
+                <section class="settings-card decision-review-card" id="decision-review" aria-live="polite">
+                  <div class="settings-card-heading"><div><span class="card-kicker">02 / DECISION REVIEW</span><h3>Awaiting an agent decision</h3></div><span class="status-pill unknown" id="simulator-verdict">NOT RUN</span></div>
+                  <div id="decision-review-empty" class="unknown-message">Run one of the scenarios to inspect the full decision packet.</div>
+                  <div id="decision-review-content" hidden>
+                    <div class="decision-review-summary">
+                      <div><span>Verdict</span><strong id="review-decision">UNKNOWN</strong></div>
+                      <div><span>Status</span><strong id="review-status">UNKNOWN</strong></div>
+                      <div><span>Reason codes</span><strong id="review-reasons">UNKNOWN</strong></div>
+                    </div>
+                    <div class="review-grid">
+                      <article><span class="card-kicker">CALldata / DECODED OPERATION</span><pre id="review-calldata"></pre></article>
+                      <article><span class="card-kicker">PERMISSION EXPOSURE</span><div id="review-permissions"></div></article>
+                      <article><span class="card-kicker">EVIDENCE & PROVENANCE</span><div id="review-evidence"></div></article>
+                      <article><span class="card-kicker">POLICY CHECKS</span><div id="review-policy"></div></article>
+                    </div>
+                    <div class="review-passport" id="review-passport" hidden>
+                      <div><span class="card-kicker">PASSPORT / ADMISSION</span><h4>Accepted trust is explicit and revocable.</h4><p id="review-passport-copy">A compliant result can be attested locally for review. This does not publish a blockchain attestation.</p></div>
+                      <div class="review-passport-actions"><button type="button" class="secondary-button" id="review-attest">Issue local Passport</button><button type="button" class="secondary-button" id="review-admit" hidden>Check admission</button></div>
+                      <div id="review-passport-result" class="review-passport-result"></div>
+                    </div>
+                    <div class="review-footnote" id="review-limitations"></div>
+                  </div>
+                </section>
+              </div>
             </section>
             <section id="intelligence-dashboard" class="intelligence-dashboard" hidden>
               <div class="intelligence-heading">

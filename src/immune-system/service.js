@@ -33,6 +33,31 @@ function boundedKey(value) {
   return value;
 }
 
+function normalizeDependencyChange(change = null, fallbackId = "DEPENDENCY_CHANGED") {
+  const input = change && typeof change === "object" ? change : {};
+  const changeId = String(input.changeId || fallbackId).trim();
+  if (!/^[a-zA-Z0-9._:-]{1,64}$/.test(changeId)) {
+    throw Object.assign(new Error("INVALID_CHANGE_ID"), { code: "INVALID_CHANGE_ID" });
+  }
+  const classification = String(input.classification || "DIRECTLY_OBSERVED").toUpperCase();
+  if (!["CONFIGURED", "DIRECTLY_OBSERVED", "EXPLICITLY_INFERRED"].includes(classification)) {
+    throw Object.assign(new Error("INVALID_CHANGE_CLASSIFICATION"), { code: "INVALID_CHANGE_CLASSIFICATION" });
+  }
+  const serialized = JSON.stringify({ before: input.before ?? null, after: input.after ?? null });
+  if (serialized.length > 4096) throw Object.assign(new Error("DEPENDENCY_CHANGE_TOO_LARGE"), { code: "DEPENDENCY_CHANGE_TOO_LARGE" });
+  return {
+    changeId,
+    dependencyType: String(input.dependencyType || "CONFIGURED_DEPENDENCY").slice(0, 64),
+    dependencyId: input.dependencyId ? String(input.dependencyId).slice(0, 160) : null,
+    before: clone(input.before ?? null),
+    after: clone(input.after ?? null),
+    classification,
+    evidenceRefs: Array.isArray(input.evidenceRefs) ? input.evidenceRefs.map(String).slice(0, 20) : [],
+    confidence: input.confidence || "HIGH",
+    limitation: input.limitation ? String(input.limitation).slice(0, 500) : null,
+  };
+}
+
 function abiWord(value) {
   return BigInt(value).toString(16).padStart(64, "0");
 }
@@ -81,6 +106,7 @@ class ImmuneSystemService {
     this.decisions = new Map();
     this.idempotency = new Map();
     this.provenance = new Map();
+    this.dependencyEvents = new Map();
     this.registry = new InMemoryAttestationRegistry({ issuerIds, clock });
     this.gate = new AdmissionGate({ registry: this.registry, clock });
   }
@@ -131,9 +157,10 @@ class ImmuneSystemService {
     };
   }
 
-  async createIntentCheck({ workspaceId, actorId, payload = {}, idempotencyKey, useFixture = null } = {}) {
+  async createIntentCheck({ workspaceId, actorId, payload = {}, input = null, idempotencyKey, useFixture = null } = {}) {
     if (!workspaceId || !actorId) throw Object.assign(new Error("WORKSPACE_SCOPE_REQUIRED"), { code: "WORKSPACE_SCOPE_REQUIRED" });
-    const inputForKey = useFixture ? `${DEMO_SCENARIO.id}:${useFixture}` : payload;
+    const requestPayload = input || payload;
+    const inputForKey = useFixture ? `${DEMO_SCENARIO.id}:${useFixture}` : requestPayload;
     const key = boundedKey(idempotencyKey || `intent:${hash(canonicalize(inputForKey)).slice(0, 96)}`);
     const idempotencyId = `${workspaceId}:${key}`;
     if (this.persistence?.getImmuneDecisionByIdempotency) {
@@ -143,21 +170,25 @@ class ImmuneSystemService {
     const existingId = this.idempotency.get(idempotencyId);
     if (existingId) return { duplicate: true, decision: publicDecision(this.decisions.get(existingId)) };
 
-    const input = useFixture ? this.makeFixture(useFixture) : payload;
-    const intentInput = input.intent || input;
-    const transactionInput = input.unsignedTransaction || input.transaction;
+    const normalizedInput = useFixture ? this.makeFixture(useFixture) : requestPayload;
+    const intentInput = normalizedInput.intent || normalizedInput;
+    const transactionInput = normalizedInput.unsignedTransaction || normalizedInput.transaction;
     if (intentInput.actorId !== actorId && !useFixture) throw Object.assign(new Error("ACTOR_MISMATCH"), { code: "ACTOR_MISMATCH" });
     if (useFixture) intentInput.actorId = actorId;
     const intent = normalizeIntent(intentInput);
     const transaction = normalizeTransaction(transactionInput);
     const decoded = decodeCalldata(transaction.data, { targetStandard: transaction.targetStandard });
     const compared = compareIntentAndTransaction({ intent, transaction, decoded, now: this.clock() });
+    const dependencyChange = normalizedInput.dependencyChange ? normalizeDependencyChange(normalizedInput.dependencyChange) : null;
+    if (dependencyChange) {
+      compared.reasonCodes = [...new Set([...compared.reasonCodes, "DEPENDENCY_CHANGED"])];
+    }
     const network = NETWORK_PROFILES[Object.keys(NETWORK_PROFILES).find((key) => NETWORK_PROFILES[key].chainId === intent.chainId)] || null;
 
     let deployment;
     let provenance;
     let evidenceSnapshot;
-    if (useFixture || input.fixtureEvidence) {
+    if (useFixture || normalizedInput.fixtureEvidence) {
       deployment = {
         status: "VERIFIED",
         deploymentStatus: "DEPLOYED",
@@ -257,7 +288,8 @@ class ImmuneSystemService {
       deployment: clone(deployment),
       provenance: clone(provenance),
       limitations: policyResult.limitations,
-      fixture: useFixture ? { id: input.fixtureId, label: DEMO_SCENARIO.label, liveEvidence: false } : null,
+      fixture: useFixture ? { id: normalizedInput.fixtureId, label: DEMO_SCENARIO.label, liveEvidence: false } : null,
+      dependencyChange: clone(dependencyChange),
       attestation: null,
       idempotencyKey: key,
     };
@@ -277,14 +309,44 @@ class ImmuneSystemService {
     return this.createIntentCheck({ workspaceId, actorId, payload: input, idempotencyKey });
   }
 
-  async replayChange({ workspaceId, actorId, decisionId, changeId = "DEPENDENCY_CHANGED", idempotencyKey = null } = {}) {
+  async replayChange({
+    workspaceId,
+    actorId,
+    decisionId,
+    changeId = "DEPENDENCY_CHANGED",
+    change = null,
+    idempotencyKey = null,
+  } = {}) {
     const original = this.persistence?.getImmuneDecision
       ? await this.persistence.getImmuneDecision(workspaceId, decisionId)
       : this.decisions.get(decisionId);
     if (!original || original.workspaceId !== workspaceId) {
       throw Object.assign(new Error("DECISION_NOT_FOUND"), { code: "DECISION_NOT_FOUND" });
     }
-    const replayKey = idempotencyKey || `watchtower:${decisionId}:${String(changeId).slice(0, 64)}`;
+    const dependencyChange = normalizeDependencyChange(change, changeId);
+    const replayKey = idempotencyKey || `watchtower:${decisionId}:${dependencyChange.changeId}`;
+    const eventKey = `${workspaceId}:${decisionId}:${dependencyChange.changeId}`;
+    const existingEvent = this.dependencyEvents.get(eventKey);
+    if (existingEvent) {
+      const existingReplay = await this.getDecision(workspaceId, existingEvent.replayDecisionId);
+      return {
+        replayed: true,
+        duplicate: true,
+        sourceDecisionId: decisionId,
+        changeId: dependencyChange.changeId,
+        watchtowerEvent: clone(existingEvent),
+        invalidation: existingEvent.invalidation,
+        decision: existingReplay,
+      };
+    }
+    let invalidation = null;
+    if (original.attestation?.passportId) {
+      invalidation = await this.invalidatePassport({
+        workspaceId,
+        passportId: original.attestation.passportId,
+        reasonCode: "DEPENDENCY_CHANGED",
+      });
+    }
     const replay = await this.createIntentCheck({
       workspaceId,
       actorId,
@@ -292,12 +354,39 @@ class ImmuneSystemService {
       payload: {
         intent: clone(original.intent),
         unsignedTransaction: clone(original.unsignedTransaction),
+        dependencyChange,
       },
     });
+    const watchtowerEvent = {
+      eventId: `change_${hash({ workspaceId, decisionId, dependencyChange }).slice(0, 24)}`,
+      schemaVersion: "1.0.0",
+      eventType: "DEPENDENCY_CHANGED",
+      workspaceId,
+      sourceDecisionId: decisionId,
+      replayDecisionId: replay.decision.decisionId,
+      passportId: original.attestation?.passportId || null,
+      occurredAt: this.clock().toISOString(),
+      change: clone(dependencyChange),
+      materiality: "CRITICAL",
+      directImpact: [
+        { type: "PASSPORT", id: original.attestation?.passportId || null, status: original.attestation ? "INVALIDATED" : "NOT_ATTESTED" },
+        { type: "DECISION", id: decisionId, status: "REQUIRES_REVIEW" },
+      ],
+      inferredImpact: [],
+      limitation: dependencyChange.limitation || "Only the directly linked passport and decision are included; broader graph impact is not inferred.",
+      invalidation: invalidation ? {
+        duplicate: Boolean(invalidation.duplicate),
+        passportId: invalidation.passport?.passportId || null,
+        reasonCode: "DEPENDENCY_CHANGED",
+      } : null,
+    };
+    this.dependencyEvents.set(eventKey, watchtowerEvent);
     return {
       replayed: true,
       sourceDecisionId: decisionId,
-      changeId: String(changeId).slice(0, 64),
+      changeId: dependencyChange.changeId,
+      watchtowerEvent: clone(watchtowerEvent),
+      invalidation,
       ...replay,
     };
   }
@@ -424,14 +513,23 @@ class ImmuneSystemService {
     return this.gate.listAttempts();
   }
 
-  getBlastRadius(subjectId) {
+  getBlastRadius(subjectId, workspaceId = null) {
+    const changes = [...this.dependencyEvents.values()].filter((event) =>
+      (!workspaceId || event.workspaceId === workspaceId)
+      && (event.passportId === subjectId || event.sourceDecisionId === subjectId || event.change.dependencyId === subjectId),
+    );
     const invalidated = this.registry.listEvents().filter((item) => item.eventType === "ATTESTATION_INVALIDATED");
     return {
       subjectId,
-      status: invalidated.length ? "PARTIAL" : "UNKNOWN",
-      affectedPassports: invalidated.filter((item) => item.subject === subjectId || item.passportId === subjectId).map((item) => item.passportId),
-      reasonCodes: invalidated.length ? ["DEPENDENCY_CHANGED"] : ["BLAST_RADIUS_INCOMPLETE"],
-      limitation: "Only attestations held by this process are included; external registry/indexer state is not inferred.",
+      status: changes.length || invalidated.length ? "PARTIAL" : "UNKNOWN",
+      affectedPassports: [...new Set([
+        ...changes.map((event) => event.passportId).filter(Boolean),
+        ...invalidated.filter((item) => item.subject === subjectId || item.passportId === subjectId).map((item) => item.passportId),
+      ])],
+      directImpact: changes.flatMap((event) => event.directImpact || []),
+      inferredImpact: changes.flatMap((event) => event.inferredImpact || []),
+      reasonCodes: changes.length || invalidated.length ? ["DEPENDENCY_CHANGED"] : ["BLAST_RADIUS_INCOMPLETE"],
+      limitation: "Only directly linked attestations held by this process are included; broader external impact is not inferred.",
     };
   }
 }

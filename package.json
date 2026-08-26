@@ -9,6 +9,7 @@
     "test": "node --test test/*.test.js",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
+    "deploy:immune-system": "node scripts/deploy-immune-system.js",
     "db:migrate": "node scripts/migrate.js",
     "db:rollback": "node scripts/rollback.js"
   },
@@ -17,7 +18,9 @@
   },
   "dependencies": {
     "@playwright/test": "^1.62.1",
+    "ethers": "^6.17.0",
     "pg": "^8.23.0",
-    "playwright": "^1.62.1"
+    "playwright": "^1.62.1",
+    "solc": "^0.8.36"
   }
 }

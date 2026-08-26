@@ -1654,7 +1654,8 @@ async function handleApiUnsafe(req, res, url, context) {
       const result = await immuneSystem.createIntentCheck({
         workspaceId: authenticated.workspaceId,
         actorId: authenticated.actor.id,
-        input: body,
+        payload: body,
+        useFixture: body.useFixture || null,
         idempotencyKey: req.headers["idempotency-key"] || body.idempotencyKey || null,
       });
       await authService.audit("INTENT_DECISION_CREATED", authenticated.actor.id, authenticated.workspaceId, {
@@ -1673,6 +1674,7 @@ async function handleApiUnsafe(req, res, url, context) {
         actorId: authenticated.actor.id,
         decisionId: body.decisionId,
         changeId: body.changeId || "DEPENDENCY_CHANGED",
+        change: body.change || null,
         idempotencyKey: req.headers["idempotency-key"] || body.idempotencyKey || null,
       });
       await authService.audit("WATCHTOWER_CHANGE_REPLAYED", authenticated.actor.id, authenticated.workspaceId, {
@@ -1766,7 +1768,10 @@ async function handleApiUnsafe(req, res, url, context) {
       return true;
     }
     if (req.method === "GET" && blastRadiusMatch) {
-      sendJson(res, 200, { apiVersion: "v1", blastRadius: await immuneSystem.getBlastRadius(blastRadiusMatch[1]) }, { context });
+      sendJson(res, 200, {
+        apiVersion: "v1",
+        blastRadius: await immuneSystem.getBlastRadius(blastRadiusMatch[1], authenticated.workspaceId),
+      }, { context });
       return true;
     }
     if (req.method === "POST" && url.pathname === "/api/v1/keys") {

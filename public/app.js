@@ -60,6 +60,25 @@ const caseForm = document.querySelector("#case-form");
 const caseList = document.querySelector("#case-list");
 const caseCount = document.querySelector("#case-count");
 const caseStatus = document.querySelector("#case-status");
+const agentSimulator = document.querySelector("#agent-simulator");
+const agentSimulatorForm = document.querySelector("#agent-simulator-form");
+const agentSimulatorStatus = document.querySelector("#agent-simulator-status");
+const decisionReviewEmpty = document.querySelector("#decision-review-empty");
+const decisionReviewContent = document.querySelector("#decision-review-content");
+const simulatorVerdict = document.querySelector("#simulator-verdict");
+const reviewDecision = document.querySelector("#review-decision");
+const reviewStatus = document.querySelector("#review-status");
+const reviewReasons = document.querySelector("#review-reasons");
+const reviewCalldata = document.querySelector("#review-calldata");
+const reviewPermissions = document.querySelector("#review-permissions");
+const reviewEvidence = document.querySelector("#review-evidence");
+const reviewPolicy = document.querySelector("#review-policy");
+const reviewLimitations = document.querySelector("#review-limitations");
+const reviewPassport = document.querySelector("#review-passport");
+const reviewAttest = document.querySelector("#review-attest");
+const reviewAdmit = document.querySelector("#review-admit");
+const reviewPassportResult = document.querySelector("#review-passport-result");
+let simulatorDecision = null;
 const alertCount = document.querySelector("#alert-count");
 const watchlistForm = document.querySelector("#watchlist-form");
 const watchlistStatus = document.querySelector("#watchlist-status");
@@ -141,9 +160,10 @@ const pathName = () => window.location.pathname;
 const isAuthRoute = () => ["/login", "/register"].includes(pathName());
 const isAdminRoute = () => pathName() === "/admin";
 const reportRouteMatch = () => pathName().match(/^\/dashboard\/scans\/([^/]+)$/);
-const isPrivateRoute = () => pathName() === "/dashboard" || /^\/dashboard\/(?:new-scan|history|passport|watchtower|compare|reports|api-access|community|settings)$/.test(pathName()) || pathName().startsWith("/dashboard/scans/");
+const isPrivateRoute = () => pathName() === "/dashboard" || /^\/dashboard\/(?:new-scan|agent-simulator|history|passport|watchtower|compare|reports|api-access|community|settings)$/.test(pathName()) || pathName().startsWith("/dashboard/scans/");
 const privatePage = () => {
   if (pathName() === "/dashboard/new-scan") return "new-scan";
+  if (pathName() === "/dashboard/agent-simulator") return "agent-simulator";
   if (pathName() === "/dashboard/history") return "history";
   if (pathName() === "/dashboard/passport") return "passport";
   if (pathName() === "/dashboard/watchtower") return "watchtower";
@@ -196,6 +216,136 @@ function authMessage(message, target = authStatus) {
 function uiText(value) {
   return JobenI18n.t(String(value ?? ""));
 }
+
+function simulatorTone(value) {
+  const normalized = String(value || "").toLowerCase().replaceAll("_", "-");
+  if (["allow", "verified", "pass", "accepted"].includes(normalized)) return "verified";
+  if (["block", "rejected", "fail", "review-required", "review_required", "conditional"].includes(normalized)) return "high";
+  if (["demo", "partial"].includes(normalized)) return "demo";
+  return "unknown";
+}
+
+function reviewRow(label, value, tone = "") {
+  const display = typeof value === "object" ? JSON.stringify(value) : String(value ?? "UNKNOWN");
+  return `<div class="review-data-row"><span>${escapeHtml(uiText(label))}</span><strong class="${tone ? `review-${tone}` : ""}">${escapeHtml(display)}</strong></div>`;
+}
+
+function renderDecisionReview(decision) {
+  simulatorDecision = decision;
+  if (!decisionReviewEmpty || !decisionReviewContent) return;
+  decisionReviewEmpty.hidden = true;
+  decisionReviewContent.hidden = false;
+  const decisionLabel = decision.decision || decision.status || "UNKNOWN";
+  const statusLabel = decision.status || "UNKNOWN";
+  simulatorVerdict.textContent = uiText(decisionLabel);
+  simulatorVerdict.className = `status-pill ${simulatorTone(decisionLabel)}`;
+  reviewDecision.textContent = uiText(decisionLabel);
+  reviewStatus.textContent = uiText(statusLabel);
+  reviewReasons.textContent = decision.reasonCodes?.length ? decision.reasonCodes.join(" · ") : "NONE";
+  reviewCalldata.textContent = JSON.stringify({
+    target: decision.unsignedTransaction?.to || null,
+    selector: decision.decodedCall?.selector || null,
+    operation: decision.decodedCall?.operation || null,
+    status: decision.decodedCall?.status || "UNKNOWN",
+    arguments: decision.decodedCall?.arguments || null,
+  }, null, 2);
+  const exposure = decision.permissionExposure || decision.exposure || {};
+  reviewPermissions.innerHTML = [
+    reviewRow("Permission", exposure.permissionType),
+    reviewRow("Exposure", exposure.exposure, simulatorTone(exposure.exposure)),
+    reviewRow("Requested amount", exposure.requestedAmount),
+    reviewRow("Declared maximum", exposure.declaredMaximum),
+    reviewRow("Spender / operator", exposure.spender || exposure.operator),
+    reviewRow("Expiry", exposure.expiry || "NOT APPLICABLE"),
+    reviewRow("Evidence status", exposure.status, simulatorTone(exposure.status)),
+  ].join("");
+  reviewEvidence.innerHTML = [
+    reviewRow("Evidence mode", decision.evidenceSnapshot?.mode || (decision.fixture?.liveEvidence === false ? "DEMO FIXTURE" : "LIVE")),
+    reviewRow("Evidence hash", decision.evidenceSnapshot?.evidenceHash),
+    reviewRow("Deployment", decision.deployment?.status || decision.deployment?.evidenceStatus),
+    reviewRow("Provenance", decision.provenance?.status || decision.provenance?.evidenceStatus),
+    reviewRow("Network / chain", `${decision.intent?.chainId || "UNKNOWN"} · ${decision.intent?.asset?.address || "UNKNOWN"}`),
+  ].join("");
+  const checks = decision.policy?.checks || [];
+  reviewPolicy.innerHTML = [
+    reviewRow("Policy", `${decision.policy?.id || "UNKNOWN"} · v${decision.policy?.version || "?"}`),
+    reviewRow("Policy purpose", decision.policy?.purpose || decision.policy?.name),
+    ...checks.map((check) => reviewRow(check.title || check.id, check.required === false ? "OPTIONAL" : "REQUIRED")),
+    reviewRow("Reason codes", decision.reasonCodes?.length ? decision.reasonCodes.join(", ") : "NONE"),
+  ].join("");
+  reviewLimitations.textContent = [
+    ...(decision.limitations || []),
+    decision.fixture?.liveEvidence === false ? "Fixture boundary: this is not live blockchain evidence." : "",
+  ].filter(Boolean).join(" ");
+  reviewPassport.hidden = decision.decision !== "ALLOW";
+  reviewAttest.hidden = decision.decision !== "ALLOW";
+  reviewAdmit.hidden = true;
+  reviewPassportResult.textContent = decision.decision === "ALLOW"
+    ? uiText("ALLOW can be attested, but it remains bounded by expiry and invalidation.")
+    : uiText("No Passport is issued because this decision is not ALLOW.");
+}
+
+async function runAgentScenario(kind) {
+  if (!agentSimulatorStatus) return;
+  agentSimulatorStatus.className = "settings-status";
+  agentSimulatorStatus.textContent = uiText("Running deterministic review…");
+  reviewPassportResult.textContent = "";
+  try {
+    const result = await apiJson("/api/v1/intent-checks", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": `agent-simulator:${kind}:${Date.now()}`,
+      },
+      body: JSON.stringify({ useFixture: kind }),
+    });
+    renderDecisionReview(result.decision);
+    agentSimulatorStatus.textContent = uiText(`${kind === "dangerous" ? "Dangerous approval" : "Compliant approval"} reviewed. Inspect every evidence boundary below.`);
+    agentSimulatorStatus.classList.add("success");
+  } catch (error) {
+    agentSimulatorStatus.textContent = error.message;
+    agentSimulatorStatus.classList.add("error");
+  }
+}
+
+agentSimulatorForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const kind = new FormData(agentSimulatorForm).get("agent-scenario") || "dangerous";
+  runAgentScenario(kind);
+});
+
+reviewAttest?.addEventListener("click", async () => {
+  if (!simulatorDecision?.decisionId) return;
+  reviewAttest.disabled = true;
+  try {
+    const result = await apiJson(`/api/v1/intent-checks/${encodeURIComponent(simulatorDecision.decisionId)}/attest`, { method: "POST" });
+    simulatorDecision.attestation = result.passport;
+    reviewAdmit.hidden = false;
+    reviewPassportResult.textContent = uiText(`Local Passport issued: ${result.passport.passportId}. It is not a blockchain attestation.`);
+  } catch (error) {
+    reviewPassportResult.textContent = error.message;
+  } finally {
+    reviewAttest.disabled = false;
+  }
+});
+
+reviewAdmit?.addEventListener("click", async () => {
+  const passport = simulatorDecision?.attestation;
+  if (!passport) return;
+  reviewAdmit.disabled = true;
+  try {
+    const result = await apiJson(`/api/v1/passports/${encodeURIComponent(passport.passportId)}/admit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chainId: passport.subjectChainId, subject: passport.subject }),
+    });
+    reviewPassportResult.textContent = uiText(`Admission ${result.admission?.decision || "CHECKED"}: ${result.admission?.reason || "See the response for the bounded result."}`);
+  } catch (error) {
+    reviewPassportResult.textContent = error.message;
+  } finally {
+    reviewAdmit.disabled = false;
+  }
+});
 
 function pushSignal(title, message, tone = "cyan", replace = false) {
   const region = document.querySelector("#signal-toast-region");
@@ -573,6 +723,7 @@ function showLanding({ privateView = false } = {}) {
   const pageCopy = {
     dashboard: ["Dashboard", "Your evidence-backed contract intelligence workspace."],
     "new-scan": ["Core Scan", "Evidence-based contract analysis for the selected network and address."],
+    "agent-simulator": ["Agent Simulator", "Run a reversible, evidence-backed decision review before an agent action reaches the chain."],
     history: ["Scan History", "Previous analyses available to this workspace."],
     passport: ["Risk Passport", "Track evidence-backed changes across monitored contracts."],
     watchtower: ["Watchtower", "Review scheduled monitoring and evidence alerts."],
@@ -603,6 +754,7 @@ function showLanding({ privateView = false } = {}) {
   document.querySelector("#new-scan").classList.toggle("public-scan-workbench", !privateView);
   document.querySelector("#new-scan").classList.remove("report-route");
   scanHistory.hidden = !privateView || page !== "history";
+  if (agentSimulator) agentSimulator.hidden = !privateView || page !== "agent-simulator";
   intelligenceDashboard.hidden = !privateView || !["passport", "watchtower"].includes(page);
   document.querySelector("#api-access").hidden = !privateView || page !== "api-access";
   if (communityPanel) communityPanel.hidden = !privateView || page !== "community";
