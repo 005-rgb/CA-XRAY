@@ -26,6 +26,7 @@ const NETWORK_PROFILES = Object.freeze({
     environment: "testnet",
     executionRole: "primary-development-and-demo",
     eligibilityRole: "accepted-by-official-buildathon-wording",
+    rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc",
     explorerBaseUrl: "https://sepolia.arbiscan.io/address/",
   }),
   "arbitrum-one": Object.freeze({
@@ -35,6 +36,7 @@ const NETWORK_PROFILES = Object.freeze({
     environment: "mainnet",
     executionRole: "fallback-submission-and-production",
     eligibilityRole: "accepted-by-official-buildathon-wording",
+    rpcUrl: "https://arb1.arbitrum.io/rpc",
     explorerBaseUrl: "https://arbiscan.io/address/",
   }),
 });
