@@ -28,6 +28,11 @@ const NETWORK_PROFILES = Object.freeze({
     eligibilityRole: "accepted-by-official-buildathon-wording",
     rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc",
     explorerBaseUrl: "https://sepolia.arbiscan.io/address/",
+    blockscoutHost: "arbitrum-sepolia.blockscout.com",
+    dexChainId: "arbitrum",
+    providerSupport: Object.freeze(["arbitrum-json-rpc", "blockscout", "goplus", "dexscreener"]),
+    deploymentMetadataLocation: "deployments/arbitrum-sepolia.json",
+    demoWritePolicy: "TESTNET_ONLY",
   }),
   "arbitrum-one": Object.freeze({
     id: "arbitrum-one",
@@ -38,6 +43,11 @@ const NETWORK_PROFILES = Object.freeze({
     eligibilityRole: "accepted-by-official-buildathon-wording",
     rpcUrl: "https://arb1.arbitrum.io/rpc",
     explorerBaseUrl: "https://arbiscan.io/address/",
+    blockscoutHost: "arbitrum.blockscout.com",
+    dexChainId: "arbitrum",
+    providerSupport: Object.freeze(["arbitrum-json-rpc", "blockscout", "goplus", "dexscreener"]),
+    deploymentMetadataLocation: "deployments/arbitrum-one.json",
+    demoWritePolicy: "NO_MAINNET_WRITE",
   }),
 });
 

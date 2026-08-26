@@ -171,6 +171,7 @@ function unknownProvenance({ networkId, address, limitation = "No configured can
   const target = normalizeAddress(address, "address");
   return {
     status: "UNKNOWN",
+    reasonCodes: ["ORIGIN_UNKNOWN"],
     edges: [],
     subject: { networkId, address: target },
     evidenceHash: hash({ status: "UNKNOWN", networkId, address: target }),

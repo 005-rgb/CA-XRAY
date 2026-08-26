@@ -12,7 +12,7 @@ class DeveloperApi {
     this.usage = new Map();
   }
 
-  issue({ workspaceId, actorId, name = "Developer key", scopes = ["scan:create", "scan:read", "evidence:read"], expiresAt = null }) {
+  issue({ workspaceId, actorId, name = "Developer key", scopes = ["scan:create", "scan:read", "evidence:read", "intent:check", "intent:read", "intent:attest"], expiresAt = null }) {
     const raw = `jn_live_${crypto.randomBytes(24).toString("base64url")}`;
     const record = { id: keyId(), workspaceId, actorId, name: String(name).trim().slice(0, 100) || "Developer key", scopes, hash: hash(raw), createdAt: this.clock().toISOString(), expiresAt, revokedAt: null, lastUsedAt: null };
     this.keys.set(record.hash, record);

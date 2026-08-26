@@ -42,6 +42,8 @@ const {
 } = require("./src/platform/entitlements");
 const { IntelligenceStore } = require("./src/intelligence/store");
 const { DeveloperApi } = require("./src/api/developer");
+const { ImmuneSystemService } = require("./src/immune-system/service");
+const { POLICY_CATALOG, NETWORK_PROFILES } = require("./src/immune-system/phase0");
 
 const PORT = Number(process.env.PORT || 5000);
 const HOST = "0.0.0.0";
@@ -62,6 +64,7 @@ const controlPlane = new PlatformControlPlane({
 const providerRegistry = createDefaultProviderRegistry();
 const intelligenceStore = new IntelligenceStore({ persistence });
 const developerApi = new DeveloperApi({ secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex") });
+const immuneSystem = new ImmuneSystemService({ persistence });
 const intelligenceReady = persistenceReady.then(() => intelligenceStore.init());
 const scanQueue = createScanJobQueue({
   processor: (payload, jobContext) => scanLive({
@@ -1628,6 +1631,124 @@ async function handleApiUnsafe(req, res, url, context) {
   if (url.pathname.startsWith("/api/v1/")) {
     const authenticated = requireAuthenticated(context);
     const hasScope = (scope) => !context.apiKey || context.apiKey.scopes.includes(scope);
+    if (req.method === "GET" && url.pathname === "/api/v1/policies") {
+      sendJson(res, 200, {
+        apiVersion: "v1",
+        policies: Object.values(POLICY_CATALOG).map(({ id, version, purpose, requiredChecks, humanReviewChecks, missingEvidenceOutcome, conflictOutcome }) => ({
+          id, version, purpose, requiredChecks, humanReviewChecks, missingEvidenceOutcome, conflictOutcome,
+        })),
+      }, { context });
+      return true;
+    }
+    const intentDecisionMatch = url.pathname.match(/^\/api\/v1\/intent-checks\/([^/]+)$/);
+    const intentAttestMatch = url.pathname.match(/^\/api\/v1\/intent-checks\/([^/]+)\/attest$/);
+    const passportMatch = url.pathname.match(/^\/api\/v1\/passports\/([^/]+)$/);
+    const passportVerifyMatch = url.pathname.match(/^\/api\/v1\/passports\/([^/]+)\/verify$/);
+    const passportAdmitMatch = url.pathname.match(/^\/api\/v1\/passports\/([^/]+)\/admit$/);
+    const passportInvalidateMatch = url.pathname.match(/^\/api\/v1\/passports\/([^/]+)\/invalidate$/);
+    const provenanceMatch = url.pathname.match(/^\/api\/v1\/provenance\/([^/]+)\/(0x[0-9a-fA-F]{40})$/);
+    const blastRadiusMatch = url.pathname.match(/^\/api\/v1\/blast-radius\/([^/]+)$/);
+    if (req.method === "POST" && url.pathname === "/api/v1/intent-checks") {
+      if (!hasScope("intent:check") && context.apiKey) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const body = await readBody(req);
+      const result = await immuneSystem.createIntentCheck({
+        workspaceId: authenticated.workspaceId,
+        actorId: authenticated.actor.id,
+        input: body,
+        idempotencyKey: req.headers["idempotency-key"] || body.idempotencyKey || null,
+      });
+      await authService.audit("INTENT_DECISION_CREATED", authenticated.actor.id, authenticated.workspaceId, {
+        decisionId: result.decision.decisionId,
+        status: result.decision.status,
+        duplicate: result.duplicate,
+      });
+      sendJson(res, result.duplicate ? 200 : 201, { apiVersion: "v1", ...result }, { context });
+      return true;
+    }
+    if (req.method === "POST" && url.pathname === "/api/v1/watchtower/replay-change") {
+      if (!hasScope("intent:check") && context.apiKey) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const body = await readBody(req);
+      const replay = await immuneSystem.replayChange({
+        workspaceId: authenticated.workspaceId,
+        actorId: authenticated.actor.id,
+        decisionId: body.decisionId,
+        changeId: body.changeId || "DEPENDENCY_CHANGED",
+        idempotencyKey: req.headers["idempotency-key"] || body.idempotencyKey || null,
+      });
+      await authService.audit("WATCHTOWER_CHANGE_REPLAYED", authenticated.actor.id, authenticated.workspaceId, {
+        sourceDecisionId: body.decisionId,
+        replayDecisionId: replay.decision.decisionId,
+        changeId: replay.changeId,
+        duplicate: replay.duplicate,
+      });
+      sendJson(res, replay.duplicate ? 200 : 201, { apiVersion: "v1", ...replay }, { context });
+      return true;
+    }
+    if (req.method === "GET" && intentDecisionMatch) {
+      if (!hasScope("intent:read") && context.apiKey) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const decision = await immuneSystem.getDecision(authenticated.workspaceId, intentDecisionMatch[1]);
+      if (!decision) { sendJson(res, 404, { error: "DECISION_NOT_FOUND", message: "Intent decision not found." }, { context }); return true; }
+      sendJson(res, 200, { apiVersion: "v1", decision }, { context });
+      return true;
+    }
+    if (req.method === "POST" && intentAttestMatch) {
+      if (!hasScope("intent:attest") && context.apiKey) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const result = await immuneSystem.attestDecision({
+        workspaceId: authenticated.workspaceId,
+        actorId: authenticated.actor.id,
+        decisionId: intentAttestMatch[1],
+      });
+      await authService.audit("INTENT_DECISION_ATTESTED", authenticated.actor.id, authenticated.workspaceId, {
+        decisionId: intentAttestMatch[1],
+        passportId: result.passport.passportId,
+        mode: "LOCAL_SIMULATION",
+      });
+      sendJson(res, 200, { apiVersion: "v1", ...result, attestation: result.passport }, { context });
+      return true;
+    }
+    if (req.method === "GET" && passportMatch) {
+      const passport = await immuneSystem.getPassport(passportMatch[1]);
+      if (!passport) { sendJson(res, 404, { error: "PASSPORT_NOT_FOUND", message: "Passport not found." }, { context }); return true; }
+      const { workspaceId: ignoredWorkspace, actorId: ignoredActor, ...publicPassport } = passport;
+      sendJson(res, 200, { apiVersion: "v1", passport: publicPassport }, { context });
+      return true;
+    }
+    if (req.method === "GET" && passportVerifyMatch) {
+      const verification = await immuneSystem.verifyPassport({ passportId: passportVerifyMatch[1], subjectChainId: url.searchParams.get("chainId"), subject: url.searchParams.get("subject") });
+      sendJson(res, 200, { apiVersion: "v1", verification }, { context });
+      return true;
+    }
+    if (req.method === "POST" && passportAdmitMatch) {
+      const body = await readBody(req);
+      const admission = await immuneSystem.admit({ passportId: passportAdmitMatch[1], subjectChainId: body.chainId ?? null, subject: body.subject ?? null });
+      sendJson(res, admission.usable ? 200 : 409, { apiVersion: "v1", admission }, { context });
+      return true;
+    }
+    if (req.method === "POST" && passportInvalidateMatch) {
+      if (!hasScope("intent:attest") && context.apiKey) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
+      const body = await readBody(req);
+      const result = await immuneSystem.invalidatePassport({
+        workspaceId: authenticated.workspaceId,
+        passportId: passportInvalidateMatch[1],
+        reasonCode: body.reasonCode || "DEPENDENCY_CHANGED",
+      });
+      await authService.audit("INTENT_PASSPORT_INVALIDATED", authenticated.actor.id, authenticated.workspaceId, {
+        passportId: passportInvalidateMatch[1],
+        reasonCode: body.reasonCode || "DEPENDENCY_CHANGED",
+      });
+      sendJson(res, 200, { apiVersion: "v1", ...result }, { context });
+      return true;
+    }
+    if (req.method === "GET" && provenanceMatch) {
+      const chainId = Number(provenanceMatch[1]);
+      const provenance = await immuneSystem.getProvenance({ networkId: Object.values(NETWORK_PROFILES).find((item) => item.chainId === chainId)?.id || null, chainId, address: provenanceMatch[2] });
+      sendJson(res, 200, { apiVersion: "v1", provenance }, { context });
+      return true;
+    }
+    if (req.method === "GET" && blastRadiusMatch) {
+      sendJson(res, 200, { apiVersion: "v1", blastRadius: await immuneSystem.getBlastRadius(blastRadiusMatch[1]) }, { context });
+      return true;
+    }
     if (req.method === "POST" && url.pathname === "/api/v1/keys") {
       if (context.apiKey) throw Object.assign(new Error("API_KEY_SCOPE_FORBIDDEN"), { code: "FORBIDDEN" });
       const body = await readBody(req);
@@ -2013,6 +2134,29 @@ async function handleApi(req, res, url, context) {
       WEBHOOK_REPLAY_IN_PROGRESS: 409,
       INVALID_SCAN_STATUS: 400,
       INVALID_EXPORT_FORMAT: 400,
+      INVALID_IDEMPOTENCY_KEY: 400,
+      INVALID_INTENT: 400,
+      INVALID_TRANSACTION: 400,
+      INVALID_DECLARED_ACTION: 400,
+      INVALID_ACTOR_TYPE: 400,
+      INVALID_IDENTIFIER: 400,
+      INVALID_ADDRESS: 400,
+      INVALID_CHAIN_ID: 400,
+      INVALID_INTEGER: 400,
+      INVALID_CALLDATA: 400,
+      CALLDATA_TOO_LARGE: 413,
+      INVALID_ASSET: 400,
+      INTENT_DECODE_UNAVAILABLE: 422,
+      WORKSPACE_SCOPE_REQUIRED: 403,
+      DECISION_NOT_FOUND: 404,
+      ATTESTATION_DECISION_NOT_ALLOW: 409,
+      PASSPORT_NOT_FOUND: 404,
+      API_KEY_SCOPE_FORBIDDEN: 403,
+      ACTOR_MISMATCH: 403,
+      INVALID_PROVENANCE: 400,
+      PASSPORT_DUPLICATE: 409,
+      ISSUER_NOT_AUTHORIZED: 403,
+      INVALID_ATTESTATION_EXPIRY: 400,
       REPORT_NOT_READY: 409,
       SCAN_NOT_CANCELLABLE: 409,
       ENTITLEMENT_REQUIRED: 403,

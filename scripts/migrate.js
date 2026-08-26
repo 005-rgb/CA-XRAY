@@ -11,6 +11,7 @@ const migrations = [
   ["005_phase9_trajectory_deployer", "2.2.0", "1.2.0"],
   ["006_settings_retention", "2.2.0", "1.2.0"],
   ["007_phase1_durable_queue", "2.3.0", "1.3.0"],
+  ["010_immune_system", "3.0.0", "1.0.0"],
 ];
 
 async function main() {

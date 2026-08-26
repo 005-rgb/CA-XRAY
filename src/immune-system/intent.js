@@ -272,7 +272,7 @@ function compareIntentAndTransaction({ intent, transaction, decoded }) {
     };
     if (actualAmount === MAX_UINT256.toString()) reasonCodes.add("UNLIMITED_APPROVAL");
     if (declaredMaximum !== null && BigInt(actualAmount) > BigInt(declaredMaximum)) reasonCodes.add("APPROVAL_EXCEEDS_INTENT");
-    if (intent.expectedSpender && intent.expectedSpender !== spender) reasonCodes.add("UNKNOWN_SPENDER");
+    if (!intent.expectedSpender || intent.expectedSpender !== spender) reasonCodes.add("UNKNOWN_SPENDER");
     if (decoded.operation === "EIP2612_PERMIT" && args.deadline === "0") reasonCodes.add("HUMAN_REVIEW_REQUIRED");
   }
 
@@ -289,7 +289,7 @@ function compareIntentAndTransaction({ intent, transaction, decoded }) {
       status: "VERIFIED",
       reasonCodes: [],
     };
-    if (args.approved && intent.expectedSpender && intent.expectedSpender !== args.operator) reasonCodes.add("UNKNOWN_SPENDER");
+    if (args.approved && (!intent.expectedSpender || intent.expectedSpender !== args.operator)) reasonCodes.add("UNKNOWN_SPENDER");
   }
 
   if (decoded.operation === "ERC20_TRANSFER") {

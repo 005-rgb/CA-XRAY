@@ -107,6 +107,9 @@ class MemoryPersistence {
     this.outbox = new Map();
     this.webhooks = new Map();
     this.entitlements = new Map();
+    this.immuneDecisions = new Map();
+    this.immuneDecisionIdempotency = new Map();
+    this.immunePassports = new Map();
   }
 
   async init() {}
@@ -419,6 +422,44 @@ class MemoryPersistence {
   }
 
   async close() {}
+
+  async getImmuneDecision(workspaceId, decisionId) {
+    const record = this.immuneDecisions.get(`${workspaceId}:${decisionId}`);
+    return record ? clone(record) : null;
+  }
+
+  async getImmuneDecisionByIdempotency(workspaceId, idempotencyKey) {
+    const decisionId = this.immuneDecisionIdempotency.get(`${workspaceId}:${idempotencyKey}`);
+    return decisionId ? this.getImmuneDecision(workspaceId, decisionId) : null;
+  }
+
+  async saveImmuneDecision(decision) {
+    const scope = `${decision.workspaceId}:${decision.decisionId}`;
+    const idempotencyScope = `${decision.workspaceId}:${decision.idempotencyKey}`;
+    const existingId = this.immuneDecisionIdempotency.get(idempotencyScope);
+    if (existingId) return { duplicate: true, decision: clone(this.immuneDecisions.get(`${decision.workspaceId}:${existingId}`)) };
+    if (this.immuneDecisions.has(scope)) return { duplicate: true, decision: clone(this.immuneDecisions.get(scope)) };
+    this.immuneDecisions.set(scope, clone(decision));
+    this.immuneDecisionIdempotency.set(idempotencyScope, decision.decisionId);
+    return { duplicate: false, decision: clone(decision) };
+  }
+
+  async updateImmuneDecision(workspaceId, decisionId, decision) {
+    const scope = `${workspaceId}:${decisionId}`;
+    if (!this.immuneDecisions.has(scope)) return null;
+    this.immuneDecisions.set(scope, clone(decision));
+    return clone(decision);
+  }
+
+  async getImmunePassport(passportId) {
+    return clone(this.immunePassports.get(passportId) || null);
+  }
+
+  async saveImmunePassport(passport) {
+    if (!this.immunePassports.has(passport.passportId)) this.immunePassports.set(passport.passportId, clone(passport));
+    else this.immunePassports.set(passport.passportId, { ...this.immunePassports.get(passport.passportId), ...clone(passport) });
+    return clone(this.immunePassports.get(passport.passportId));
+  }
 }
 
 class PostgresPersistence {
@@ -842,6 +883,65 @@ class PostgresPersistence {
 
   async close() {
     await this.pool.end();
+  }
+
+  async getImmuneDecision(workspaceId, decisionId) {
+    const result = await this.pool.query(
+      "SELECT decision_json FROM immune_decisions WHERE workspace_id = $1 AND decision_id = $2",
+      [workspaceId, decisionId],
+    );
+    return result.rows[0]?.decision_json || null;
+  }
+
+  async getImmuneDecisionByIdempotency(workspaceId, idempotencyKey) {
+    const result = await this.pool.query(
+      "SELECT decision_json FROM immune_decisions WHERE workspace_id = $1 AND idempotency_key = $2",
+      [workspaceId, idempotencyKey],
+    );
+    return result.rows[0]?.decision_json || null;
+  }
+
+  async saveImmuneDecision(decision) {
+    const result = await this.pool.query(
+      `INSERT INTO immune_decisions
+        (decision_id, workspace_id, actor_id, idempotency_key, decision_json)
+       VALUES ($1, $2, $3, $4, $5::jsonb)
+       ON CONFLICT (workspace_id, idempotency_key) DO NOTHING
+       RETURNING decision_json`,
+      [decision.decisionId, decision.workspaceId, decision.actorId, decision.idempotencyKey, JSON.stringify(decision)],
+    );
+    if (result.rowCount) return { duplicate: false, decision: result.rows[0].decision_json };
+    return { duplicate: true, decision: await this.getImmuneDecisionByIdempotency(decision.workspaceId, decision.idempotencyKey) };
+  }
+
+  async updateImmuneDecision(workspaceId, decisionId, decision) {
+    const result = await this.pool.query(
+      `UPDATE immune_decisions SET decision_json = $3::jsonb
+       WHERE workspace_id = $1 AND decision_id = $2
+       RETURNING decision_json`,
+      [workspaceId, decisionId, JSON.stringify(decision)],
+    );
+    return result.rows[0]?.decision_json || null;
+  }
+
+  async getImmunePassport(passportId) {
+    const result = await this.pool.query(
+      "SELECT passport_json FROM immune_passports WHERE passport_id = $1",
+      [passportId],
+    );
+    return result.rows[0]?.passport_json || null;
+  }
+
+  async saveImmunePassport(passport) {
+    const result = await this.pool.query(
+      `INSERT INTO immune_passports
+        (passport_id, workspace_id, decision_id, passport_json)
+       VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (passport_id) DO UPDATE SET passport_json = EXCLUDED.passport_json
+       RETURNING passport_json`,
+      [passport.passportId, passport.workspaceId, passport.decisionId, JSON.stringify(passport)],
+    );
+    return result.rows[0]?.passport_json || passport;
   }
 }
 
