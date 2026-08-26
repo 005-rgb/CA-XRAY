@@ -233,7 +233,7 @@ function amountDelta(actual, declared) {
   return (BigInt(actual) - BigInt(declared)).toString();
 }
 
-function compareIntentAndTransaction({ intent, transaction, decoded }) {
+function compareIntentAndTransaction({ intent, transaction, decoded, now = new Date() }) {
   const reasonCodes = new Set();
   if (intent.chainId !== transaction.chainId) reasonCodes.add("TARGET_CHAIN_MISMATCH");
   if (intent.sender !== transaction.from) reasonCodes.add("INTENT_ACTION_MISMATCH");
@@ -273,7 +273,11 @@ function compareIntentAndTransaction({ intent, transaction, decoded }) {
     if (actualAmount === MAX_UINT256.toString()) reasonCodes.add("UNLIMITED_APPROVAL");
     if (declaredMaximum !== null && BigInt(actualAmount) > BigInt(declaredMaximum)) reasonCodes.add("APPROVAL_EXCEEDS_INTENT");
     if (!intent.expectedSpender || intent.expectedSpender !== spender) reasonCodes.add("UNKNOWN_SPENDER");
-    if (decoded.operation === "EIP2612_PERMIT" && args.deadline === "0") reasonCodes.add("HUMAN_REVIEW_REQUIRED");
+    if (decoded.operation === "EIP2612_PERMIT") {
+      const deadline = BigInt(args.deadline);
+      const nowSeconds = BigInt(Math.floor(new Date(now).getTime() / 1000));
+      if (deadline <= nowSeconds) reasonCodes.add("HUMAN_REVIEW_REQUIRED");
+    }
   }
 
   if (["ERC721_SET_APPROVAL_FOR_ALL", "ERC1155_SET_APPROVAL_FOR_ALL"].includes(decoded.operation)) {

@@ -1707,20 +1707,40 @@ async function handleApiUnsafe(req, res, url, context) {
       return true;
     }
     if (req.method === "GET" && passportMatch) {
-      const passport = await immuneSystem.getPassport(passportMatch[1]);
+      const passport = await immuneSystem.getPassport(passportMatch[1], authenticated.workspaceId);
       if (!passport) { sendJson(res, 404, { error: "PASSPORT_NOT_FOUND", message: "Passport not found." }, { context }); return true; }
-      const { workspaceId: ignoredWorkspace, actorId: ignoredActor, ...publicPassport } = passport;
+      const {
+        workspaceId: ignoredWorkspace,
+        actorId: ignoredActor,
+        decisionId: ignoredDecision,
+        issuerId: ignoredIssuer,
+        ...publicPassport
+      } = passport;
       sendJson(res, 200, { apiVersion: "v1", passport: publicPassport }, { context });
       return true;
     }
     if (req.method === "GET" && passportVerifyMatch) {
-      const verification = await immuneSystem.verifyPassport({ passportId: passportVerifyMatch[1], subjectChainId: url.searchParams.get("chainId"), subject: url.searchParams.get("subject") });
-      sendJson(res, 200, { apiVersion: "v1", verification }, { context });
+      const verification = await immuneSystem.verifyPassport({
+        workspaceId: authenticated.workspaceId,
+        passportId: passportVerifyMatch[1],
+        subjectChainId: url.searchParams.get("chainId"),
+        subject: url.searchParams.get("subject"),
+      });
+      const publicVerification = verification && {
+        ...verification,
+        passport: verification.passport && (({ workspaceId: ignoredWorkspace, actorId: ignoredActor, decisionId: ignoredDecision, issuerId: ignoredIssuer, ...publicPassport }) => publicPassport)(verification.passport),
+      };
+      sendJson(res, 200, { apiVersion: "v1", verification: publicVerification }, { context });
       return true;
     }
     if (req.method === "POST" && passportAdmitMatch) {
       const body = await readBody(req);
-      const admission = await immuneSystem.admit({ passportId: passportAdmitMatch[1], subjectChainId: body.chainId ?? null, subject: body.subject ?? null });
+      const admission = await immuneSystem.admit({
+        workspaceId: authenticated.workspaceId,
+        passportId: passportAdmitMatch[1],
+        subjectChainId: body.chainId ?? null,
+        subject: body.subject ?? null,
+      });
       sendJson(res, admission.usable ? 200 : 409, { apiVersion: "v1", admission }, { context });
       return true;
     }

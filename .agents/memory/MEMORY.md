@@ -8,3 +8,4 @@
 - [Imported dependency state](imported-dependency-state.md) — package manifests may be present while runtime modules are absent; install declared dependencies before judging test failures.
 - [Phase 4 case workspace](phase4-case-workspace.md) — case mutations are tenant-scoped and append-only through an auditable timeline.
 - [Passport intelligence contracts](passport-intelligence-contracts.md) — freshness, review actions, and audit exports remain snapshot-anchored and separate from risk.
+- [Immune system boundaries](immune-system-boundaries.md) — route admission through the tenant-scoped service and redact internal passport linkage from public verification.

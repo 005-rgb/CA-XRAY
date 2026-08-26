@@ -151,7 +151,7 @@ class ImmuneSystemService {
     const intent = normalizeIntent(intentInput);
     const transaction = normalizeTransaction(transactionInput);
     const decoded = decodeCalldata(transaction.data, { targetStandard: transaction.targetStandard });
-    const compared = compareIntentAndTransaction({ intent, transaction, decoded });
+    const compared = compareIntentAndTransaction({ intent, transaction, decoded, now: this.clock() });
     const network = NETWORK_PROFILES[Object.keys(NETWORK_PROFILES).find((key) => NETWORK_PROFILES[key].chainId === intent.chainId)] || null;
 
     let deployment;
@@ -355,8 +355,21 @@ class ImmuneSystemService {
     if (subject !== null && String(subject).toLowerCase() !== passport.subject) reasonCodes.push("TARGET_CHAIN_MISMATCH");
     if (passport.decision !== "ALLOW") reasonCodes.push("HUMAN_REVIEW_REQUIRED");
     if (passport.invalidated) reasonCodes.push("ATTESTATION_INVALIDATED");
-    if (new Date() >= new Date(passport.expiresAt)) reasonCodes.push("ATTESTATION_EXPIRED");
+    if (this.clock() >= new Date(passport.expiresAt)) reasonCodes.push("ATTESTATION_EXPIRED");
     return { usable: reasonCodes.length === 0, status: reasonCodes.length ? "REJECTED" : "ACCEPTED", reasonCodes, passport };
+  }
+
+  async admit({ workspaceId = null, passportId, subjectChainId = null, subject = null } = {}) {
+    const passport = await this.getPassport(passportId, workspaceId);
+    if (!passport) {
+      return {
+        usable: false,
+        status: "NOT_FOUND",
+        reasonCodes: ["ATTESTATION_EXPIRED"],
+        passport: null,
+      };
+    }
+    return this.verifyPassport({ workspaceId, passportId, subjectChainId, subject });
   }
 
   async invalidatePassport({ workspaceId, passportId, reasonCode = "DEPENDENCY_CHANGED" } = {}) {

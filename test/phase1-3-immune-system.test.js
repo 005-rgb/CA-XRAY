@@ -132,6 +132,85 @@ test("P3 attestation binds subject and chain, supports expiry/invalidation, and 
   assert.ok(rejected.reasonCodes.includes("ATTESTATION_INVALIDATED"));
 });
 
+test("P3 admission gate exposes deterministic accept/reject behavior", async () => {
+  const immune = service();
+  const decision = await immune.createIntentCheck({
+    workspaceId: "workspace-a",
+    actorId: "agent-a",
+    idempotencyKey: "admission-check",
+    useFixture: "compliant",
+  });
+  const issued = await immune.attestDecision({
+    workspaceId: "workspace-a",
+    decisionId: decision.decision.decisionId,
+  });
+  const accepted = await immune.admit({
+    workspaceId: "workspace-a",
+    passportId: issued.passport.passportId,
+    subjectChainId: 421614,
+    subject: "0x0000000000000000000000000000000000000101",
+  });
+  assert.equal(accepted.usable, true);
+  const foreign = await immune.admit({
+    workspaceId: "workspace-b",
+    passportId: issued.passport.passportId,
+    subjectChainId: 421614,
+    subject: "0x0000000000000000000000000000000000000101",
+  });
+  assert.equal(foreign.usable, false);
+  assert.equal(foreign.status, "NOT_FOUND");
+});
+
+test("P1 expired permit is review-required and retains its explicit deadline", async () => {
+  const immune = service();
+  const intent = {
+    intentId: "permit-expired",
+    actorType: "AI_AGENT",
+    actorId: "agent-a",
+    chainId: 421614,
+    sender: "0x0000000000000000000000000000000000000404",
+    declaredAction: "PERMIT",
+    asset: { address: "0x0000000000000000000000000000000000000101" },
+    amount: "500000000",
+    destination: "0x0000000000000000000000000000000000000202",
+    expectedSpender: "0x0000000000000000000000000000000000000303",
+    maxApproval: "500000000",
+    policyId: "DEMO_PERMISSIVE",
+    policyVersion: "1.0.0",
+  };
+  const words = [
+    "0000000000000000000000000000000000000000000000000000000000000404",
+    "0000000000000000000000000000000000000000000000000000000000000303",
+    "000000000000000000000000000000000000000000000000000000001dcd6500",
+    "00000000000000000000000000000000000000000000000000000000695247c0",
+    "000000000000000000000000000000000000000000000000000000000000001b",
+    "0".repeat(64),
+    "1".padStart(64, "0"),
+  ];
+  const result = await immune.createIntentCheck({
+    workspaceId: "workspace-a",
+    actorId: "agent-a",
+    idempotencyKey: "permit-expired",
+    payload: {
+      intent,
+      unsignedTransaction: {
+        transactionId: "permit-tx",
+        chainId: 421614,
+        from: intent.sender,
+        to: intent.asset.address,
+        value: "0",
+        data: `0xd505accf${words.join("")}`,
+        gasLimit: "100000",
+        targetStandard: "ERC20",
+      },
+      fixtureEvidence: { label: "PERMIT FIXTURE", liveEvidence: false },
+    },
+  });
+  assert.equal(result.decision.exposure.expiry, "1767000000");
+  assert.equal(result.decision.decision, "REVIEW_REQUIRED");
+  assert.ok(result.decision.reasonCodes.includes("HUMAN_REVIEW_REQUIRED"));
+});
+
 test("watchtower change replay re-evaluates the original immutable intent with bounded idempotency", async () => {
   const persistence = new MemoryPersistence();
   const immune = new ImmuneSystemService({ persistence, clock: CLOCK });
