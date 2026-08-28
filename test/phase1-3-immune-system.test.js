@@ -6,7 +6,9 @@ const path = require("node:path");
 const { MemoryPersistence } = require("../src/persistence");
 const { ImmuneSystemService } = require("../src/immune-system/service");
 const { collectDeploymentEvidence, normalizeProvenanceEdge } = require("../src/immune-system/evidence");
-const { validateDeploymentConfig } = require("../src/immune-system/deployment");
+const { validateDeploymentConfig, deploymentMetadata } = require("../src/immune-system/deployment");
+const { canonicalAttestationPayload, hash } = require("../src/immune-system/registry");
+const { evaluatePolicy } = require("../src/immune-system/policy");
 
 const CLOCK = () => new Date("2026-01-01T00:00:00.000Z");
 
@@ -59,6 +61,8 @@ test("P1 compliant capped approval reaches ALLOW and is idempotent across servic
   assert.equal(second.decision.decisionId, first.decision.decisionId);
   assert.equal(second.decision.workspaceId, undefined);
   assert.equal(second.decision.intent.actorId, undefined);
+  assert.equal(second.decision.unsignedTransaction.data, undefined);
+  assert.equal(second.decision.unsignedTransaction.calldataRedacted, true);
 });
 
 test("P1 idempotency is tenant scoped and missing live evidence never allows", async () => {
@@ -130,6 +134,27 @@ test("P3 attestation binds subject and chain, supports expiry/invalidation, and 
   const rejected = await immune.verifyPassport({ passportId: issued.passport.passportId });
   assert.equal(rejected.usable, false);
   assert.ok(rejected.reasonCodes.includes("ATTESTATION_INVALIDATED"));
+});
+
+test("P3 attestation hash is stable over the required canonical payload", async () => {
+  const immune = service();
+  const decision = await immune.createIntentCheck({
+    workspaceId: "workspace-a",
+    actorId: "agent-a",
+    idempotencyKey: "canonical-attestation",
+    useFixture: "compliant",
+  });
+  const issued = await immune.attestDecision({
+    workspaceId: "workspace-a",
+    decisionId: decision.decision.decisionId,
+  });
+  const passport = issued.passport;
+  const payload = canonicalAttestationPayload(passport.attestationPayload);
+  assert.deepEqual(payload, passport.attestationPayload);
+  assert.equal(passport.attestationHash, `0x${hash(payload)}`);
+  assert.equal(payload.subjectChainId, 421614);
+  assert.equal(payload.policyId, "DEMO_PERMISSIVE");
+  assert.equal(payload.decisionSchemaVersion, "1.0.0");
 });
 
 test("P3 admission gate exposes deterministic accept/reject behavior", async () => {
@@ -235,6 +260,51 @@ test("watchtower change replay re-evaluates the original immutable intent with b
   assert.notEqual(replay.decision.decisionId, original.decision.decisionId);
 });
 
+test("P2 partial provenance and stale contract evidence never produce ALLOW", () => {
+  const base = {
+    decoded: { status: "VERIFIED", permissionType: "ERC20_ALLOWANCE" },
+    comparison: { reasonCodes: [] },
+    deployment: { status: "VERIFIED", freshness: { state: "FRESH" }, limitations: [] },
+    evidenceSnapshot: { id: "snapshot-1" },
+    policyId: "AI_AGENT_CONSERVATIVE",
+    policyVersion: "1.0.0",
+  };
+  const partial = evaluatePolicy({
+    ...base,
+    provenance: { status: "PARTIAL", reasonCodes: [], limitations: [] },
+  });
+  assert.equal(partial.decision, "REVIEW_REQUIRED");
+  const stale = evaluatePolicy({
+    ...base,
+    provenance: { status: "VERIFIED", reasonCodes: [], limitations: [] },
+    deployment: { status: "VERIFIED", freshness: { state: "STALE" }, limitations: [] },
+  });
+  assert.equal(stale.decision, "STALE_EVIDENCE");
+});
+
+test("P2 same-status provenance disagreement is preserved as a conflict", () => {
+  const immune = service();
+  const to = "0x0000000000000000000000000000000000000101";
+  const first = immune.configureProvenance({
+    from: { networkId: "ethereum", address: "0x0000000000000000000000000000000000000001" },
+    to: { networkId: "arbitrum-sepolia", address: to },
+    classification: "CONFIGURED",
+    status: "VERIFIED",
+    source: "bridge-a",
+  });
+  const second = immune.configureProvenance({
+    from: { networkId: "ethereum", address: "0x0000000000000000000000000000000000000002" },
+    to: { networkId: "arbitrum-sepolia", address: to },
+    classification: "CONFIGURED",
+    status: "VERIFIED",
+    source: "bridge-b",
+  });
+  assert.equal(first.status, "VERIFIED");
+  assert.equal(second.status, "CONFLICT");
+  assert.equal(second.reasonCodes[0], "PROVIDER_CONFLICT");
+  assert.equal(second.edges.length, 2);
+});
+
 test("P3 deployment preflight requires explicit metadata and credentials without exposing them", () => {
   assert.throws(() => validateDeploymentConfig({
     networkId: "arbitrum-one", chainId: 42161, environment: "mainnet",
@@ -243,4 +313,23 @@ test("P3 deployment preflight requires explicit metadata and credentials without
   const source = fs.readFileSync(path.join(__dirname, "..", "contracts", "JobenAttestationRegistry.sol"), "utf8");
   assert.match(source, /non-upgradeable/);
   assert.doesNotMatch(source, /delegatecall|selfdestruct|transferFrom/i);
+});
+
+test("P3 deployment metadata requires both deployment transaction hashes", () => {
+  const common = {
+    networkId: "arbitrum-sepolia",
+    chainId: 421614,
+    registryAddress: "0x0000000000000000000000000000000000000101",
+    gateAddress: "0x0000000000000000000000000000000000000102",
+    deployerAddress: "0x0000000000000000000000000000000000000103",
+  };
+  assert.throws(() => deploymentMetadata(common), /registryDeploymentTx/);
+  const metadata = deploymentMetadata({
+    ...common,
+    registryDeploymentTx: `0x${"1".repeat(64)}`,
+    gateDeploymentTx: `0x${"2".repeat(64)}`,
+    deployedAt: "2026-08-28T00:00:00.000Z",
+  });
+  assert.equal(metadata.network, "arbitrum-sepolia");
+  assert.equal(metadata.registryDeploymentTx, `0x${"1".repeat(64)}`);
 });

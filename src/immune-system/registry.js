@@ -3,6 +3,7 @@ const { DECISION_STATUS } = require("./phase0");
 const { normalizeAddress, normalizeChainId, normalizeInteger } = require("./intent");
 
 const ZERO_HASH = `0x${"0".repeat(64)}`;
+const ATTESTATION_SCHEMA_VERSION = "1.0.0";
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -30,6 +31,35 @@ function normalizeBytes32(value, field) {
     throw error;
   }
   return `0x${text.replace(/^0x/i, "").toLowerCase()}`;
+}
+
+function canonicalAttestationPayload({
+  subject,
+  subjectChainId,
+  decision,
+  evidenceHash,
+  policyId,
+  policyVersion,
+  issuedAt,
+  expiresAt,
+  decisionSchemaVersion = ATTESTATION_SCHEMA_VERSION,
+} = {}) {
+  const issued = new Date(issuedAt);
+  const expires = new Date(expiresAt);
+  if (!Number.isFinite(issued.getTime()) || !Number.isFinite(expires.getTime())) {
+    throw Object.assign(new TypeError("Attestation timestamps must be valid ISO dates."), { code: "INVALID_ATTESTATION_TIMESTAMP" });
+  }
+  return {
+    decisionSchemaVersion: String(decisionSchemaVersion),
+    subject: normalizeAddress(subject, "subject"),
+    subjectChainId: normalizeChainId(subjectChainId, "subjectChainId"),
+    decision: String(decision || "").toUpperCase(),
+    evidenceHash: normalizeBytes32(evidenceHash, "evidenceHash"),
+    policyId: String(policyId || ""),
+    policyVersion: String(policyVersion || ""),
+    issuedAt: issued.toISOString(),
+    expiresAt: expires.toISOString(),
+  };
 }
 
 function event(type, payload, clock) {
@@ -82,6 +112,16 @@ class InMemoryAttestationRegistry {
     if (!Number.isFinite(issued.getTime()) || !Number.isFinite(expires.getTime()) || expires.getTime() <= issued.getTime()) {
       throw Object.assign(new Error("INVALID_ATTESTATION_EXPIRY"), { code: "INVALID_ATTESTATION_EXPIRY" });
     }
+    const attestationPayload = canonicalAttestationPayload({
+      subject: normalizedSubject,
+      subjectChainId: chainId,
+      decision: normalizedDecision,
+      evidenceHash,
+      policyId,
+      policyVersion,
+      issuedAt: issued.toISOString(),
+      expiresAt: expires.toISOString(),
+    });
     const record = {
       passportId,
       subjectChainId: chainId,
@@ -99,18 +139,9 @@ class InMemoryAttestationRegistry {
       issuerId,
       workspaceId,
       decisionId,
-      attestationHash: `0x${hash({
-        passportId,
-        subjectChainId: chainId,
-        subject: normalizedSubject,
-        evidenceHash: normalizeBytes32(evidenceHash, "evidenceHash"),
-        policyHash: normalizeBytes32(policyHash, "policyHash"),
-        policyId,
-        policyVersion,
-        decision: normalizedDecision,
-        issuedAt: issued.toISOString(),
-        expiresAt: expires.toISOString(),
-      })}`,
+      decisionSchemaVersion: ATTESTATION_SCHEMA_VERSION,
+      attestationPayload,
+      attestationHash: `0x${hash(attestationPayload)}`,
     };
     this.records.set(passportId, record);
     this.events.push(event("ATTESTATION_ISSUED", {
@@ -200,8 +231,11 @@ class AdmissionGate {
 
 module.exports = {
   ZERO_HASH,
+  ATTESTATION_SCHEMA_VERSION,
   canonicalize,
+  canonicalAttestationPayload,
   hash,
+  normalizeBytes32,
   InMemoryAttestationRegistry,
   AdmissionGate,
 };

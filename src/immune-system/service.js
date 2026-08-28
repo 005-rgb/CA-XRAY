@@ -13,7 +13,14 @@ const {
 } = require("./intent");
 const { collectDeploymentEvidence, hash: evidenceHash, normalizeProvenanceEdge, unknownProvenance } = require("./evidence");
 const { evaluatePolicy } = require("./policy");
-const { AdmissionGate, InMemoryAttestationRegistry, canonicalize, hash } = require("./registry");
+const {
+  AdmissionGate,
+  InMemoryAttestationRegistry,
+  canonicalAttestationPayload,
+  canonicalize,
+  hash,
+  normalizeBytes32,
+} = require("./registry");
 
 const FIXTURE = Object.freeze({
   sender: "0x0000000000000000000000000000000000000404",
@@ -88,6 +95,10 @@ function publicDecision(record) {
   delete result.actorId;
   delete result.idempotencyKey;
   if (result.intent) delete result.intent.actorId;
+  if (result.unsignedTransaction) {
+    delete result.unsignedTransaction.data;
+    result.unsignedTransaction.calldataRedacted = true;
+  }
   return result;
 }
 
@@ -277,6 +288,7 @@ class ImmuneSystemService {
       issuedAt,
       expiresAt,
       decisionHash,
+      decisionSchemaVersion: "1.0.0",
       policyHash: `0x${policyResult.policyHash}`,
       intent: clone(intent),
       unsignedTransaction: clone(transaction),
@@ -410,13 +422,28 @@ class ImmuneSystemService {
     if (!record || record.workspaceId !== workspaceId) throw Object.assign(new Error("DECISION_NOT_FOUND"), { code: "DECISION_NOT_FOUND" });
     if (record.decision !== "ALLOW") throw Object.assign(new Error("ATTESTATION_DECISION_NOT_ALLOW"), { code: "ATTESTATION_DECISION_NOT_ALLOW" });
     if (record.attestation) return { duplicate: true, passport: this.registry.get(record.attestation.passportId) || await this.persistence?.getImmunePassport(record.attestation.passportId) };
+    const attestationPassportId = passportId || (this.onChain
+      ? `0x${hash({ decisionId, workspaceId, subject: record.unsignedTransaction.to }).slice(0, 64)}`
+      : `passport:${decisionId}`);
+    const attestationEvidenceHash = normalizeBytes32(record.evidenceSnapshot.evidenceHash, "evidenceHash");
+    const attestationPayload = canonicalAttestationPayload({
+      subject: record.unsignedTransaction.to,
+      subjectChainId: record.intent.chainId,
+      decision: record.decision,
+      evidenceHash: attestationEvidenceHash,
+      policyId: record.policy.id,
+      policyVersion: record.policy.version,
+      issuedAt: record.issuedAt,
+      expiresAt: record.expiresAt,
+      decisionSchemaVersion: record.decisionSchemaVersion,
+    });
     const passport = this.registry.attest({
       issuerId,
-      passportId: passportId || `passport:${decisionId}`,
+      passportId: attestationPassportId,
       subjectChainId: record.intent.chainId,
       subject: record.unsignedTransaction.to,
-       evidenceHash: record.evidenceSnapshot.evidenceHash,
-       policyHash: record.policyHash || `0x${hash(record.policy)}`,
+      evidenceHash: attestationEvidenceHash,
+      policyHash: record.policyHash || `0x${hash(record.policy)}`,
       policyId: record.policy.id,
       policyVersion: record.policy.version,
       decision: record.decision,
@@ -425,6 +452,8 @@ class ImmuneSystemService {
       workspaceId,
       decisionId,
     });
+    record.attestationPayload = attestationPayload;
+    record.attestationHash = passport.attestationHash;
     const attestedPassport = this.onChain
       ? await this.onChain.issue(passport)
       : { ...passport, mode: "LOCAL_SIMULATION" };
@@ -502,12 +531,19 @@ class ImmuneSystemService {
     const normalized = normalizeProvenanceEdge(edge);
     const key = `${normalized.to.networkId}:${normalized.to.address}`;
     const current = this.provenance.get(key);
-    if (current && current.status !== normalized.status) {
+    const currentEdge = current?.edges?.[0];
+    const differs = currentEdge
+      && (currentEdge.evidenceHash !== normalized.evidenceHash
+        || currentEdge.from.address !== normalized.from.address
+        || currentEdge.to.address !== normalized.to.address
+        || currentEdge.relationship !== normalized.relationship);
+    if (current && (current.status === "CONFLICT" || current.status !== normalized.status || differs)) {
+      const existingEdges = current.status === "CONFLICT" ? current.edges : [currentEdge || current];
       this.provenance.set(key, {
         subject: normalized.to,
         status: "CONFLICT",
-        edges: [current, normalized],
-        evidenceHash: evidenceHash({ current, normalized }),
+        edges: [...existingEdges, normalized],
+        evidenceHash: evidenceHash({ current: existingEdges, normalized }),
         reasonCodes: ["PROVIDER_CONFLICT"],
         limitation: "Configured provenance sources disagree.",
       });

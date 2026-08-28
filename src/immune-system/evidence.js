@@ -1,6 +1,7 @@
 const { createHash } = require("node:crypto");
 const { NETWORK_PROFILES } = require("./phase0");
 const { normalizeAddress, normalizeChainId } = require("./intent");
+const { freshnessFor } = require("../contracts/trust");
 
 const PROVENANCE_STATUSES = Object.freeze(["VERIFIED", "PARTIAL", "UNKNOWN", "CONFLICT"]);
 const NETWORK_BY_CHAIN_ID = new Map(Object.values(NETWORK_PROFILES).map((profile) => [profile.chainId, profile]));
@@ -52,6 +53,7 @@ async function collectDeploymentEvidence({
   reader = null,
 } = {}) {
   const retrievedAt = new Date(now).toISOString();
+  const freshness = freshnessFor({ retrievedAt, family: "contract", now });
   let normalizedAddress;
   try {
     normalizedAddress = normalizeAddress(address, "target");
@@ -63,6 +65,7 @@ async function collectDeploymentEvidence({
       target: address || null,
       chainId: Number(chainId) || null,
       retrievedAt,
+      freshness,
       evidenceHash: hash({ status: "INVALID_TARGET", address, chainId }),
       limitations: ["Target address is not a valid EVM address."],
     };
@@ -76,6 +79,7 @@ async function collectDeploymentEvidence({
       target: normalizedAddress,
       chainId: Number(chainId) || null,
       retrievedAt,
+      freshness,
       evidenceHash: hash({ status: "CHAIN_PROFILE_UNAVAILABLE", target: normalizedAddress, chainId }),
       limitations: ["The selected network is not one of the locked Arbitrum profiles."],
     };
@@ -98,6 +102,7 @@ async function collectDeploymentEvidence({
         observedChainId,
         blockNumber,
         retrievedAt,
+        freshness,
         evidenceHash: hash({ status: "CHAIN_MISMATCH", target: normalizedAddress, selectedChainId: profile.chainId, observedChainId, blockNumber }),
         limitations: ["RPC chain ID differs from the selected network profile."],
       };
@@ -114,6 +119,7 @@ async function collectDeploymentEvidence({
       blockNumber,
       bytecodeLength: deployed ? (code.length - 2) / 2 : 0,
       retrievedAt,
+      freshness,
       provider: "arbitrum-json-rpc",
       evidenceHash: hash({ status: deploymentStatus, target: normalizedAddress, selectedChainId: profile.chainId, observedChainId, blockNumber, code }),
       limitations: deployed ? [] : ["No deployed bytecode exists at the target on the selected chain."],
@@ -126,6 +132,7 @@ async function collectDeploymentEvidence({
       target: normalizedAddress,
       selectedChainId: profile.chainId,
       retrievedAt,
+      freshness,
       provider: "arbitrum-json-rpc",
       evidenceHash: hash({ status: "RPC_UNAVAILABLE", target: normalizedAddress, selectedChainId: profile.chainId, retrievedAt }),
       limitations: ["Chain evidence request failed; no synthetic deployment result was substituted."],

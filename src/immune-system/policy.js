@@ -46,6 +46,8 @@ function evaluatePolicy({
   let decision = "ALLOW";
   let status = "ALLOW";
   const limitations = [];
+  const deploymentFreshness = deployment?.freshness?.state || deployment?.freshness;
+  const provenanceFreshness = provenance?.freshness?.state || provenance?.freshness;
 
   if (decoded?.status === "UNAVAILABLE") {
     decision = "UNAVAILABLE";
@@ -62,10 +64,27 @@ function evaluatePolicy({
   } else if (deployment?.status === "CONFLICT" || criticalEvidence.status === "CONFLICT" || provenance?.status === "CONFLICT") {
     decision = "CONFLICT";
     status = "CONFLICT";
-  } else if (criticalEvidence.freshness === "STALE" || provenance?.freshness === "STALE") {
+  } else if (
+    reasons.includes("CRITICAL_EVIDENCE_STALE")
+    || deploymentFreshness === "STALE"
+    || criticalEvidence.freshness === "STALE"
+    || provenanceFreshness === "STALE"
+    || provenance?.freshness === "STALE"
+  ) {
     decision = "STALE_EVIDENCE";
     status = "STALE_EVIDENCE";
-  } else if (reasons.includes("HUMAN_REVIEW_REQUIRED") || reasons.includes("UNKNOWN_SPENDER") || provenance?.status === "UNKNOWN") {
+  } else if (
+    criticalEvidence.status === "UNAVAILABLE"
+    || criticalEvidence.status === "UNKNOWN"
+  ) {
+    decision = criticalEvidence.status === "UNAVAILABLE" ? "UNAVAILABLE" : "REVIEW_REQUIRED";
+    status = decision;
+  } else if (
+    reasons.includes("HUMAN_REVIEW_REQUIRED")
+    || reasons.includes("UNKNOWN_SPENDER")
+    || provenance?.status === "UNKNOWN"
+    || provenance?.status === "PARTIAL"
+  ) {
     decision = "REVIEW_REQUIRED";
     status = "REVIEW_REQUIRED";
   } else if (reasons.length) {

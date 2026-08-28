@@ -2,9 +2,17 @@ const { NETWORK_PROFILES } = require("./phase0");
 const { normalizeAddress, normalizeChainId } = require("./intent");
 
 const DEPLOYMENT_ENVIRONMENTS = new Set(["testnet", "mainnet"]);
+const TX_HASH = /^0x[0-9a-f]{64}$/i;
 
 function deploymentError(code, message) {
   return Object.assign(new Error(message || code), { code });
+}
+
+function normalizeTransactionHash(value, field) {
+  if (typeof value !== "string" || !TX_HASH.test(value)) {
+    throw deploymentError("DEPLOYMENT_TRANSACTION_REQUIRED", `${field} must be a 32-byte transaction hash.`);
+  }
+  return value.toLowerCase();
 }
 
 function validateDeploymentConfig({
@@ -33,7 +41,16 @@ function validateDeploymentConfig({
     deployerConfigured: true,
     deploymentMetadata: deploymentMetadata || null,
   };
-  if (!normalized.deploymentMetadata) throw deploymentError("DEPLOYMENT_METADATA_REQUIRED", "Deployment metadata must be recorded before deployment is considered complete.");
+  if (!normalized.deploymentMetadata
+      || normalized.deploymentMetadata.network !== profile.id
+      || normalized.deploymentMetadata.chainId !== profile.chainId
+      || !normalized.deploymentMetadata.registryAddress
+      || !normalized.deploymentMetadata.gateAddress
+      || !normalized.deploymentMetadata.registryDeploymentTx
+      || !normalized.deploymentMetadata.gateDeploymentTx
+      || !normalized.deploymentMetadata.deployerAddress) {
+    throw deploymentError("DEPLOYMENT_METADATA_REQUIRED", "Complete deployment metadata must be recorded before deployment is considered complete.");
+  }
   if (environment === "mainnet" && profile.demoWritePolicy === "NO_MAINNET_WRITE") {
     throw deploymentError("MAINNET_WRITE_NOT_ALLOWED", "Mainnet writes are not allowed by this deployment profile.");
   }
@@ -60,9 +77,9 @@ function deploymentMetadata({
     network: networkId,
     chainId: profile.chainId,
     registryAddress: normalizeAddress(registryAddress, "registryAddress"),
-    registryDeploymentTx: String(registryDeploymentTx || ""),
+    registryDeploymentTx: normalizeTransactionHash(registryDeploymentTx, "registryDeploymentTx"),
     gateAddress: normalizeAddress(gateAddress, "gateAddress"),
-    gateDeploymentTx: String(gateDeploymentTx || ""),
+    gateDeploymentTx: normalizeTransactionHash(gateDeploymentTx, "gateDeploymentTx"),
     deployerAddress: normalizeAddress(deployerAddress, "deployerAddress"),
     compilerVersion: String(compilerVersion),
     sourceVerification: ["VERIFIED", "UNVERIFIED"].includes(sourceVerification) ? sourceVerification : "UNVERIFIED",
@@ -70,4 +87,4 @@ function deploymentMetadata({
   });
 }
 
-module.exports = { validateDeploymentConfig, deploymentMetadata };
+module.exports = { validateDeploymentConfig, deploymentMetadata, normalizeTransactionHash };

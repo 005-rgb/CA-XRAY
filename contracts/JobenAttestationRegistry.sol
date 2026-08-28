@@ -25,6 +25,7 @@ contract JobenAttestationRegistry {
     error InvalidExpiry();
     error MissingPassport();
     error AlreadyInvalidated();
+    error InvalidSubject();
 
     event AttestationIssued(
         bytes32 indexed passportId,
@@ -69,7 +70,8 @@ contract JobenAttestationRegistry {
     ) external onlyIssuer {
         if (passportId == bytes32(0)) revert ZeroPassportId();
         if (attestations[passportId].issuedAt != 0) revert DuplicatePassport();
-        if (subject == address(0) || expiresAt <= issuedAt) revert InvalidExpiry();
+        if (subject == address(0) || subjectChainId == 0) revert InvalidSubject();
+        if (expiresAt <= issuedAt) revert InvalidExpiry();
         attestations[passportId] = Attestation(
             subjectChainId, subject, evidenceHash, policyHash,
             issuedAt, expiresAt, decision, false
